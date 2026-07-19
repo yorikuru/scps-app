@@ -1,3 +1,10 @@
+export function generateStaticParams() {
+  return [];
+}
+
+// （以下、元からあるコード）
+// 
+
 "use client";
 
 import React, { useEffect, useState } from "react";
