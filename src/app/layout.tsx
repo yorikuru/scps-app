@@ -6,11 +6,9 @@ export const metadata: Metadata = {
     template: "%s | 生徒会ポータルシステム",
     default: "生徒会ポータルシステム | SCPS",
   },
-  description: "生徒会ポータルシステム（PSCS）",
-  icons: {
-    icon: "/logo.png",
-    apple: "/logo.png",
-  },
+  description: "生徒会ポータルシステム（SCPS）",
+  // ※ ここにあった icons の設定は削除しました。
+  // src/app/icon.png が自動的にファビコンとして読み込まれます。
 };
 
 export default function RootLayout({
