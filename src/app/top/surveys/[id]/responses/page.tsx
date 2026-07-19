@@ -1,8 +1,8 @@
-// src/app/top/surveys/[id]/responses/page.tsx (新しく作成するサーバー用ファイル)
 import ClientPage from './ClientPage';
 
 export function generateStaticParams() {
-  return [];
+  // Next.jsを納得させるためのダミーIDを1つだけ渡す
+  return [{ id: 'dummy' }];
 }
 
 export default function Page() {
