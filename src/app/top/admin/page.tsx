@@ -5,12 +5,13 @@ import { useRouter } from "next/navigation";
 import { onAuthStateChanged } from "firebase/auth";
 import { collection, doc, getDoc, getDocs, query, where } from "firebase/firestore";
 import { auth, db } from "@/lib/firebase";
-import { Users, ShieldCheck, Settings, UserPlus, ArrowLeft, Loader2, CheckCircle2, AlertCircle, MessageCircle } from "lucide-react";
+import { Users, ShieldCheck, Settings, UserPlus, ArrowLeft, Loader2, CheckCircle2, AlertCircle, MessageCircle, Lock } from "lucide-react";
 
 import UserManagement from "./components/UserManagement";
 import PermissionManagement from "./components/PermissionManagement";
 import GuestManagement from "./components/GuestManagement";
 import TenantSettings from "./components/TenantSettings";
+import SecuritySettings from "./components/SecuritySettings";
 import LineSettings from "./components/LineSettings";
 
 export type UserData = {
@@ -30,6 +31,12 @@ export type UserData = {
   requireMfa?: boolean;
 };
 
+export type MfaPolicy = {
+  allowSetup: boolean;
+  forceSetup: boolean;
+  allowUsage: boolean;
+};
+
 export type SchoolData = {
   id: string;
   name: string;
@@ -42,7 +49,11 @@ export type SchoolData = {
   requireMfa?: boolean;
   safeIps?: string[];
   allowedMfaMethods?: string[];
-  // ★ ネットワーク詳細情報を保存するプロパティを追加
+  mfaPolicies?: {
+    email: MfaPolicy;
+    totp: MfaPolicy;
+    passkey: MfaPolicy;
+  };
   safeNetworks?: {
     ip: string;
     name: string;
@@ -64,7 +75,7 @@ export default function TopAdminPage() {
   const [users, setUsers] = useState<UserData[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   
-  const [activeTab, setActiveTab] = useState<"users" | "permissions" | "guests" | "settings" | "line">("users");
+  const [activeTab, setActiveTab] = useState<"users" | "permissions" | "guests" | "settings" | "security" | "line">("users");
   
   const [alert, setAlert] = useState<{ show: boolean; type: "success" | "error"; message: string }>({ 
     show: false, type: "success", message: "" 
@@ -156,6 +167,9 @@ export default function TopAdminPage() {
           <button onClick={() => setActiveTab("guests")} className={`flex items-center px-4 py-3 rounded-lg text-sm font-bold whitespace-nowrap transition-colors ${activeTab === "guests" ? "bg-emerald-50 text-emerald-700" : "text-gray-600 hover:bg-gray-50"}`}>
             <UserPlus className="h-5 w-5 mr-3 md:inline hidden" /> ゲスト発行
           </button>
+          <button onClick={() => setActiveTab("security")} className={`flex items-center px-4 py-3 rounded-lg text-sm font-bold whitespace-nowrap transition-colors ${activeTab === "security" ? "bg-amber-50 text-amber-700" : "text-gray-600 hover:bg-gray-50"}`}>
+            <Lock className="h-5 w-5 mr-3 md:inline hidden" /> セキュリティ設定
+          </button>
           <button onClick={() => setActiveTab("line")} className={`flex items-center px-4 py-3 rounded-lg text-sm font-bold whitespace-nowrap transition-colors ${activeTab === "line" ? "bg-[#e6faed] text-[#00993c]" : "text-gray-600 hover:bg-gray-50"}`}>
             <MessageCircle className="h-5 w-5 mr-3 md:inline hidden" /> LINE運用設定
           </button>
@@ -186,6 +200,9 @@ export default function TopAdminPage() {
         )}
         {activeTab === "guests" && (
           <GuestManagement schoolData={schoolData} fetchUsers={fetchUsers} showAlert={showAlert} />
+        )}
+        {activeTab === "security" && (
+          <SecuritySettings schoolData={schoolData} showAlert={showAlert} />
         )}
         {activeTab === "line" && (
           <LineSettings schoolData={schoolData} users={users} setUsers={setUsers} showAlert={showAlert} />
