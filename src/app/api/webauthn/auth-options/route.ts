@@ -28,12 +28,12 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "パスキーが登録されていません" }, { status: 400 });
     }
     
-    // 最新ライブラリの型仕様に合わせ、id には string (Base64URL形式の credentialID) をそのまま指定する
     const options = await generateAuthenticationOptions({
       rpID,
       allowCredentials: passkeys.map((pk: any) => ({
-        id: pk.credentialID,
+        id: pk.credentialID, // 正しいIDをそのまま渡す
         type: 'public-key',
+        transports: pk.transports, // ローカル認証器（Touch ID等）を優先的に呼び出す指示
       })),
       userVerification: "preferred",
     });

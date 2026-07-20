@@ -23,27 +23,20 @@ export async function POST(request: Request) {
     const passkeys = userData.passkeys || [];
     const expectedChallenge = userData.webAuthnCurrentChallenge;
 
-    // クライアントから送られたBase64URLのIDを正規化し、登録済みパスキーと照合する
-    const targetPasskey = passkeys.find((pk: any) => {
-      let normalizedResponseId = response.id.replace(/-/g, '+').replace(/_/g, '/');
-      while (normalizedResponseId.length % 4) {
-        normalizedResponseId += '=';
-      }
-      return pk.credentialID === normalizedResponseId;
-    });
+    // 修正: 複雑な文字コード変換を廃止し、正しいID同士でシンプルに照合する
+    const targetPasskey = passkeys.find((pk: any) => pk.credentialID === response.id);
 
     if (!targetPasskey) {
       return NextResponse.json({ error: "この端末のパスキーは登録されていません" }, { status: 400 });
     }
 
-    // TypeScriptエラー修正: 最新仕様に合わせて credential.id に string (response.id) を渡す
     const verification = await verifyAuthenticationResponse({
       response,
       expectedChallenge,
       expectedOrigin: origin,
       expectedRPID: rpID,
       credential: {
-        id: response.id,
+        id: targetPasskey.credentialID,
         publicKey: new Uint8Array(Buffer.from(targetPasskey.credentialPublicKey, 'base64')),
         counter: targetPasskey.counter,
         transports: targetPasskey.transports,
@@ -53,7 +46,6 @@ export async function POST(request: Request) {
     if (verification.verified && verification.authenticationInfo) {
       const { newCounter } = verification.authenticationInfo;
 
-      // 複製攻撃防止のため、カウンターを更新して保存
       const updatedPasskeys = passkeys.map((pk: any) => {
          if (pk.credentialID === targetPasskey.credentialID) {
            return { ...pk, counter: newCounter };

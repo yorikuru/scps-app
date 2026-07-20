@@ -22,7 +22,6 @@ export async function POST(request: Request) {
 
     const expectedChallenge = userData.webAuthnCurrentChallenge;
 
-    // 端末から送られた署名を検証
     const verification = await verifyRegistrationResponse({
       response,
       expectedChallenge,
@@ -31,23 +30,22 @@ export async function POST(request: Request) {
     });
 
     if (verification.verified && verification.registrationInfo) {
-      // 最新のライブラリ仕様に合わせて credential から取得
       const { credential } = verification.registrationInfo;
-      const { id, publicKey, counter } = credential;
+      const { id, publicKey, counter, transports } = credential;
 
-      // Uint8ArrayをFirestore保存用にBase64文字列に変換
+      // 修正: idはすでに正しい文字列なので、余計な変換をせずそのまま保存する
       const newPasskey = {
-        credentialID: Buffer.from(id).toString('base64'),
+        credentialID: id, 
         credentialPublicKey: Buffer.from(publicKey).toString('base64'),
         counter,
+        transports: transports || [], // Touch ID等をスムーズに起動させるためのヒント
         createdAt: new Date().toISOString()
       };
 
-      // 既存のパスキー配列に追加（複数端末登録対応）
       const existingPasskeys = userData.passkeys || [];
       await userRef.update({
         passkeys: [...existingPasskeys, newPasskey],
-        webAuthnCurrentChallenge: null, // 使い終わったチャレンジを破棄
+        webAuthnCurrentChallenge: null,
       });
 
       return NextResponse.json({ verified: true });
