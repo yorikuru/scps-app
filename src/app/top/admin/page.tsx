@@ -11,7 +11,7 @@ import UserManagement from "./components/UserManagement";
 import PermissionManagement from "./components/PermissionManagement";
 import GuestManagement from "./components/GuestManagement";
 import TenantSettings from "./components/TenantSettings";
-import LineSettings from "./components/LineSettings"; // ★追加
+import LineSettings from "./components/LineSettings";
 
 export type UserData = {
   id: string;
@@ -25,9 +25,9 @@ export type UserData = {
   allowedModules?: string[];
   expiresAt?: string;
   systemId?: string;
-  // ★LINE連携用のプロパティを追加
   lineUserId?: string;
   lineConnectionAllowed?: boolean; 
+  requireMfa?: boolean;
 };
 
 export type SchoolData = {
@@ -36,10 +36,18 @@ export type SchoolData = {
   schoolCode: string;
   allowedAuthProviders: string[];
   availableModules: string[];
-  // ★LINE連携用のプロパティを追加
   lineFeatureAllowed?: boolean;
   lineFeatureEnabled?: boolean;
   lineConnectionEnforced?: boolean;
+  requireMfa?: boolean;
+  safeIps?: string[];
+  allowedMfaMethods?: string[];
+  // ★ ネットワーク詳細情報を保存するプロパティを追加
+  safeNetworks?: {
+    ip: string;
+    name: string;
+    details?: string;
+  }[];
 };
 
 export const SYSTEM_MODULES = [
@@ -56,7 +64,6 @@ export default function TopAdminPage() {
   const [users, setUsers] = useState<UserData[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   
-  // ★ activeTab に "line" を追加
   const [activeTab, setActiveTab] = useState<"users" | "permissions" | "guests" | "settings" | "line">("users");
   
   const [alert, setAlert] = useState<{ show: boolean; type: "success" | "error"; message: string }>({ 
@@ -132,7 +139,6 @@ export default function TopAdminPage() {
 
   return (
     <div className="min-h-screen bg-gray-100 flex flex-col md:flex-row">
-      {/* サイドバー */}
       <div className="md:w-64 bg-white border-r border-gray-200 flex-shrink-0 flex flex-col">
         <div className="p-4 border-b border-gray-200 flex items-center justify-between">
           <div>
@@ -150,7 +156,6 @@ export default function TopAdminPage() {
           <button onClick={() => setActiveTab("guests")} className={`flex items-center px-4 py-3 rounded-lg text-sm font-bold whitespace-nowrap transition-colors ${activeTab === "guests" ? "bg-emerald-50 text-emerald-700" : "text-gray-600 hover:bg-gray-50"}`}>
             <UserPlus className="h-5 w-5 mr-3 md:inline hidden" /> ゲスト発行
           </button>
-          {/* ★LINE設定タブを追加 */}
           <button onClick={() => setActiveTab("line")} className={`flex items-center px-4 py-3 rounded-lg text-sm font-bold whitespace-nowrap transition-colors ${activeTab === "line" ? "bg-[#e6faed] text-[#00993c]" : "text-gray-600 hover:bg-gray-50"}`}>
             <MessageCircle className="h-5 w-5 mr-3 md:inline hidden" /> LINE運用設定
           </button>
@@ -165,9 +170,7 @@ export default function TopAdminPage() {
         </div>
       </div>
 
-      {/* メインコンテンツ */}
       <div className="flex-1 overflow-y-auto p-4 md:p-8">
-        
         {alert.show && (
           <div className={`mb-6 p-4 rounded-md text-sm font-bold flex items-center shadow-sm ${alert.type === "success" ? "bg-green-50 text-green-800 border border-green-200" : "bg-red-50 text-red-800 border border-red-200"}`}>
             {alert.type === "success" ? <CheckCircle2 className="mr-2 h-5 w-5 flex-shrink-0" /> : <AlertCircle className="mr-2 h-5 w-5 flex-shrink-0" />}
@@ -175,7 +178,6 @@ export default function TopAdminPage() {
           </div>
         )}
 
-        {/* コンポーネント切り替え */}
         {activeTab === "users" && (
           <UserManagement users={users} setUsers={setUsers} schoolData={schoolData} fetchUsers={fetchUsers} showAlert={showAlert} />
         )}
@@ -191,7 +193,6 @@ export default function TopAdminPage() {
         {activeTab === "settings" && (
           <TenantSettings schoolData={schoolData} showAlert={showAlert} />
         )}
-
       </div>
     </div>
   );
