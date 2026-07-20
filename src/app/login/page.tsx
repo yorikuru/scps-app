@@ -71,8 +71,6 @@ export default function LoginPage() {
   const [mfaState, setMfaState] = useState<MfaState | null>(null);
   const [mfaCode, setMfaCode] = useState("");
   const [isVerifyingPasskey, setIsVerifyingPasskey] = useState(false);
-  
-  // TOTP(認証アプリ)の初回セットアップ用データ
   const [totpSetupData, setTotpSetupData] = useState<{ secret: string, uri: string } | null>(null);
 
   const showAlert = (type: "success" | "error", message: string) => {
@@ -89,6 +87,31 @@ export default function LoginPage() {
       console.warn("IPアドレスの取得に失敗しました", error);
       return "";
     }
+  };
+
+  // 組織の設定状況と、ユーザーの登録状況を厳密にマージしてフィルタリングする
+  const getAvailableMfaMethods = (userData: any, allowedMethods: string[]) => {
+    console.log("--- MFA Filtering Debug ---");
+    console.log("Tenant Allowed Methods (組織で許可):", allowedMethods);
+    console.log("User Data Object (ユーザーデータ):", userData);
+
+    return allowedMethods.filter(method => {
+      if (method === "email") {
+        return !!userData?.email;
+      }
+      if (method === "totp") {
+        const hasTotp = !!userData?.totpSecret;
+        console.log("Checking TOTP - Has secret:", hasTotp);
+        return hasTotp;
+      }
+      if (method === "passkey") {
+        // 配列であるか、中身があるかをより安全にチェック
+        const hasPasskeys = Array.isArray(userData?.passkeys) && userData.passkeys.length > 0;
+        console.log("Checking Passkey - Registered count:", userData?.passkeys?.length || 0, "Is Visible:", hasPasskeys);
+        return hasPasskeys;
+      }
+      return false;
+    });
   };
 
   const generateAndSendEmailOTP = async (uid: string, userEmail: string) => {
@@ -158,6 +181,8 @@ export default function LoginPage() {
 
       let isMfaRequired = false;
       let isSafeIpSkipped = false;
+      
+      // テナントで許可されているMFA方法を取得 (未設定ならemailをデフォルトに)
       const allowedMfaMethods = schoolData.allowedMfaMethods || ["email"];
       
       if (userData.accountStatus !== "unaccessed") {
@@ -235,6 +260,7 @@ export default function LoginPage() {
       const userCredential = await signInWithEmailAndPassword(auth, email, password);
       await processLoginFlow(userCredential, "password");
     } catch (error: any) {
+      console.error("Login error:", error);
       let errorMsg = "ログインに失敗しました。";
       if (error.code === "auth/invalid-credential" || error.code === "auth/user-not-found" || error.code === "auth/wrong-password") {
         errorMsg = "メールアドレスまたはパスワードが間違っています。";
@@ -293,27 +319,6 @@ export default function LoginPage() {
     } 
   };
 
-  // TOTP設定情報の取得
-  useEffect(() => {
-    if (mfaState?.selectedMethod === 'totp' && !mfaState.userData.totpSecret && !totpSetupData) {
-      const fetchTotp = async () => {
-        try {
-          const res = await fetch('/api/totp/generate', {
-            method: 'POST',
-            headers: {'Content-Type': 'application/json'},
-            body: JSON.stringify({ email: mfaState.userData.email })
-          });
-          const data = await res.json();
-          if (res.ok) setTotpSetupData(data);
-          else throw new Error(data.error);
-        } catch (error) {
-          showAlert('error', '認証アプリの設定準備に失敗しました。');
-        }
-      };
-      fetchTotp();
-    }
-  }, [mfaState?.selectedMethod]);
-
   const selectMfaMethod = async (method: string) => {
     if (!mfaState) return;
     setAlert({ show: false, type: "success", message: "" });
@@ -333,7 +338,6 @@ export default function LoginPage() {
     }
   };
 
-  // パスキー認証処理
   const handlePasskeyAuth = async () => {
     if (!mfaState || !mfaState.uid) {
       showAlert("error", "ユーザー情報が特定できません。もう一度ログインし直してください。");
@@ -343,7 +347,6 @@ export default function LoginPage() {
     setIsVerifyingPasskey(true);
 
     try {
-      // uidが確実に文字列であることを保証する
       const targetUid = String(mfaState.uid);
       console.log("Sending UID for Auth Options:", targetUid);
       
@@ -419,7 +422,6 @@ export default function LoginPage() {
           throw new Error(data.error || "認証コードが正しくありません。");
         }
 
-        // 初回セットアップの場合はFirestoreにシークレットキーを保存
         if (!mfaState.userData.totpSecret) {
           const userDocRef = doc(db, "users", mfaState.uid);
           await updateDoc(userDocRef, { totpSecret: secretToVerify });
@@ -445,13 +447,15 @@ export default function LoginPage() {
     setAlert({ show: false, type: "success", message: "" });
   };
 
-  // --- MFA 入力・選択画面のレンダリング ---
   if (mfaState?.isRequired) {
     const isMethodSelected = mfaState.selectedMethod !== "";
     const isEmail = mfaState.selectedMethod === "email";
     const isTotp = mfaState.selectedMethod === "totp";
     const isPasskey = mfaState.selectedMethod === "passkey";
     const needsTotpSetup = isTotp && !mfaState.userData.totpSecret;
+
+    // 設定可能・表示可能な認証手段をフィルタリング
+    const validMethods = getAvailableMfaMethods(mfaState.userData, mfaState.availableMethods);
 
     return (
       <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 flex flex-col justify-center py-12 px-4 sm:px-6 lg:px-8">
@@ -475,74 +479,41 @@ export default function LoginPage() {
 
           {!isMethodSelected ? (
             <div className="space-y-4">
-              {mfaState.availableMethods.includes("passkey") && (
-                <button 
-                  onClick={() => selectMfaMethod("passkey")} 
-                  disabled={isLoading}
-                  className="w-full flex items-center p-4 border border-gray-200 rounded-xl hover:bg-gray-50 hover:border-blue-300 transition-all group disabled:opacity-50"
-                >
-                  <div className="bg-blue-50 p-3 rounded-lg group-hover:bg-blue-100 transition-colors mr-4">
-                    <Fingerprint className="h-6 w-6 text-blue-600" />
-                  </div>
-                  <div className="text-left">
-                    <p className="text-sm font-bold text-gray-900">パスキー</p>
-                    <p className="text-xs text-gray-500 mt-1">端末の生体認証（指紋・顔）を利用します</p>
-                  </div>
-                </button>
-              )}
-
-              {mfaState.availableMethods.includes("totp") && (
-                <button 
-                  onClick={() => selectMfaMethod("totp")} 
-                  disabled={isLoading}
-                  className="w-full flex items-center p-4 border border-gray-200 rounded-xl hover:bg-gray-50 hover:border-blue-300 transition-all group disabled:opacity-50"
-                >
-                  <div className="bg-blue-50 p-3 rounded-lg group-hover:bg-blue-100 transition-colors mr-4">
-                    <ScanLine className="h-6 w-6 text-blue-600" />
-                  </div>
-                  <div className="text-left">
-                    <p className="text-sm font-bold text-gray-900">認証アプリ</p>
-                    <p className="text-xs text-gray-500 mt-1">Google Authenticator等を使用します</p>
-                  </div>
-                </button>
-              )}
-
-              {mfaState.availableMethods.includes("email") && (
-                <button 
-                  onClick={() => selectMfaMethod("email")} 
-                  disabled={isLoading}
-                  className="w-full flex items-center p-4 border border-gray-200 rounded-xl hover:bg-gray-50 hover:border-blue-300 transition-all group disabled:opacity-50"
-                >
-                  <div className="bg-blue-50 p-3 rounded-lg group-hover:bg-blue-100 transition-colors mr-4">
-                    <Mail className="h-6 w-6 text-blue-600" />
-                  </div>
-                  <div className="text-left">
-                    <p className="text-sm font-bold text-gray-900">メールアドレス</p>
-                    <p className="text-xs text-gray-500 mt-1">登録済みのメールにコードを送信します</p>
-                  </div>
-                </button>
-              )}
-
-              {mfaState.availableMethods.includes("sms") && (
-                <button 
-                  onClick={() => selectMfaMethod("sms")} 
-                  disabled={isLoading}
-                  className="w-full flex items-center p-4 border border-gray-200 rounded-xl hover:bg-gray-50 hover:border-blue-300 transition-all group disabled:opacity-50"
-                >
-                  <div className="bg-blue-50 p-3 rounded-lg group-hover:bg-blue-100 transition-colors mr-4">
-                    <Smartphone className="h-6 w-6 text-blue-600" />
-                  </div>
-                  <div className="text-left">
-                    <p className="text-sm font-bold text-gray-900">SMS認証</p>
-                    <p className="text-xs text-gray-500 mt-1">登録済みの電話番号にコードを送信します</p>
-                  </div>
-                </button>
+              <h3 className="text-center font-bold text-gray-900 mb-6">認証方法を選択</h3>
+              {validMethods.length === 0 ? (
+                <div className="text-center p-4 bg-red-50 rounded-xl border border-red-200">
+                  <p className="text-sm text-red-700 font-bold mb-2">利用可能な認証手段がありません</p>
+                  <p className="text-xs text-red-500 leading-relaxed">
+                    学校の管理者メニューから組織設定（セキュリティ設定）の「許可する認証方式」で該当する認証方法（パスキー等）が有効化されているか確認してください。
+                  </p>
+                </div>
+              ) : (
+                validMethods.map(method => (
+                  <button 
+                    key={method}
+                    onClick={() => selectMfaMethod(method)} 
+                    disabled={isLoading}
+                    className="w-full flex items-center p-4 border border-gray-200 rounded-xl hover:bg-blue-50/50 hover:border-blue-300 transition-all group"
+                  >
+                    <div className="bg-blue-50 p-3 rounded-lg mr-4">
+                      {method === 'email' && <Mail className="h-6 w-6 text-blue-600"/>}
+                      {method === 'totp' && <ScanLine className="h-6 w-6 text-blue-600"/>}
+                      {method === 'passkey' && <Fingerprint className="h-6 w-6 text-blue-600"/>}
+                    </div>
+                    <div className="text-left">
+                      <p className="text-sm font-bold text-gray-900">
+                        {method === 'email' && 'メールアドレス認証'}
+                        {method === 'totp' && '認証アプリ (Google/Microsoft)'}
+                        {method === 'passkey' && 'パスキー (端末の指紋・顔認証)'}
+                      </p>
+                    </div>
+                  </button>
+                ))
               )}
             </div>
           ) : (
             <form className="space-y-6" onSubmit={handleMfaSubmit}>
               
-              {/* パスキー認証の場合のUI */}
               {isPasskey && (
                 <div className="text-center animate-fade-in space-y-4 py-4">
                   <Fingerprint className="h-14 w-14 text-blue-600 mx-auto" />
@@ -561,7 +532,6 @@ export default function LoginPage() {
                 </div>
               )}
 
-              {/* メールまたはTOTP認証の場合のUI */}
               {(isEmail || isTotp) && (
                 <>
                   {needsTotpSetup && totpSetupData && (
