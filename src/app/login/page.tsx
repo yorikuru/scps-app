@@ -39,6 +39,7 @@ import {
   ScanLine
 } from "lucide-react";
 import { QRCodeSVG } from "qrcode.react";
+import { startAuthentication } from "@simplewebauthn/browser";
 
 type AlertState = {
   show: boolean;
@@ -69,6 +70,7 @@ export default function LoginPage() {
 
   const [mfaState, setMfaState] = useState<MfaState | null>(null);
   const [mfaCode, setMfaCode] = useState("");
+  const [isVerifyingPasskey, setIsVerifyingPasskey] = useState(false);
   
   // TOTP(認証アプリ)の初回セットアップ用データ
   const [totpSetupData, setTotpSetupData] = useState<{ secret: string, uri: string } | null>(null);
@@ -201,19 +203,13 @@ export default function LoginPage() {
     const finalUserData = userDataParam || userData;
 
     if (isMfaRequired) {
-      const selectedMethod = allowedMfaMethods.includes("email") ? "email" : allowedMfaMethods[0];
-      
-      if (selectedMethod === "email") {
-        await generateAndSendEmailOTP(userCredential.user.uid, finalUserData.email);
-      }
-
       setMfaState({
         isRequired: true,
         uid: userCredential.user.uid,
         userData: finalUserData,
         isSystemAdmin,
         availableMethods: allowedMfaMethods,
-        selectedMethod: selectedMethod
+        selectedMethod: "" // 最初は空にして選択画面を表示させる
       });
       setIsLoading(false);
       showAlert("success", "セキュリティ保護のため、追加認証が必要です。");
@@ -318,8 +314,9 @@ export default function LoginPage() {
     }
   }, [mfaState?.selectedMethod]);
 
-  const changeMfaMethod = async (method: string) => {
+  const selectMfaMethod = async (method: string) => {
     if (!mfaState) return;
+    setAlert({ show: false, type: "success", message: "" });
     setMfaCode("");
     setMfaState({ ...mfaState, selectedMethod: method });
     
@@ -327,12 +324,64 @@ export default function LoginPage() {
       setIsLoading(true);
       try {
         await generateAndSendEmailOTP(mfaState.uid, mfaState.userData.email);
-        showAlert("success", "新しい認証コードをメールで送信しました。");
+        showAlert("success", "認証コードをメールで送信しました。");
       } catch (e: any) {
         showAlert("error", e.message);
       } finally {
         setIsLoading(false);
       }
+    }
+  };
+
+  // パスキー認証処理
+  const handlePasskeyAuth = async () => {
+    if (!mfaState || !mfaState.uid) {
+      showAlert("error", "ユーザー情報が特定できません。もう一度ログインし直してください。");
+      return;
+    }
+    setAlert({ show: false, type: "success", message: "" });
+    setIsVerifyingPasskey(true);
+
+    try {
+      // uidが確実に文字列であることを保証する
+      const targetUid = String(mfaState.uid);
+      console.log("Sending UID for Auth Options:", targetUid);
+      
+      const optionsResp = await fetch('/api/webauthn/auth-options', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ uid: targetUid })
+      });
+      
+      const optionsJSON = await optionsResp.json();
+      
+      if (!optionsResp.ok) {
+        console.error("Server Error details:", optionsJSON);
+        throw new Error(optionsJSON.error || "認証オプションの取得に失敗しました");
+      }
+
+      const asseResp = await startAuthentication({ optionsJSON });
+
+      const verifyResp = await fetch('/api/webauthn/auth-verify', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ uid: targetUid, response: asseResp })
+      });
+      
+      const verifyResult = await verifyResp.json();
+      if (!verifyResp.ok) throw new Error(verifyResult.error || "検証に失敗しました");
+
+      handlePostLogin(targetUid, mfaState.userData, mfaState.isSystemAdmin);
+
+    } catch (error: any) {
+      console.error("Passkey auth error:", error);
+      if (error.name === "NotAllowedError" || error.message?.includes("timed out") || error.message?.includes("not allowed")) {
+         showAlert("error", "生体認証がキャンセルされました。");
+      } else {
+         showAlert("error", error.message || "パスキー認証に失敗しました。");
+      }
+    } finally {
+      setIsVerifyingPasskey(false);
     }
   };
 
@@ -396,10 +445,12 @@ export default function LoginPage() {
     setAlert({ show: false, type: "success", message: "" });
   };
 
-  // --- MFA 入力画面のレンダリング ---
+  // --- MFA 入力・選択画面のレンダリング ---
   if (mfaState?.isRequired) {
+    const isMethodSelected = mfaState.selectedMethod !== "";
     const isEmail = mfaState.selectedMethod === "email";
     const isTotp = mfaState.selectedMethod === "totp";
+    const isPasskey = mfaState.selectedMethod === "passkey";
     const needsTotpSetup = isTotp && !mfaState.userData.totpSecret;
 
     return (
@@ -409,7 +460,9 @@ export default function LoginPage() {
             <ShieldCheck className="h-12 w-12 text-blue-600 drop-shadow-sm" />
           </div>
           <h2 className="text-2xl font-extrabold text-gray-900 tracking-tight">2段階認証</h2>
-          <p className="text-sm text-gray-500 font-medium mt-2">安全のため、本人確認を行ってください。</p>
+          <p className="text-sm text-gray-500 font-medium mt-2">
+            {!isMethodSelected ? "認証方法を選択してください。" : "安全のため、本人確認を行ってください。"}
+          </p>
         </div>
 
         <div className="sm:mx-auto sm:w-full sm:max-w-md bg-white py-8 px-4 sm:px-10 shadow-xl shadow-gray-200/50 rounded-2xl border border-gray-100">
@@ -420,68 +473,153 @@ export default function LoginPage() {
             </div>
           )}
 
-          {mfaState.availableMethods.length > 1 && (
-            <div className="mb-6 flex gap-2 justify-center">
-              {mfaState.availableMethods.includes("email") && (
-                <button onClick={() => changeMfaMethod("email")} className={`p-2 rounded-lg border ${isEmail ? "border-blue-500 bg-blue-50 text-blue-700" : "border-gray-200 text-gray-500 hover:bg-gray-50"}`} title="メール認証"><Mail className="h-5 w-5" /></button>
-              )}
-              {mfaState.availableMethods.includes("totp") && (
-                <button onClick={() => changeMfaMethod("totp")} className={`p-2 rounded-lg border ${isTotp ? "border-blue-500 bg-blue-50 text-blue-700" : "border-gray-200 text-gray-500 hover:bg-gray-50"}`} title="認証アプリ"><ScanLine className="h-5 w-5" /></button>
-              )}
-              {mfaState.availableMethods.includes("sms") && (
-                <button onClick={() => changeMfaMethod("sms")} className={`p-2 rounded-lg border ${mfaState.selectedMethod === "sms" ? "border-blue-500 bg-blue-50 text-blue-700" : "border-gray-200 text-gray-500 hover:bg-gray-50"}`} title="SMS認証"><Smartphone className="h-5 w-5" /></button>
-              )}
+          {!isMethodSelected ? (
+            <div className="space-y-4">
               {mfaState.availableMethods.includes("passkey") && (
-                <button onClick={() => changeMfaMethod("passkey")} className={`p-2 rounded-lg border ${mfaState.selectedMethod === "passkey" ? "border-blue-500 bg-blue-50 text-blue-700" : "border-gray-200 text-gray-500 hover:bg-gray-50"}`} title="パスキー"><Fingerprint className="h-5 w-5" /></button>
+                <button 
+                  onClick={() => selectMfaMethod("passkey")} 
+                  disabled={isLoading}
+                  className="w-full flex items-center p-4 border border-gray-200 rounded-xl hover:bg-gray-50 hover:border-blue-300 transition-all group disabled:opacity-50"
+                >
+                  <div className="bg-blue-50 p-3 rounded-lg group-hover:bg-blue-100 transition-colors mr-4">
+                    <Fingerprint className="h-6 w-6 text-blue-600" />
+                  </div>
+                  <div className="text-left">
+                    <p className="text-sm font-bold text-gray-900">パスキー</p>
+                    <p className="text-xs text-gray-500 mt-1">端末の生体認証（指紋・顔）を利用します</p>
+                  </div>
+                </button>
+              )}
+
+              {mfaState.availableMethods.includes("totp") && (
+                <button 
+                  onClick={() => selectMfaMethod("totp")} 
+                  disabled={isLoading}
+                  className="w-full flex items-center p-4 border border-gray-200 rounded-xl hover:bg-gray-50 hover:border-blue-300 transition-all group disabled:opacity-50"
+                >
+                  <div className="bg-blue-50 p-3 rounded-lg group-hover:bg-blue-100 transition-colors mr-4">
+                    <ScanLine className="h-6 w-6 text-blue-600" />
+                  </div>
+                  <div className="text-left">
+                    <p className="text-sm font-bold text-gray-900">認証アプリ</p>
+                    <p className="text-xs text-gray-500 mt-1">Google Authenticator等を使用します</p>
+                  </div>
+                </button>
+              )}
+
+              {mfaState.availableMethods.includes("email") && (
+                <button 
+                  onClick={() => selectMfaMethod("email")} 
+                  disabled={isLoading}
+                  className="w-full flex items-center p-4 border border-gray-200 rounded-xl hover:bg-gray-50 hover:border-blue-300 transition-all group disabled:opacity-50"
+                >
+                  <div className="bg-blue-50 p-3 rounded-lg group-hover:bg-blue-100 transition-colors mr-4">
+                    <Mail className="h-6 w-6 text-blue-600" />
+                  </div>
+                  <div className="text-left">
+                    <p className="text-sm font-bold text-gray-900">メールアドレス</p>
+                    <p className="text-xs text-gray-500 mt-1">登録済みのメールにコードを送信します</p>
+                  </div>
+                </button>
+              )}
+
+              {mfaState.availableMethods.includes("sms") && (
+                <button 
+                  onClick={() => selectMfaMethod("sms")} 
+                  disabled={isLoading}
+                  className="w-full flex items-center p-4 border border-gray-200 rounded-xl hover:bg-gray-50 hover:border-blue-300 transition-all group disabled:opacity-50"
+                >
+                  <div className="bg-blue-50 p-3 rounded-lg group-hover:bg-blue-100 transition-colors mr-4">
+                    <Smartphone className="h-6 w-6 text-blue-600" />
+                  </div>
+                  <div className="text-left">
+                    <p className="text-sm font-bold text-gray-900">SMS認証</p>
+                    <p className="text-xs text-gray-500 mt-1">登録済みの電話番号にコードを送信します</p>
+                  </div>
+                </button>
               )}
             </div>
+          ) : (
+            <form className="space-y-6" onSubmit={handleMfaSubmit}>
+              
+              {/* パスキー認証の場合のUI */}
+              {isPasskey && (
+                <div className="text-center animate-fade-in space-y-4 py-4">
+                  <Fingerprint className="h-14 w-14 text-blue-600 mx-auto" />
+                  <p className="text-sm font-bold text-gray-900">生体認証（パスキー）</p>
+                  <p className="text-xs text-gray-500 px-4">
+                    この端末に登録されている指紋・顔認証やPINコードを使用して安全にログインします。
+                  </p>
+                  <button
+                    type="button"
+                    onClick={handlePasskeyAuth}
+                    disabled={isVerifyingPasskey}
+                    className="mt-6 w-full flex justify-center items-center py-3.5 px-4 border border-transparent rounded-lg shadow-md text-sm font-bold text-white transition-all bg-blue-600 hover:bg-blue-700"
+                  >
+                    {isVerifyingPasskey ? <Loader2 className="animate-spin h-5 w-5" /> : "生体認証を起動する"}
+                  </button>
+                </div>
+              )}
+
+              {/* メールまたはTOTP認証の場合のUI */}
+              {(isEmail || isTotp) && (
+                <>
+                  {needsTotpSetup && totpSetupData && (
+                    <div className="mb-6 bg-gray-50 p-4 rounded-xl border border-gray-200 text-center animate-fade-in">
+                      <p className="text-sm font-bold text-gray-800 mb-2">認証アプリの初回設定</p>
+                      <p className="text-xs text-gray-500 mb-4">Google Authenticator等のアプリでQRコードを読み取ってください。</p>
+                      <div className="flex justify-center mb-4 bg-white p-2 rounded-lg inline-block border border-gray-200 shadow-sm">
+                        <QRCodeSVG value={totpSetupData.uri} size={150} level="M" />
+                      </div>
+                      <p className="text-xs text-gray-400 font-mono">キー: {totpSetupData.secret}</p>
+                    </div>
+                  )}
+
+                  <div>
+                    <label className="block text-sm font-bold text-gray-700 mb-2 text-center">
+                      {isEmail ? "メールで受信した8桁のコード" : "アプリに表示された6桁のコード"}
+                    </label>
+                    <input 
+                      type="text" 
+                      required={!isPasskey}
+                      maxLength={isEmail ? 8 : 6}
+                      value={mfaCode} 
+                      onChange={(e) => setMfaCode(e.target.value.replace(/[^0-9]/g, ''))}
+                      className={`block w-full text-center tracking-[0.2em] font-mono border border-gray-300 rounded-lg py-4 px-3 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-shadow bg-gray-50 focus:bg-white ${isEmail ? 'text-3xl' : 'text-4xl'}`} 
+                      placeholder={isEmail ? "00000000" : "000000"} 
+                    />
+                    {isEmail && (
+                      <p className="text-xs text-center text-gray-500 mt-3 font-medium">
+                        {mfaState.userData.email.replace(/(.{2})(.*)(?=@)/, "$1***")} 宛に送信しました
+                      </p>
+                    )}
+                  </div>
+
+                  <button
+                    type="submit"
+                    disabled={isLoading || (isEmail ? mfaCode.length !== 8 : mfaCode.length !== 6)}
+                    className={`w-full flex justify-center items-center py-3.5 px-4 border border-transparent rounded-lg shadow-md text-sm font-bold text-white transition-all ${
+                      isLoading || (isEmail ? mfaCode.length !== 8 : mfaCode.length !== 6) ? "bg-blue-400 cursor-not-allowed" : "bg-blue-600 hover:bg-blue-700 hover:shadow-lg focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+                    }`}
+                  >
+                    {isLoading ? <Loader2 className="animate-spin h-5 w-5" /> : (needsTotpSetup ? "設定して認証する" : "認証する")}
+                  </button>
+                </>
+              )}
+
+              <div className="mt-4 text-center">
+                <button 
+                  type="button" 
+                  onClick={() => setMfaState({ ...mfaState, selectedMethod: "" })} 
+                  className="text-sm font-bold text-blue-600 hover:text-blue-800 transition-colors"
+                >
+                  他の認証方法を選ぶ
+                </button>
+              </div>
+            </form>
           )}
 
-          <form className="space-y-6" onSubmit={handleMfaSubmit}>
-            
-            {needsTotpSetup && totpSetupData && (
-              <div className="mb-6 bg-gray-50 p-4 rounded-xl border border-gray-200 text-center animate-fade-in">
-                <p className="text-sm font-bold text-gray-800 mb-2">認証アプリの初回設定</p>
-                <p className="text-xs text-gray-500 mb-4">Google Authenticator等のアプリでQRコードを読み取ってください。</p>
-                <div className="flex justify-center mb-4 bg-white p-2 rounded-lg inline-block border border-gray-200 shadow-sm">
-                  <QRCodeSVG value={totpSetupData.uri} size={150} level="M" />
-                </div>
-                <p className="text-xs text-gray-400 font-mono">キー: {totpSetupData.secret}</p>
-              </div>
-            )}
-
-            <div>
-              <label className="block text-sm font-bold text-gray-700 mb-2 text-center">
-                {isEmail ? "メールで受信した8桁のコード" : "アプリに表示された6桁のコード"}
-              </label>
-              <input 
-                type="text" 
-                required 
-                maxLength={isEmail ? 8 : 6}
-                value={mfaCode} 
-                onChange={(e) => setMfaCode(e.target.value.replace(/[^0-9]/g, ''))}
-                className={`block w-full text-center tracking-[0.2em] font-mono border border-gray-300 rounded-lg py-4 px-3 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-shadow bg-gray-50 focus:bg-white ${isEmail ? 'text-3xl' : 'text-4xl'}`} 
-                placeholder={isEmail ? "00000000" : "000000"} 
-              />
-              {isEmail && (
-                <p className="text-xs text-center text-gray-500 mt-3 font-medium">
-                  {mfaState.userData.email.replace(/(.{2})(.*)(?=@)/, "$1***")} 宛に送信しました
-                </p>
-              )}
-            </div>
-
-            <button
-              type="submit"
-              disabled={isLoading || (isEmail ? mfaCode.length !== 8 : mfaCode.length !== 6)}
-              className={`w-full flex justify-center items-center py-3.5 px-4 border border-transparent rounded-lg shadow-md text-sm font-bold text-white transition-all ${
-                isLoading || (isEmail ? mfaCode.length !== 8 : mfaCode.length !== 6) ? "bg-blue-400 cursor-not-allowed" : "bg-blue-600 hover:bg-blue-700 hover:shadow-lg focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
-              }`}
-            >
-              {isLoading ? <Loader2 className="animate-spin h-5 w-5" /> : (needsTotpSetup ? "設定して認証する" : "認証する")}
-            </button>
-          </form>
-
-          <div className="mt-6 text-center">
+          <div className="mt-6 text-center border-t border-gray-100 pt-6">
             <button onClick={cancelMfa} className="inline-flex items-center text-sm font-bold text-gray-500 hover:text-gray-700 transition-colors">
               <ArrowLeft className="h-4 w-4 mr-1" /> ログイン画面に戻る
             </button>

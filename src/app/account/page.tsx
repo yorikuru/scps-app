@@ -12,6 +12,7 @@ import {
 import { doc, getDoc, updateDoc } from "firebase/firestore";
 import { auth, db, googleProvider, microsoftProvider } from "@/lib/firebase";
 import { QRCodeSVG } from "qrcode.react";
+import { startRegistration } from "@simplewebauthn/browser";
 import { 
   User as UserIcon, 
   ShieldCheck, 
@@ -35,7 +36,8 @@ import {
   ArrowRight,
   ArrowLeft,
   Download,
-  Apple
+  Apple,
+  Fingerprint
 } from "lucide-react";
 
 // UIアラートの型定義
@@ -367,6 +369,78 @@ function AccountContent() {
     });
   };
 
+  // --- パスキー (WebAuthn) 設定処理 ---
+  const handleRegisterPasskey = async () => {
+    if (!currentUser?.email) {
+      showAlert("error", "メールアドレスが登録されていません。");
+      return;
+    }
+    
+    setIsProcessing(true);
+    try {
+      // 1. オプション（チャレンジ）を取得
+      const optionsResp = await fetch('/api/webauthn/register-options', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ uid: currentUser.uid, email: currentUser.email })
+      });
+      const optionsJSON = await optionsResp.json();
+      if (!optionsResp.ok) throw new Error(optionsJSON.error || "オプションの生成に失敗しました");
+
+      // 2. ブラウザの生体認証（WebAuthn API）を呼び出し
+      const attResp = await startRegistration({ optionsJSON });
+
+      // 3. 署名をサーバーで検証し保存
+      const verifyResp = await fetch('/api/webauthn/register-verify', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ uid: currentUser.uid, response: attResp })
+      });
+      const verifyResult = await verifyResp.json();
+      if (!verifyResp.ok) throw new Error(verifyResult.error || "検証に失敗しました");
+
+      showAlert("success", "現在の端末をパスキーとして登録しました！");
+      
+      // フロントエンドのStateを更新
+      const newPasskeyObj = { createdAt: new Date().toISOString() };
+      setUserData((prev: any) => prev ? { ...prev, passkeys: [...(prev.passkeys || []), newPasskeyObj] } : null);
+
+    } catch (error: any) {
+      console.error("Passkey register error:", error);
+      // エラー文言が "The operation either timed out or was not allowed" 等の場合はキャンセル扱い
+      if (error.message.includes("timed out") || error.message.includes("not allowed") || error.name === "NotAllowedError") {
+        showAlert("error", "パスキーの登録がキャンセルされました。");
+      } else {
+        showAlert("error", error.message || "パスキーの登録に失敗しました。");
+      }
+    } finally {
+      setIsProcessing(false);
+    }
+  };
+
+  const handleRemovePasskeys = () => {
+    setConfirmDialog({
+      show: true,
+      message: "登録されているすべてのパスキー（生体認証端末）を解除しますか？\n解除後はパスワード等でログインする必要があります。",
+      onConfirm: async () => {
+        setConfirmDialog({ show: false, message: "", onConfirm: () => {} });
+        if (!userData) return;
+        setIsProcessing(true);
+        try {
+          await updateDoc(doc(db, "users", userData.id), {
+            passkeys: []
+          });
+          setUserData((prev: any) => prev ? { ...prev, passkeys: [] } : null);
+          showAlert("success", "すべてのパスキーを解除しました。");
+        } catch (error) {
+          showAlert("error", "パスキーの解除に失敗しました。");
+        } finally {
+          setIsProcessing(false);
+        }
+      }
+    });
+  };
+
   if (isLoading || isProcessingLine) {
     return (
       <div className="min-h-screen bg-gray-50 flex flex-col justify-center items-center p-4 text-center">
@@ -430,7 +504,6 @@ function AccountContent() {
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-6 bg-black/60 backdrop-blur-sm animate-fade-in">
           <div className="bg-white rounded-2xl shadow-2xl max-w-3xl w-full max-h-[95vh] overflow-hidden flex flex-col relative border border-gray-100">
             
-            {/* モーダルヘッダー */}
             <div className="px-6 py-4 border-b border-gray-100 flex justify-between items-center bg-white/95 sticky top-0 z-10">
               <div className="flex items-center text-blue-900">
                 <ShieldAlert className="h-5 w-5 mr-2 text-blue-600" />
@@ -441,10 +514,7 @@ function AccountContent() {
               </button>
             </div>
 
-            {/* モーダルボディ (スクロール可能) */}
             <div className="p-6 overflow-y-auto flex-1 bg-gray-50/30">
-              
-              {/* ステップインジケーター */}
               <div className="max-w-xl mx-auto mb-10">
                 <div className="flex items-center justify-between relative">
                   <div className="absolute left-0 top-1/2 transform -translate-y-1/2 w-full h-1 bg-gray-200 rounded-full -z-10"></div>
@@ -460,7 +530,6 @@ function AccountContent() {
 
               <div className="max-w-2xl mx-auto bg-white p-6 sm:p-8 rounded-2xl shadow-sm border border-gray-100">
                 
-                {/* STEP 1: アプリ準備 */}
                 {setupStep === 1 && (
                   <div className="text-center animate-fade-in">
                     <div className="mx-auto w-16 h-16 bg-blue-50 rounded-full flex items-center justify-center mb-6">
@@ -473,8 +542,7 @@ function AccountContent() {
 
                     {deviceType !== "loading" && (
                       <div className="grid gap-6 sm:grid-cols-2 mb-10 text-left">
-                        
-                        {/* Microsoft Authenticator */}
+                        {/* Microsoft */}
                         <div className="border border-gray-200 rounded-xl p-5 bg-gray-50 flex flex-col justify-between">
                           <div>
                             <div className="flex items-center justify-center sm:justify-start mb-4">
@@ -484,7 +552,6 @@ function AccountContent() {
                               <h6 className="font-bold text-sm text-gray-900">Microsoft<br/>Authenticator</h6>
                             </div>
                             
-                            {/* PC: QRコード表示 */}
                             {deviceType === "pc" && (
                               <div className="flex justify-center gap-4 mb-4">
                                 <div className="text-center">
@@ -503,7 +570,6 @@ function AccountContent() {
                             )}
                           </div>
                           
-                          {/* ボタン表示 (スマホ、またはPCでもクリックできるように) */}
                           <div className="space-y-2 mt-auto">
                             {(deviceType === "pc" || deviceType === "ios") && (
                               <a href={APP_URLS.ms.ios} target="_blank" rel="noopener noreferrer" className="flex items-center justify-center w-full bg-gray-900 text-white text-xs font-bold py-2.5 rounded-lg hover:bg-black transition-colors">
@@ -512,13 +578,13 @@ function AccountContent() {
                             )}
                             {(deviceType === "pc" || deviceType === "android") && (
                               <a href={APP_URLS.ms.android} target="_blank" rel="noopener noreferrer" className="flex items-center justify-center w-full bg-blue-600 text-white text-xs font-bold py-2.5 rounded-lg hover:bg-blue-700 transition-colors">
-                                <Download className="h-4 w-4 mr-1.5" /> Google Play で手に入れる
+                                <Download className="h-4 w-4 mr-1.5" /> Google Play で入手
                               </a>
                             )}
                           </div>
                         </div>
 
-                        {/* Google Authenticator */}
+                        {/* Google */}
                         <div className="border border-gray-200 rounded-xl p-5 bg-gray-50 flex flex-col justify-between">
                           <div>
                             <div className="flex items-center justify-center sm:justify-start mb-4">
@@ -531,7 +597,6 @@ function AccountContent() {
                               <h6 className="font-bold text-sm text-gray-900">Google<br/>Authenticator</h6>
                             </div>
 
-                            {/* PC: QRコード表示 */}
                             {deviceType === "pc" && (
                               <div className="flex justify-center gap-4 mb-4">
                                 <div className="text-center">
@@ -550,7 +615,6 @@ function AccountContent() {
                             )}
                           </div>
                           
-                          {/* ボタン表示 (スマホ、またはPCでもクリックできるように) */}
                           <div className="space-y-2 mt-auto">
                             {(deviceType === "pc" || deviceType === "ios") && (
                               <a href={APP_URLS.google.ios} target="_blank" rel="noopener noreferrer" className="flex items-center justify-center w-full bg-gray-900 text-white text-xs font-bold py-2.5 rounded-lg hover:bg-black transition-colors">
@@ -559,7 +623,7 @@ function AccountContent() {
                             )}
                             {(deviceType === "pc" || deviceType === "android") && (
                               <a href={APP_URLS.google.android} target="_blank" rel="noopener noreferrer" className="flex items-center justify-center w-full bg-blue-600 text-white text-xs font-bold py-2.5 rounded-lg hover:bg-blue-700 transition-colors">
-                                <Download className="h-4 w-4 mr-1.5" /> Google Play で手に入れる
+                                <Download className="h-4 w-4 mr-1.5" /> Google Play で入手
                               </a>
                             )}
                           </div>
@@ -579,7 +643,6 @@ function AccountContent() {
                   </div>
                 )}
 
-                {/* STEP 2: QRコード */}
                 {setupStep === 2 && (
                   <div className="text-center animate-fade-in">
                     <div className="mx-auto w-16 h-16 bg-blue-50 rounded-full flex items-center justify-center mb-6">
@@ -630,7 +693,6 @@ function AccountContent() {
                   </div>
                 )}
 
-                {/* STEP 3: コード検証 */}
                 {setupStep === 3 && (
                   <div className="text-center animate-fade-in">
                     <div className="mx-auto w-16 h-16 bg-blue-50 rounded-full flex items-center justify-center mb-6">
@@ -670,7 +732,6 @@ function AccountContent() {
                   </div>
                 )}
 
-                {/* STEP 4: 完了 */}
                 {setupStep === 4 && (
                   <div className="text-center animate-fade-in py-6">
                     <div className="mx-auto w-24 h-24 bg-green-50 rounded-full flex items-center justify-center mb-8 border-4 border-green-100">
@@ -697,13 +758,12 @@ function AccountContent() {
       {/* メインコンテンツ (1カラム・全幅活用) */}
       <div className="max-w-5xl mx-auto space-y-10">
         
-        {/* ページヘッダー */}
         <div className="flex items-center justify-between pb-4 border-b border-gray-200">
           <div>
             <h1 className="text-2xl sm:text-3xl font-extrabold text-gray-900 flex items-center tracking-tight">
               マイアカウント
             </h1>
-            <p className="mt-2 text-sm text-gray-500 font-medium">プロフィール情報の確認と、セキュリティ設定（外部アカウント連携）を行います。</p>
+            <p className="mt-2 text-sm text-gray-500 font-medium">プロフィール情報の確認と、セキュリティ設定を行います。</p>
           </div>
           <button
             onClick={() => router.push("/top")}
@@ -713,7 +773,6 @@ function AccountContent() {
           </button>
         </div>
 
-        {/* UIアラート */}
         {alert.show && (
           <div className={`p-4 rounded-xl text-sm font-bold flex items-center shadow-sm animate-fade-in ${alert.type === "success" ? "bg-green-50 text-green-800 border border-green-200" : "bg-red-50 text-red-800 border border-red-200"}`}>
             {alert.type === "success" ? <CheckCircle2 className="mr-3 h-5 w-5 flex-shrink-0" /> : <AlertCircle className="mr-3 h-5 w-5 flex-shrink-0" />}
@@ -732,49 +791,31 @@ function AccountContent() {
           <div className="p-0">
             <dl className="divide-y divide-gray-100">
               <div className="px-6 py-5 flex flex-col sm:flex-row sm:items-center hover:bg-gray-50/50 transition-colors">
-                <dt className="text-sm font-bold text-gray-500 sm:w-1/4 mb-1 sm:mb-0 flex items-center">
-                  氏名
-                </dt>
+                <dt className="text-sm font-bold text-gray-500 sm:w-1/4 mb-1 sm:mb-0 flex items-center">氏名</dt>
                 <dd className="text-base text-gray-900 font-bold sm:w-3/4">
                   {userData?.name || "未設定"} <span className="text-gray-400 font-medium text-sm ml-3">{userData?.nameKana || ""}</span>
                 </dd>
               </div>
               <div className="px-6 py-5 flex flex-col sm:flex-row sm:items-center hover:bg-gray-50/50 transition-colors">
-                <dt className="text-sm font-bold text-gray-500 sm:w-1/4 mb-1 sm:mb-0 flex items-center">
-                  メールアドレス
-                </dt>
-                <dd className="text-base text-gray-900 font-medium sm:w-3/4">
-                  {currentUser?.email}
-                </dd>
+                <dt className="text-sm font-bold text-gray-500 sm:w-1/4 mb-1 sm:mb-0 flex items-center">メールアドレス</dt>
+                <dd className="text-base text-gray-900 font-medium sm:w-3/4">{currentUser?.email}</dd>
               </div>
               <div className="px-6 py-5 flex flex-col sm:flex-row sm:items-center hover:bg-gray-50/50 transition-colors">
-                <dt className="text-sm font-bold text-gray-500 sm:w-1/4 mb-1 sm:mb-0 flex items-center">
-                  所属テナント
-                </dt>
-                <dd className="text-base text-gray-900 font-medium sm:w-3/4">
-                  {tenantData?.name || "未設定"}
-                </dd>
+                <dt className="text-sm font-bold text-gray-500 sm:w-1/4 mb-1 sm:mb-0 flex items-center">所属テナント</dt>
+                <dd className="text-base text-gray-900 font-medium sm:w-3/4">{tenantData?.name || "未設定"}</dd>
               </div>
               <div className="px-6 py-5 flex flex-col sm:flex-row sm:items-center hover:bg-gray-50/50 transition-colors">
-                <dt className="text-sm font-bold text-gray-500 sm:w-1/4 mb-1 sm:mb-0 flex items-center">
-                  役職・権限
-                </dt>
+                <dt className="text-sm font-bold text-gray-500 sm:w-1/4 mb-1 sm:mb-0 flex items-center">役職・権限</dt>
                 <dd className="text-base text-gray-900 font-medium sm:w-3/4 flex items-center flex-wrap gap-3">
                   <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-bold bg-blue-50 text-blue-700 border border-blue-100">
                     {userData?.role === "admin" ? "テナント管理者" : userData?.role === "system_admin" ? "システム特権" : userData?.role === "officer" ? "生徒会役員" : "一般生徒"}
                   </span>
-                  {userData?.positionName && (
-                    <span className="text-gray-700 font-bold">{userData.positionName}</span>
-                  )}
+                  {userData?.positionName && <span className="text-gray-700 font-bold">{userData.positionName}</span>}
                 </dd>
               </div>
               <div className="px-6 py-5 flex flex-col sm:flex-row sm:items-center hover:bg-gray-50/50 transition-colors">
-                <dt className="text-sm font-bold text-gray-500 sm:w-1/4 mb-1 sm:mb-0 flex items-center">
-                  電話番号
-                </dt>
-                <dd className="text-base text-gray-900 font-medium sm:w-3/4">
-                  {userData?.phoneNumber || "未登録"}
-                </dd>
+                <dt className="text-sm font-bold text-gray-500 sm:w-1/4 mb-1 sm:mb-0 flex items-center">電話番号</dt>
+                <dd className="text-base text-gray-900 font-medium sm:w-3/4">{userData?.phoneNumber || "未登録"}</dd>
               </div>
             </dl>
           </div>
@@ -788,12 +829,61 @@ function AccountContent() {
               2段階認証 (MFA)
             </h3>
           </div>
-          <div className="p-6">
+          <div className="p-6 space-y-4">
+            
+            {/* パスキー (WebAuthn) カード */}
             <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 p-5 rounded-xl bg-gray-50 border border-gray-100">
               <div className="flex-1">
-                <p className="text-base font-bold text-gray-900 mb-1">認証アプリ連携</p>
+                <p className="text-base font-bold text-gray-900 mb-1 flex items-center">
+                  <Fingerprint className="h-4 w-4 mr-1.5 text-gray-700" />
+                  パスキー（生体認証）連携
+                </p>
                 <p className="text-sm text-gray-500 leading-relaxed mb-4">
-                  Google Authenticator等のアプリを登録することで、ログイン時に追加の認証を求め、アカウントの安全性を大幅に高めます。
+                  Touch IDやFace IDなど、端末の生体認証機能を使ってパスワードレスでより安全にログインできます。
+                </p>
+                <div className="flex items-center">
+                  <span className="text-sm font-bold text-gray-900 mr-3">現在の状態:</span>
+                  {userData?.passkeys && userData.passkeys.length > 0 ? (
+                    <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-bold bg-green-100 text-green-800">
+                      {userData.passkeys.length}台の端末を登録済み
+                    </span>
+                  ) : (
+                    <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-bold bg-gray-200 text-gray-600">
+                      未登録
+                    </span>
+                  )}
+                </div>
+              </div>
+              
+              <div className="w-full md:w-auto flex-shrink-0 flex flex-col md:flex-row gap-3">
+                <button 
+                  onClick={handleRegisterPasskey}
+                  disabled={isSettingTotp || isProcessing}
+                  className="w-full md:w-auto px-6 py-3 border border-transparent rounded-xl shadow-sm text-sm font-bold text-white bg-gray-900 hover:bg-black focus:outline-none transition-colors"
+                >
+                  現在の端末を登録する
+                </button>
+                {userData?.passkeys && userData.passkeys.length > 0 && (
+                  <button 
+                    onClick={handleRemovePasskeys}
+                    disabled={isProcessing}
+                    className="w-full md:w-auto px-6 py-3 border border-red-200 rounded-xl shadow-sm text-sm font-bold text-red-600 bg-white hover:bg-red-50 focus:outline-none transition-colors"
+                  >
+                    連携を解除
+                  </button>
+                )}
+              </div>
+            </div>
+
+            {/* 認証アプリ連携 カード */}
+            <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 p-5 rounded-xl bg-gray-50 border border-gray-100">
+              <div className="flex-1">
+                <p className="text-base font-bold text-gray-900 mb-1 flex items-center">
+                  <Scan className="h-4 w-4 mr-1.5 text-gray-700" />
+                  認証アプリ連携 (TOTP)
+                </p>
+                <p className="text-sm text-gray-500 leading-relaxed mb-4">
+                  Google Authenticator等のアプリを登録することで、ログイン時に追加の認証を求め、アカウントの安全性を高めます。
                 </p>
                 <div className="flex items-center">
                   <span className="text-sm font-bold text-gray-900 mr-3">現在の状態:</span>
@@ -809,26 +899,27 @@ function AccountContent() {
                 </div>
               </div>
               
-              <div className="w-full md:w-auto flex-shrink-0">
+              <div className="w-full md:w-auto flex-shrink-0 flex flex-col md:flex-row gap-3">
                 {!userData?.totpSecret ? (
                   <button 
                     onClick={handleStartTotpSetup}
                     disabled={isSettingTotp || isProcessing}
-                    className="w-full md:w-auto px-8 py-3 border border-transparent rounded-xl shadow-sm text-sm font-bold text-white bg-blue-600 hover:bg-blue-700 focus:outline-none transition-colors"
+                    className="w-full md:w-auto px-6 py-3 border border-transparent rounded-xl shadow-sm text-sm font-bold text-blue-600 bg-blue-50 hover:bg-blue-100 focus:outline-none transition-colors"
                   >
-                    設定を始める
+                    アプリを設定する
                   </button>
                 ) : (
                   <button 
                     onClick={handleRemoveTotp}
                     disabled={isProcessing}
-                    className="w-full md:w-auto px-8 py-3 border border-red-200 rounded-xl shadow-sm text-sm font-bold text-red-600 bg-white hover:bg-red-50 focus:outline-none transition-colors"
+                    className="w-full md:w-auto px-6 py-3 border border-red-200 rounded-xl shadow-sm text-sm font-bold text-red-600 bg-white hover:bg-red-50 focus:outline-none transition-colors"
                   >
                     連携を解除
                   </button>
                 )}
               </div>
             </div>
+
           </div>
         </section>
 
