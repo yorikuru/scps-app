@@ -28,6 +28,9 @@ type ExtendedUserData = UserData & {
   authProviders?: string[];
   accountStatus: "active" | "pending" | "rejected" | "unaccessed";
   requireMfa?: boolean;
+  mfaPasskeyAllowed?: boolean;
+  mfaAppAllowed?: boolean;
+  mfaEmailAllowed?: boolean;
 };
 
 type CsvPreviewRow = ExtendedUserData & {
@@ -68,7 +71,8 @@ export default function CsvUploadModal({ schoolData, users, fetchUsers, showAler
       "部活・クラブ", "役職名", "IT担当者(はい/いいえ)", "性別(男性/女性/その他)", 
       "生年月日(YYYY-MM-DD)", "電話番号", "所属組織住所", "出身校",
       "アカウント有効開始日(YYYY-MM-DD)", "アカウント有効終了日(YYYY-MM-DD)",
-      "LINE連携許可(はい/いいえ)", "LINE連携強制(はい/いいえ)"
+      "LINE連携許可(はい/いいえ)", "LINE連携強制(はい/いいえ)",
+      "MFA強制(はい/いいえ)", "MFAパスキー許可(はい/いいえ)", "MFA認証アプリ許可(はい/いいえ)", "MFAメール許可(はい/いいえ)"
     ];
     
     const sampleRow = [
@@ -76,7 +80,9 @@ export default function CsvUploadModal({ schoolData, users, fetchUsers, showAler
       "yamada@example.com", "3101", "3", "1", "1", "普通科", 
       "陸上部", "", "いいえ", "男性", 
       "2000-01-01", "090-0000-0000", "東京都〇〇区", "田中高等学校",
-      "2026-04-01", "2029-03-31", "はい", "いいえ"
+      "2026-04-01", "2029-03-31", 
+      "はい", "いいえ",
+      "いいえ", "はい", "はい", "はい"
     ];
 
     const csvContent = headers.join(",") + "\n" + sampleRow.join(",");
@@ -151,7 +157,8 @@ export default function CsvUploadModal({ schoolData, users, fetchUsers, showAler
             email, studentId, grade, classNumber, attendanceNumber, department, 
             club, positionName, isITManagerStr, genderStr, 
             birthDate, phoneNumber, organizationAddress, previousSchool,
-            validStart, validEnd, lineAllowedStr, lineEnforcedStr
+            validStart, validEnd, lineAllowedStr, lineEnforcedStr,
+            requireMfaStr, mfaPasskeyAllowedStr, mfaAppAllowedStr, mfaEmailAllowedStr
           ] = cols;
           
           if (!rawName || !systemId) continue;
@@ -192,13 +199,16 @@ export default function CsvUploadModal({ schoolData, users, fetchUsers, showAler
             previousSchool: previousSchool || "",
             accountValidStartDate: validStart || "",
             accountValidEndDate: validEnd || "",
-            lineConnectionAllowed: parseBoolean(lineAllowedStr, true),
-            lineConnectionEnforced: parseBoolean(lineEnforcedStr, false),
+            lineConnectionAllowed: lineAllowedStr ? parseBoolean(lineAllowedStr, true) : (existingUser?.lineConnectionAllowed ?? true),
+            lineConnectionEnforced: lineEnforcedStr ? parseBoolean(lineEnforcedStr, false) : (existingUser?.lineConnectionEnforced ?? false),
+            requireMfa: requireMfaStr ? parseBoolean(requireMfaStr, false) : (existingUser?.requireMfa ?? false),
+            mfaPasskeyAllowed: mfaPasskeyAllowedStr ? parseBoolean(mfaPasskeyAllowedStr, true) : (existingUser?.mfaPasskeyAllowed ?? true),
+            mfaAppAllowed: mfaAppAllowedStr ? parseBoolean(mfaAppAllowedStr, true) : (existingUser?.mfaAppAllowed ?? true),
+            mfaEmailAllowed: mfaEmailAllowedStr ? parseBoolean(mfaEmailAllowedStr, true) : (existingUser?.mfaEmailAllowed ?? true),
             schoolId: schoolData.id,
             accountStatus: existingUser ? existingUser.accountStatus : "unaccessed",
             allowedModules: existingUser ? existingUser.allowedModules : (schoolData.availableModules || SYSTEM_MODULES.map(m => m.id)),
             initialPassword: existingUser ? existingUser.initialPassword : generateInitialPassword(),
-            requireMfa: existingUser ? existingUser.requireMfa : false,
           });
           
           if (!errorMessage) newSelectedIndices.add(i);

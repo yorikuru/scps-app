@@ -7,7 +7,8 @@ import { doc, getDoc, collection, getDocs, updateDoc, arrayUnion } from "firebas
 import { auth, db } from "@/lib/firebase";
 import { 
   User as UserIcon, Settings, LogOut, LayoutDashboard, Loader2, 
-  BellRing, X, AlertTriangle, ShieldBan, Building2, Menu, ChevronRight
+  BellRing, X, AlertTriangle, ShieldBan, Building2, Menu, ChevronRight,
+  ShieldCheck, Lock, Smartphone, CheckCircle2, ArrowRight
 } from "lucide-react";
 import Link from "next/link";
 
@@ -17,9 +18,15 @@ type UserData = {
   schoolName: string;
   role: string;
   schoolId: string;
-  accountStatus: "active" | "pending" | "rejected";
+  accountStatus: "active" | "pending" | "rejected" | "unaccessed";
   positionName?: string;
   isITManager?: boolean;
+  // 強制設定チェック用のフィールド
+  initialPassword?: string;
+  lineConnectionEnforced?: boolean;
+  lineUid?: string;
+  requireMfa?: boolean;
+  mfaSetupComplete?: boolean;
 };
 
 type SchoolData = {
@@ -49,6 +56,14 @@ export default function PortalTopPage() {
   const [messages, setMessages] = useState<SystemMessage[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [errorMsg, setErrorMsg] = useState("");
+  
+  // 必須設定のステータス管理
+  const [setupStatus, setSetupStatus] = useState({
+    needsPassword: false,
+    needsLine: false,
+    needsMfa: false,
+    isBlocked: false
+  });
   
   // メニューの開閉状態
   const [isProfileMenuOpen, setIsProfileMenuOpen] = useState(false);
@@ -87,6 +102,18 @@ export default function PortalTopPage() {
           const uData = { id: userDocSnap.id, ...userDocSnap.data() } as UserData;
           setUserData(uData);
 
+          // 必須設定のブロック判定ロジック
+          const needsPassword = !!uData.initialPassword;
+          const needsLine = !!uData.lineConnectionEnforced && !uData.lineUid;
+          const needsMfa = !!uData.requireMfa && !uData.mfaSetupComplete;
+          
+          setSetupStatus({
+            needsPassword,
+            needsLine,
+            needsMfa,
+            isBlocked: needsPassword || needsLine || needsMfa
+          });
+
           const schoolDocRef = doc(db, "schools", uData.schoolId);
           const schoolDocSnap = await getDoc(schoolDocRef);
           
@@ -105,7 +132,7 @@ export default function PortalTopPage() {
             mSnap.forEach(doc => {
               const data = doc.data() as Omit<SystemMessage, 'id'>;
               
-              // 1. 配信期間の判定 (ローカルタイム文字列をDate型に変換して比較)
+              // 1. 配信期間の判定
               const start = data.startAt ? new Date(data.startAt) : null;
               const end = data.endAt ? new Date(data.endAt) : null;
 
@@ -253,6 +280,116 @@ export default function PortalTopPage() {
           <button onClick={handleLogout} className="w-full inline-flex justify-center py-2 px-4 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50">
             ログアウトして戻る
           </button>
+        </div>
+      </div>
+    );
+  }
+
+  // ブロック判定 4: 必須設定チュートリアル（パスワード、MFA、LINE強制）
+  if (setupStatus.isBlocked) {
+    return (
+      <div className="min-h-screen bg-gray-100 flex flex-col items-center justify-center p-4 sm:p-6">
+        <div className="w-full max-w-2xl bg-white rounded-2xl shadow-xl overflow-hidden">
+          {/* ヘッダー */}
+          <div className="bg-gradient-to-r from-blue-600 to-indigo-700 p-8 text-center relative overflow-hidden">
+            <div className="absolute top-0 right-0 -mt-4 -mr-4 w-24 h-24 bg-white opacity-10 rounded-full blur-2xl"></div>
+            <div className="absolute bottom-0 left-0 -mb-4 -ml-4 w-20 h-20 bg-white opacity-10 rounded-full blur-xl"></div>
+            <ShieldCheck className="h-16 w-16 text-white mx-auto mb-4 relative z-10" />
+            <h1 className="text-2xl sm:text-3xl font-extrabold text-white relative z-10 tracking-tight">初期設定を完了してください</h1>
+            <p className="mt-3 text-blue-100 text-sm sm:text-base max-w-lg mx-auto relative z-10 font-medium leading-relaxed">
+              組織のセキュリティポリシーにより、システムを利用する前に以下の必須設定を完了する必要があります。
+            </p>
+          </div>
+          
+          {/* 設定タスクリスト */}
+          <div className="p-6 sm:p-8 space-y-4">
+            
+            {/* パスワード変更チェック */}
+            <div className={`flex items-start p-5 rounded-xl border-2 transition-all ${setupStatus.needsPassword ? "border-red-200 bg-red-50/50" : "border-green-200 bg-green-50"}`}>
+              <div className={`flex-shrink-0 mt-1 ${setupStatus.needsPassword ? "text-red-500" : "text-green-500"}`}>
+                {setupStatus.needsPassword ? <Lock className="h-6 w-6" /> : <CheckCircle2 className="h-6 w-6" />}
+              </div>
+              <div className="ml-4 flex-1">
+                <h3 className={`text-base font-bold ${setupStatus.needsPassword ? "text-red-900" : "text-green-900"}`}>
+                  初期パスワードの変更
+                </h3>
+                <p className={`text-sm mt-1 ${setupStatus.needsPassword ? "text-red-700" : "text-green-700"}`}>
+                  {setupStatus.needsPassword 
+                    ? "セキュリティ保護のため、管理者から発行された初期パスワードを任意のパスワードに変更してください。" 
+                    : "パスワードの変更は完了しています。"}
+                </p>
+              </div>
+              <div className="ml-4 flex-shrink-0 font-bold text-sm">
+                {setupStatus.needsPassword ? <span className="text-red-600 bg-red-100 px-3 py-1 rounded-full">未完了</span> : <span className="text-green-600 bg-green-100 px-3 py-1 rounded-full">完了</span>}
+              </div>
+            </div>
+
+            {/* 多要素認証チェック */}
+            {(userData?.requireMfa || setupStatus.needsMfa) && (
+              <div className={`flex items-start p-5 rounded-xl border-2 transition-all ${setupStatus.needsMfa ? "border-red-200 bg-red-50/50" : "border-green-200 bg-green-50"}`}>
+                <div className={`flex-shrink-0 mt-1 ${setupStatus.needsMfa ? "text-red-500" : "text-green-500"}`}>
+                  {setupStatus.needsMfa ? <ShieldCheck className="h-6 w-6" /> : <CheckCircle2 className="h-6 w-6" />}
+                </div>
+                <div className="ml-4 flex-1">
+                  <h3 className={`text-base font-bold ${setupStatus.needsMfa ? "text-red-900" : "text-green-900"}`}>
+                    多要素認証（MFA）の設定
+                  </h3>
+                  <p className={`text-sm mt-1 ${setupStatus.needsMfa ? "text-red-700" : "text-green-700"}`}>
+                    {setupStatus.needsMfa 
+                      ? "アカウントの安全性を高めるため、認証アプリまたはパスキーによる2段階認証の設定が必須です。" 
+                      : "多要素認証の設定は完了しています。"}
+                  </p>
+                </div>
+                <div className="ml-4 flex-shrink-0 font-bold text-sm">
+                  {setupStatus.needsMfa ? <span className="text-red-600 bg-red-100 px-3 py-1 rounded-full">未完了</span> : <span className="text-green-600 bg-green-100 px-3 py-1 rounded-full">完了</span>}
+                </div>
+              </div>
+            )}
+
+            {/* LINE連携チェック */}
+            {(userData?.lineConnectionEnforced || setupStatus.needsLine) && (
+              <div className={`flex items-start p-5 rounded-xl border-2 transition-all ${setupStatus.needsLine ? "border-red-200 bg-red-50/50" : "border-green-200 bg-green-50"}`}>
+                <div className={`flex-shrink-0 mt-1 ${setupStatus.needsLine ? "text-red-500" : "text-green-500"}`}>
+                  {setupStatus.needsLine ? <Smartphone className="h-6 w-6" /> : <CheckCircle2 className="h-6 w-6" />}
+                </div>
+                <div className="ml-4 flex-1">
+                  <h3 className={`text-base font-bold ${setupStatus.needsLine ? "text-red-900" : "text-green-900"}`}>
+                    LINEアカウントとの連携
+                  </h3>
+                  <p className={`text-sm mt-1 ${setupStatus.needsLine ? "text-red-700" : "text-green-700"}`}>
+                    {setupStatus.needsLine 
+                      ? "重要な通知を即座に受け取るため、LINEアカウントの連携が必須とされています。" 
+                      : "LINEアカウントの連携は完了しています。"}
+                  </p>
+                </div>
+                <div className="ml-4 flex-shrink-0 font-bold text-sm">
+                  {setupStatus.needsLine ? <span className="text-red-600 bg-red-100 px-3 py-1 rounded-full">未完了</span> : <span className="text-green-600 bg-green-100 px-3 py-1 rounded-full">完了</span>}
+                </div>
+              </div>
+            )}
+
+            {/* アクションボタン */}
+            <div className="pt-6 mt-4 border-t border-gray-100">
+              <button 
+                onClick={() => router.push('/account')}
+                className="w-full flex items-center justify-center px-6 py-4 border border-transparent rounded-xl shadow-md text-lg font-bold text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-colors"
+              >
+                アカウント設定画面へ進む
+                <ArrowRight className="ml-2 h-5 w-5" />
+              </button>
+              
+              <div className="mt-6 text-center">
+                <button 
+                  onClick={handleLogout} 
+                  className="text-sm font-bold text-gray-500 hover:text-gray-900 transition-colors inline-flex items-center"
+                >
+                  <LogOut className="h-4 w-4 mr-1" />
+                  ログアウト
+                </button>
+              </div>
+            </div>
+
+          </div>
         </div>
       </div>
     );
@@ -435,7 +572,7 @@ export default function PortalTopPage() {
           </p>
         </div>
 
-        {/* メインアプリアイコングリッド (マイアカウントは右上に移動したためアプリ群を強調) */}
+        {/* メインアプリアイコングリッド */}
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
           
           <Link href="/top/board" className="bg-white overflow-hidden shadow-sm rounded-xl p-6 hover:shadow-md transition-all group border border-gray-100 flex flex-col items-center text-center">
