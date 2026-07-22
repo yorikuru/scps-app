@@ -95,22 +95,36 @@ export default function UserManagement({ users, setUsers, schoolData, fetchUsers
     }
   };
 
-  const handlePasswordReset = async (email: string) => {
+  const handlePasswordReset = async (email?: string) => {
     if (!email) {
       showAlert("error", "メールアドレスが登録されていないため、リセットメールを送信できません。");
       return;
     }
+    
+    // Firebaseの標準機能ではなく、独自API（Microsoft Graph経由）を呼び出す
     try {
-      await sendPasswordResetEmail(auth, email);
-      showAlert("success", `${email} 宛にパスワードリセットメールを送信しました。`);
-    } catch (error) {
-      showAlert("error", "パスワードリセットメールの送信に失敗しました。");
+      const res = await fetch('/api/send-password-reset', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email })
+      });
+      
+      const data = await res.json();
+      
+      if (!res.ok) {
+        throw new Error(data.error || "メールの送信に失敗しました");
+      }
+      
+      showAlert("success", `${email} 宛にパスワードリセットメールを確実に送信しました。`);
+    } catch (error: any) {
+      console.error("Password reset error:", error);
+      showAlert("error", `パスワードリセットメールの送信に失敗しました: ${error.message}`);
     }
   };
 
   const handlePrint = (targets: ExtendedUserData[]) => setPrintTargets(targets);
 
-useEffect(() => {
+  useEffect(() => {
     const generatePDF = async () => {
       if (printTargets.length === 0) return;
       setIsGeneratingPDF(true);
@@ -152,7 +166,6 @@ useEffect(() => {
     if (printTargets.length > 0) setTimeout(() => generatePDF(), 500);
   }, [printTargets]);
 
-
   const processedUsers = useMemo(() => {
     let result = [...(users as ExtendedUserData[])];
     if (searchQuery) {
@@ -189,8 +202,8 @@ useEffect(() => {
         </div>
       )}
 
-{/* PDF非表示出力エリア（A4サイズ1ページに美しく収まる絶妙なバランス調整版） */}
-<div style={{ position: "absolute", left: "-9999px", top: 0 }}>
+      {/* PDF非表示出力エリア（A4サイズ1ページに美しく収まる絶妙なバランス調整版） */}
+      <div style={{ position: "absolute", left: "-9999px", top: 0 }}>
         {printTargets.map((user) => (
           <div key={user.id} id={`print-sheet-${user.id}`} style={{ display: "none", width: "210mm", height: "297mm", backgroundColor: "#ffffff", padding: "32px 36px", boxSizing: "border-box", fontFamily: "sans-serif", color: "#111827", overflow: "hidden" }}>
             
@@ -435,7 +448,8 @@ useEffect(() => {
                             <CheckCircle2 className="h-3 w-3 mr-1" /> 復旧
                           </button>
                         )}
-                      </div>                    </div>
+                      </div>
+                    </div>
                   </td>
                 </tr>
               ))}

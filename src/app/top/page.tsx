@@ -12,6 +12,12 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 
+type MfaPolicy = {
+  allowSetup: boolean;
+  forceSetup: boolean;
+  allowUsage: boolean;
+};
+
 type UserData = {
   id: string;
   name: string;
@@ -21,18 +27,32 @@ type UserData = {
   accountStatus: "active" | "pending" | "rejected" | "unaccessed";
   positionName?: string;
   isITManager?: boolean;
+  email?: string;
   // 強制設定チェック用のフィールド
   initialPassword?: string;
   lineConnectionEnforced?: boolean;
   lineUid?: string;
   requireMfa?: boolean;
-  mfaSetupComplete?: boolean;
+  totpSecret?: string;
+  passkeys?: any[];
+  // 個別MFA設定用フィールド
+  useCustomMfaPolicy?: boolean;
+  mfaPolicies?: {
+    email: MfaPolicy;
+    totp: MfaPolicy;
+    passkey: MfaPolicy;
+  };
 };
 
 type SchoolData = {
   id: string;
   name: string;
   status: "active" | "suspended";
+  mfaPolicies?: {
+    email: MfaPolicy;
+    totp: MfaPolicy;
+    passkey: MfaPolicy;
+  };
 };
 
 type SystemMessage = {
@@ -102,10 +122,52 @@ export default function PortalTopPage() {
           const uData = { id: userDocSnap.id, ...userDocSnap.data() } as UserData;
           setUserData(uData);
 
+          // 先に組織データを取得してテナントのMFAポリシーを参照可能にする
+          const schoolDocRef = doc(db, "schools", uData.schoolId);
+          const schoolDocSnap = await getDoc(schoolDocRef);
+          let sData: SchoolData | null = null;
+          
+          if (schoolDocSnap.exists()) {
+            sData = { id: schoolDocSnap.id, ...schoolDocSnap.data() } as SchoolData;
+            setSchoolData(sData);
+          }
+
           // 必須設定のブロック判定ロジック
           const needsPassword = !!uData.initialPassword;
           const needsLine = !!uData.lineConnectionEnforced && !uData.lineUid;
-          const needsMfa = !!uData.requireMfa && !uData.mfaSetupComplete;
+          
+          // MFA 完了判定のロジック構築
+          const hasTotp = !!uData.totpSecret;
+          const hasPasskey = Array.isArray(uData.passkeys) && uData.passkeys.length > 0;
+          const hasEmail = !!uData.email || !!user.email; // メールアドレスがあればメール認証可能と判定
+
+          // 適用するポリシー（個別設定優先、なければテナント設定）
+          const activePolicies = uData.useCustomMfaPolicy && uData.mfaPolicies 
+            ? uData.mfaPolicies 
+            : (sData?.mfaPolicies || {
+                email: { allowSetup: true, forceSetup: false, allowUsage: true },
+                totp: { allowSetup: false, forceSetup: false, allowUsage: false },
+                passkey: { allowSetup: false, forceSetup: false, allowUsage: false },
+              });
+
+          let needsMfa = false;
+
+          // ユーザーに2FAが必須化されている場合
+          if (uData.requireMfa) {
+            const forcedMethods = [];
+            
+            if (activePolicies.totp?.forceSetup) forcedMethods.push(hasTotp);
+            if (activePolicies.passkey?.forceSetup) forcedMethods.push(hasPasskey);
+            if (activePolicies.email?.forceSetup) forcedMethods.push(hasEmail);
+
+            if (forcedMethods.length > 0) {
+              // 強制設定されている認証方法がある場合は、対象が「すべて」設定されているか
+              needsMfa = forcedMethods.some(isSetup => !isSetup);
+            } else {
+              // 2FAは必須だが強制されているメソッドがない場合、3つのうち1つでも設定されていればOK
+              needsMfa = !(hasTotp || hasPasskey || hasEmail);
+            }
+          }
           
           setSetupStatus({
             needsPassword,
@@ -113,13 +175,6 @@ export default function PortalTopPage() {
             needsMfa,
             isBlocked: needsPassword || needsLine || needsMfa
           });
-
-          const schoolDocRef = doc(db, "schools", uData.schoolId);
-          const schoolDocSnap = await getDoc(schoolDocRef);
-          
-          if (schoolDocSnap.exists()) {
-            setSchoolData({ id: schoolDocSnap.id, ...schoolDocSnap.data() } as SchoolData);
-          }
 
           if (uData.accountStatus === "active") {
             const messagesRef = collection(db, "system_messages");
@@ -336,7 +391,7 @@ export default function PortalTopPage() {
                   </h3>
                   <p className={`text-sm mt-1 ${setupStatus.needsMfa ? "text-red-700" : "text-green-700"}`}>
                     {setupStatus.needsMfa 
-                      ? "アカウントの安全性を高めるため、認証アプリまたはパスキーによる2段階認証の設定が必須です。" 
+                      ? "アカウントの安全性を高めるため、指定された2段階認証（認証アプリ、パスキー、またはメール）の設定が必須です。" 
                       : "多要素認証の設定は完了しています。"}
                   </p>
                 </div>
