@@ -173,6 +173,9 @@ export default function CsvUploadModal({ schoolData, users, fetchUsers, showAler
           const isUpdate = !!existingUser;
           const docId = existingUser ? existingUser.id : `uid_${schoolData.schoolCode}_${systemId}`;
 
+          // ★追加：メールアドレスが空欄の場合はシステム番号からダミーアドレスを自動生成してAuthに登録できるようにする
+          const parsedEmail = email || `${systemId}@${schoolData.schoolCode.toLowerCase()}.scps.local`;
+
           parsedRows.push({
             id: docId,
             _csvIndex: i,
@@ -183,7 +186,7 @@ export default function CsvUploadModal({ schoolData, users, fetchUsers, showAler
             nameKana, 
             role: parseRole(roleStr || ""),
             systemId,
-            email: email || "",
+            email: parsedEmail,
             studentId: studentId || "",
             grade: grade || "",
             classNumber: classNumber || "",
@@ -234,26 +237,56 @@ export default function CsvUploadModal({ schoolData, users, fetchUsers, showAler
 
     try {
       const selectedRows = csvPreviewData.filter(row => selectedCsvRowIndices.has(row._csvIndex) && !row._error);
+
+      // ★追加：Firebase Authentication にユーザー情報を一括で登録・更新する
+      const authSyncPayload = selectedRows.map(row => ({
+        uid: row._docId,
+        email: row.email,
+        password: row.initialPassword,
+        displayName: row.name
+      }));
+
+      try {
+        const authRes = await fetch('/api/admin/sync-auth', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ users: authSyncPayload })
+        });
+        if (!authRes.ok) {
+          const errorData = await authRes.json();
+          console.error("Auth sync errors:", errorData.details);
+          throw new Error(errorData.error || "認証システムへのユーザー登録に失敗しました。");
+        }
+      } catch (authErr: any) {
+        showAlert("error", authErr.message);
+        setIsUploading(false);
+        return; // Authentication側の登録に失敗した場合は、データベースへの書き込みも中止する
+      }
+
+      // Authenticationへの登録が成功したら、Firestoreデータベースに保存
       for (const row of selectedRows) {
         try {
-          const { _csvIndex, _isUpdate, _docId, _error, ...rawSaveData } = row;
+          const { _csvIndex, _isUpdate, _docId, _error, id, ...rawSaveData } = row;
           const saveData = Object.fromEntries(Object.entries(rawSaveData).filter(([_, v]) => v !== undefined));
           
-          await setDoc(doc(db, "users", _docId), {
+          await setDoc(doc(db, "users", row._docId), {
             ...saveData,
             schoolName: schoolData.name,
             schoolCode: schoolData.schoolCode,
             updatedAt: new Date().toISOString(),
             ...(!_isUpdate ? { createdAt: new Date().toISOString(), authProviders: [] } : {})
           }, { merge: true });
+          
           successCount++;
         } catch (e) {
+          console.error(`Error saving user ${row._docId}:`, e);
           errorCount++;
         }
       }
       setUploadResult({ success: successCount, error: errorCount });
       await fetchUsers(schoolData.id);
     } catch (e) {
+      console.error("Fatal upload error:", e);
       showAlert("error", "アップロード中に致命的なエラーが発生しました。");
     } finally {
       setIsUploading(false);
@@ -341,7 +374,7 @@ export default function CsvUploadModal({ schoolData, users, fetchUsers, showAler
                       <th className="px-4 py-3 text-left text-xs font-bold text-gray-500 uppercase">システム利用番号</th>
                       <th className="px-4 py-3 text-left text-xs font-bold text-gray-500 uppercase">氏名 / ふりがな</th>
                       <th className="px-4 py-3 text-left text-xs font-bold text-gray-500 uppercase">権限</th>
-                      <th className="px-4 py-3 text-left text-xs font-bold text-gray-500 uppercase">有効開始 / 終了日</th>
+                      <th className="px-4 py-3 text-left text-xs font-bold text-gray-500 uppercase">ログイン用メールアドレス</th>
                       <th className="px-4 py-3 text-left text-xs font-bold text-gray-500 uppercase">警告/エラー</th>
                     </tr>
                   </thead>
@@ -360,7 +393,7 @@ export default function CsvUploadModal({ schoolData, users, fetchUsers, showAler
                           <div className="text-xs text-gray-500">{row.nameKana}</div>
                         </td>
                         <td className="px-4 py-3 whitespace-nowrap text-sm font-medium text-gray-700">{row.role === "admin" ? "管理者" : row.role === "officer" ? "役員" : "生徒"}</td>
-                        <td className="px-4 py-3 whitespace-nowrap text-xs text-gray-600">{row.accountValidStartDate || "未指定"} <span className="text-gray-400">〜</span> {row.accountValidEndDate || "未指定"}</td>
+                        <td className="px-4 py-3 whitespace-nowrap text-xs text-gray-500">{row.email}</td>
                         <td className="px-4 py-3 whitespace-nowrap text-xs">{row._error ? <span className="text-red-600 font-bold">{row._error}</span> : <span className="text-gray-400">-</span>}</td>
                       </tr>
                     ))}
@@ -379,7 +412,7 @@ export default function CsvUploadModal({ schoolData, users, fetchUsers, showAler
                 <Info className="h-5 w-5 text-blue-500 mr-3 mt-0.5 flex-shrink-0" />
                 <div>
                   <h4 className="text-sm font-bold text-blue-800 mb-1">CSV一括登録について</h4>
-                  <p className="text-xs text-blue-700 leading-relaxed">大量のユーザーを一度に登録したい場合に便利です。システム利用番号が同じ行は「上書き更新」され、新しい番号は「新規登録」され自動で初期パスワードが生成されます。</p>
+                  <p className="text-xs text-blue-700 leading-relaxed">大量のユーザーを一度に登録したい場合に便利です。システム利用番号が同じ行は「上書き更新」され、新しい番号は「新規登録」され自動で初期パスワードが生成されます。また、認証システムへのアカウント登録も自動で実行されます。</p>
                 </div>
               </div>
               <div className="space-y-6 relative max-w-3xl mx-auto">
@@ -427,7 +460,7 @@ export default function CsvUploadModal({ schoolData, users, fetchUsers, showAler
                     <input type="file" accept=".csv" ref={fileInputRef} onChange={handleFileChange} className="hidden" />
                     <button onClick={() => fileInputRef.current?.click()} disabled={isUploading} className="w-full flex flex-col items-center justify-center p-8 border-2 border-dashed border-gray-300 rounded-xl hover:bg-gray-50 hover:border-blue-500 transition-all group disabled:opacity-50 disabled:cursor-not-allowed">
                       {isUploading ? (
-                        <><Loader2 className="h-10 w-10 text-blue-500 animate-spin mb-3" /><span className="text-sm font-bold text-gray-600">ファイルを読み込んでいます...</span></>
+                        <><Loader2 className="h-10 w-10 text-blue-500 animate-spin mb-3" /><span className="text-sm font-bold text-gray-600">認証サーバーに登録しています...</span></>
                       ) : (
                         <><div className="bg-blue-50 p-4 rounded-full mb-3 group-hover:scale-110 transition-transform"><Upload className="h-8 w-8 text-blue-600" /></div><span className="text-base font-bold text-blue-600 mb-1">ファイルを選択してアップロード</span><span className="text-sm text-gray-400">または、ここをクリック</span></>
                       )}

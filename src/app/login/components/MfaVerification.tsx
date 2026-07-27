@@ -1,7 +1,7 @@
 "use client";
 
-import React, { useEffect, useRef } from "react";
-import { Fingerprint, Loader2 } from "lucide-react";
+import React from "react";
+import { Mail, Smartphone, Fingerprint, Loader2, KeyRound } from "lucide-react";
 
 type Props = {
   selectedMethod: string;
@@ -12,90 +12,94 @@ type Props = {
   isVerifyingPasskey: boolean;
   handleMfaSubmit: (e: React.FormEvent) => void;
   handlePasskeyAuth: () => void;
-  setMfaState: any;
+  setMfaState: (state: any) => void;
 };
 
 export default function MfaVerification({
-  selectedMethod, mfaCode, setMfaCode, userData,
-  isLoading, isVerifyingPasskey, handleMfaSubmit, handlePasskeyAuth, setMfaState
+  selectedMethod, mfaCode, setMfaCode, userData, isLoading,
+  isVerifyingPasskey, handleMfaSubmit, handlePasskeyAuth, setMfaState
 }: Props) {
-  const isEmail = selectedMethod === "email";
-  const isTotp = selectedMethod === "totp";
-  const isPasskey = selectedMethod === "passkey";
-
-  const hasTriggered = useRef(false);
   
-  useEffect(() => {
-    if (isPasskey && !hasTriggered.current) {
-      hasTriggered.current = true;
-      handlePasskeyAuth();
-    }
-    return () => { if (!isPasskey) hasTriggered.current = false; };
-  }, [isPasskey]);
+  const handleResetSelection = () => {
+    setMfaState((prev: any) => ({ ...prev, selectedMethod: "" }));
+  };
 
-  return (
-    <div className="w-full max-w-md mx-auto animate-fade-in">
-      {isPasskey && (
-        <div className="text-center space-y-4 py-4">
-          <div className="relative inline-block">
-            <Fingerprint className={`h-16 w-14 text-blue-600 mx-auto ${isVerifyingPasskey ? 'animate-pulse' : ''}`} />
-            {isVerifyingPasskey && <Loader2 className="h-5 w-5 text-blue-600 animate-spin absolute -top-1 -right-1" />}
-          </div>
-          <p className="text-sm font-bold text-gray-900">生体認証（パスキー）</p>
-          <p className="text-xs text-gray-400 px-4 leading-relaxed">
-            端末の顔認証・指紋認証プロンプトが自動で立ち上がります。認証を完了させてください。
-          </p>
-          
-          {!isVerifyingPasskey && (
-            <button
-              type="button" onClick={handlePasskeyAuth}
-              className="mt-6 w-full flex justify-center items-center py-3.5 px-4 border border-transparent rounded-xl shadow-md text-sm font-bold text-white bg-blue-600 hover:bg-blue-700 active:scale-[0.98] transition-all"
-            >
-              生体認証を再起動する
-            </button>
-          )}
+  if (selectedMethod === "passkey") {
+    return (
+      <div className="text-center animate-fade-in transition-colors duration-300">
+        <div className="mx-auto w-16 h-16 bg-blue-50 dark:bg-blue-900/50 rounded-full flex items-center justify-center mb-6 shadow-inner border border-blue-100 dark:border-blue-800">
+          <Fingerprint className="h-8 w-8 text-blue-600 dark:text-blue-400" />
         </div>
-      )}
+        <h3 className="text-xl font-extrabold text-gray-900 dark:text-white mb-3">2段階認証 (MFA)</h3>
+        <p className="text-sm text-gray-500 dark:text-gray-400 mb-8 leading-relaxed font-medium px-4">
+          Face ID、Touch ID等の生体認証を使用してログインします。<br/>下のボタンを押して認証を開始してください。
+        </p>
 
-      {(isEmail || isTotp) && (
-        <form className="space-y-5" onSubmit={handleMfaSubmit}>
-          <div>
-            <label className="block text-xs font-bold text-gray-700 mb-2 text-center">
-              {isEmail ? "メールで受信した8桁のコード" : "アプリに表示された6桁のコード"}
-            </label>
-            <input 
-              type="text" required maxLength={isEmail ? 8 : 6} value={mfaCode} 
-              onChange={(e) => setMfaCode(e.target.value.replace(/[^0-9]/g, ''))}
-              className={`block w-full text-center tracking-[0.2em] font-mono border border-gray-200 rounded-xl py-3.5 px-3 focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 transition-all bg-gray-50 focus:bg-white outline-none ${isEmail ? 'text-2xl' : 'text-3xl'}`} 
-              placeholder={isEmail ? "00000000" : "000000"} 
-              autoFocus
-            />
-            {isEmail && (
-              <p className="text-[11px] text-center text-gray-400 mt-2 font-medium">
-                {userData?.email?.replace(/(.{2})(.*)(?=@)/, "$1***")} 宛に送信しました
-              </p>
-            )}
-          </div>
-
-          <button
-            type="submit"
-            disabled={isLoading || (isEmail ? mfaCode.length !== 8 : mfaCode.length !== 6)}
-            className="w-full flex justify-center items-center py-3.5 px-4 border border-transparent rounded-xl shadow-md text-sm font-bold text-white transition-all bg-blue-600 hover:bg-blue-700 active:scale-[0.98] disabled:opacity-50"
-          >
-            {isLoading ? <Loader2 className="animate-spin h-5 w-5" /> : "認証を確認する"}
-          </button>
-        </form>
-      )}
-
-      <div className="mt-5 text-center">
-        <button 
-          type="button" 
-          onClick={() => { setMfaState((prev: any) => prev ? { ...prev, selectedMethod: "" } : null); setMfaCode(""); }} 
-          className="text-xs font-bold text-blue-600 hover:text-blue-800 transition-colors"
+        <button
+          onClick={handlePasskeyAuth}
+          disabled={isVerifyingPasskey}
+          className="w-full flex items-center justify-center py-4 px-4 border border-transparent rounded-xl shadow-md text-base font-bold text-white bg-blue-600 hover:bg-blue-700 dark:bg-blue-500 dark:hover:bg-blue-600 transition-all active:scale-[0.98] disabled:opacity-70 mb-4"
         >
-          別の認証方法を選択し直す
+          {isVerifyingPasskey ? (
+            <><Loader2 className="animate-spin h-5 w-5 mr-2" /> 検証中...</>
+          ) : (
+            <><Fingerprint className="h-5 w-5 mr-2" /> 生体認証（パスキー）でログイン</>
+          )}
+        </button>
+        <button onClick={handleResetSelection} className="text-sm font-bold text-gray-500 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200">
+          他の認証方法を選択する
         </button>
       </div>
-    </div>
+    );
+  }
+
+  return (
+    <form onSubmit={handleMfaSubmit} className="text-center animate-fade-in transition-colors duration-300">
+      <div className="mx-auto w-16 h-16 bg-indigo-50 dark:bg-indigo-900/50 rounded-full flex items-center justify-center mb-6 shadow-inner border border-indigo-100 dark:border-indigo-800">
+        {selectedMethod === "email" ? (
+          <Mail className="h-8 w-8 text-indigo-600 dark:text-indigo-400" />
+        ) : (
+          <Smartphone className="h-8 w-8 text-indigo-600 dark:text-indigo-400" />
+        )}
+      </div>
+      <h3 className="text-xl font-extrabold text-gray-900 dark:text-white mb-3">2段階認証 (MFA)</h3>
+      
+      {selectedMethod === "email" ? (
+        <p className="text-sm text-gray-500 dark:text-gray-400 mb-8 leading-relaxed">
+          <span className="font-bold text-gray-800 dark:text-gray-200">{userData.email}</span> 宛に<br/>
+          6桁の認証コードを送信しました。
+        </p>
+      ) : (
+        <p className="text-sm text-gray-500 dark:text-gray-400 mb-8 leading-relaxed">
+          認証アプリ (Authenticator) に表示されている<br/>
+          6桁の認証コードを入力してください。
+        </p>
+      )}
+
+      <div className="mb-8">
+        <input
+          type="text"
+          maxLength={6}
+          required
+          value={mfaCode}
+          onChange={(e) => setMfaCode(e.target.value.replace(/[^0-9]/g, ''))}
+          className="block w-full max-w-[240px] mx-auto text-center text-3xl tracking-[0.4em] font-mono border-2 border-gray-300 dark:border-gray-600 rounded-xl py-4 bg-gray-50 dark:bg-gray-800 text-gray-900 dark:text-white focus:bg-white dark:focus:bg-gray-700 focus:ring-4 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all outline-none shadow-inner"
+          placeholder="000000"
+          autoFocus
+        />
+      </div>
+
+      <button
+        type="submit"
+        disabled={isLoading || mfaCode.length !== 6}
+        className="w-full flex justify-center items-center py-3.5 px-4 border border-transparent rounded-xl shadow-md text-sm font-bold text-white bg-indigo-600 hover:bg-indigo-700 dark:bg-indigo-500 dark:hover:bg-indigo-600 transition-all active:scale-[0.98] disabled:opacity-50 mb-4"
+      >
+        {isLoading ? <Loader2 className="animate-spin h-5 w-5" /> : "コードを検証してログイン"}
+      </button>
+
+      <button type="button" onClick={handleResetSelection} className="text-sm font-bold text-gray-500 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200">
+        他の認証方法を選択する
+      </button>
+    </form>
   );
 }

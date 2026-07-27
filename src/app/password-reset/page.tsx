@@ -2,7 +2,7 @@
 
 import React, { useEffect, useState, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { confirmPasswordReset, verifyPasswordResetCode } from "firebase/auth";
+import { confirmPasswordReset, verifyPasswordResetCode, updatePassword, signOut } from "firebase/auth";
 import { collection, doc, getDoc, getDocs, query, where, updateDoc } from "firebase/firestore";
 import { auth, db } from "@/lib/firebase";
 import { ShieldCheck, CheckCircle2, ArrowRight, Loader2 } from "lucide-react";
@@ -20,10 +20,8 @@ function PasswordResetContent() {
   const [isSuccess, setIsSuccess] = useState(false);
   const [alert, setAlert] = useState<{ type: "success" | "error"; message: string } | null>(null);
 
-  // 対象アカウントの表示用情報を管理
   const [accountInfo, setAccountInfo] = useState<{ name: string; schoolName: string } | null>(null);
 
-  // トークン検証と同時にFirestoreから該当ユーザー名と学校名を特定するエモいエフェクト
   useEffect(() => {
     const fetchAccountMetadata = async (targetEmail: string) => {
       try {
@@ -45,7 +43,6 @@ function PasswordResetContent() {
       setIsValidatingToken(true);
       verifyPasswordResetCode(auth, oobCode)
         .then((email) => {
-          // トークンから判明したメールアドレスをキーに情報を引っ張る
           if (email) fetchAccountMetadata(email);
           setIsValidatingToken(false);
         })
@@ -54,7 +51,7 @@ function PasswordResetContent() {
           setIsValidatingToken(false);
         });
     } else if (directUid) {
-      // 直接UIDルート（未アクセスユーザー等）の場合のフェッチ
+      // 初期アクセス（unaccessed）のユーザー情報取得
       setIsValidatingToken(true);
       getDoc(doc(db, "users", directUid)).then((snap) => {
         if (snap.exists()) {
@@ -75,13 +72,29 @@ function PasswordResetContent() {
 
     try {
       if (oobCode) {
+        // パターンA: パスワードを忘れた場合（メールからのリセット）
         await confirmPasswordReset(auth, oobCode, newPassword);
         setIsSuccess(true);
       } else if (directUid) {
+        // ★パターンB: 初回ログイン（unaccessed）からの強制パスワード変更
+        // 先ほどのログイン画面で既にログイン（セッション保持）しているため、updatePasswordが利用可能
+        if (!auth.currentUser) {
+          throw new Error("セキュリティセッションが切れました。もう一度ログイン画面からやり直してください。");
+        }
+        
+        // 1. Firebase Authentication の本パスワードを更新
+        await updatePassword(auth.currentUser, newPassword);
+        
+        // 2. Firestoreのステータスを「active」にし、初期パスワードを削除
         await updateDoc(doc(db, "users", directUid), {
           initialPassword: null,
+          accountStatus: "active",
           updatedAt: new Date().toISOString()
         });
+
+        // 3. 安全のため一度ログアウトさせ、新しいパスワードでログインし直させる
+        await signOut(auth);
+        
         setIsSuccess(true);
       } else {
         throw new Error("無効なアクセスです。認証情報が見つかりません。");
@@ -125,13 +138,13 @@ function PasswordResetContent() {
               </div>
               <div>
                 <h3 className="text-lg font-extrabold text-gray-900">パスワードを設定しました</h3>
-                <p className="text-xs text-gray-400 mt-1.5 font-medium">
-                  新しいパスワードの登録が完了しました。<br/>ログイン画面から新しいパスワードでアクセスしてください。
+                <p className="text-xs text-gray-400 mt-1.5 font-medium leading-relaxed">
+                  新しいパスワードの登録が完了し、アカウントが有効化されました。<br/>セキュリティ保護のため、ログイン画面から再度アクセスしてください。
                 </p>
               </div>
               <button
                 onClick={() => router.push("/login")}
-                className="mt-6 w-full flex justify-center items-center py-3 px-4 border border-transparent rounded-xl shadow-md text-sm font-bold text-white bg-blue-600 hover:bg-blue-700 transition-all active:scale-[0.98]"
+                className="mt-6 w-full flex justify-center items-center py-3.5 px-4 border border-transparent rounded-xl shadow-md text-sm font-bold text-white bg-blue-600 hover:bg-blue-700 transition-all active:scale-[0.98]"
               >
                 ログイン画面へ進む
                 <ArrowRight className="h-4 w-4 ml-1.5" />

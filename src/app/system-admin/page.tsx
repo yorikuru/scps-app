@@ -7,7 +7,7 @@ import { collection, doc, getDoc, getDocs } from "firebase/firestore";
 import { auth, db } from "@/lib/firebase";
 import { 
   Building2, Users, BellRing, LayoutDashboard, 
-  ArrowLeft, Loader2, CheckCircle2, AlertCircle, UserCog ,ShieldAlert
+  ArrowLeft, Loader2, CheckCircle2, AlertCircle, UserCog, ShieldAlert, Scale, LayoutGrid
 } from "lucide-react";
 
 import Dashboard from "./components/Dashboard";
@@ -16,6 +16,8 @@ import GlobalUserManagement from "./components/GlobalUserManagement";
 import MessageDelivery from "./components/MessageDelivery";
 import Line from "./components/line";
 import SystemAccount from "./components/SystemAccount";
+import LegalManagement from "./components/LegalManagement"; // ★追加
+import AppManagement from "./components/AppManagement";     // ★追加
 
 export type TenantData = {
   id: string;
@@ -28,6 +30,8 @@ export type TenantData = {
   availableModules: string[];
   status: "active" | "suspended";
   createdAt?: string;
+  lineFeatureEnabled?: boolean;
+  mfaPolicies?: any;
 };
 
 export type GlobalUserData = {
@@ -53,6 +57,14 @@ export type GlobalUserData = {
   phoneNumber?: string;
   organizationAddress?: string;
   createdAt?: string;
+  lineConnectionAllowed?: boolean;
+  lineUserId?: string | null;
+  lineNotificationEnabled?: boolean;
+  requireMfa?: boolean;
+  totpSecret?: string | null;
+  passkeys?: any[];
+  mfaPolicies?: any;
+  useCustomMfaPolicy?: boolean;
 };
 
 export const SYSTEM_MODULES = [
@@ -65,7 +77,8 @@ export const SYSTEM_MODULES = [
 export default function SystemAdminPage() {
   const router = useRouter();
   const [isLoading, setIsLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState<"dashboard" | "tenants" | "users" | "messages" | "line" | "account">("dashboard");
+  // ★タブの型に apps と legal を追加
+  const [activeTab, setActiveTab] = useState<"dashboard" | "tenants" | "users" | "apps" | "messages" | "line" | "legal" | "account">("dashboard");
   
   const [tenants, setTenants] = useState<TenantData[]>([]);
   const [users, setUsers] = useState<GlobalUserData[]>([]);
@@ -136,7 +149,7 @@ export default function SystemAdminPage() {
   return (
     <div className="min-h-screen bg-gray-100 flex flex-col md:flex-row text-gray-900">
       {/* サイドバー */}
-      <div className="md:w-64 bg-white border-r border-gray-200 flex-shrink-0 flex flex-col">
+      <div className="md:w-64 bg-white border-r border-gray-200 flex-shrink-0 flex flex-col z-10">
         <div className="p-4 border-b border-gray-200 flex items-center">
           <div className="bg-blue-600 rounded p-1.5 mr-2">
             <ShieldAlert className="h-5 w-5 text-white" />
@@ -156,11 +169,17 @@ export default function SystemAdminPage() {
           <button onClick={() => setActiveTab("users")} className={`flex items-center px-4 py-3 rounded-lg text-sm font-bold whitespace-nowrap transition-colors ${activeTab === "users" ? "bg-emerald-50 text-emerald-700" : "text-gray-600 hover:bg-gray-50"}`}>
             <Users className="h-5 w-5 mr-3 md:inline hidden" /> 全ユーザー管理
           </button>
-          <button onClick={() => setActiveTab("messages")} className={`flex items-center px-4 py-3 rounded-lg text-sm font-bold whitespace-nowrap transition-colors ${activeTab === "messages" ? "bg-orange-50 text-orange-700" : "text-gray-600 hover:bg-gray-50"}`}>
+          <button onClick={() => setActiveTab("apps")} className={`flex items-center px-4 py-3 rounded-lg text-sm font-bold whitespace-nowrap transition-colors ${activeTab === "apps" ? "bg-indigo-50 text-indigo-700" : "text-gray-600 hover:bg-gray-50"}`}>
+            <LayoutGrid className="h-5 w-5 mr-3 md:inline hidden" /> プラグイン・アプリ
+          </button>
+          <button onClick={() => setActiveTab("messages")} className={`flex items-center px-4 py-3 rounded-lg text-sm font-bold whitespace-nowrap transition-colors ${activeTab === "messages" ? "bg-amber-50 text-amber-700" : "text-gray-600 hover:bg-gray-50"}`}>
             <BellRing className="h-5 w-5 mr-3 md:inline hidden" /> システム配信
           </button>
-          <button onClick={() => setActiveTab("line")} className={`flex items-center px-4 py-3 rounded-lg text-sm font-bold whitespace-nowrap transition-colors ${activeTab === "line" ? "bg-orange-50 text-orange-700" : "text-gray-600 hover:bg-gray-50"}`}>
-            <BellRing className="h-5 w-5 mr-3 md:inline hidden" /> LINE通知連携機能
+          <button onClick={() => setActiveTab("line")} className={`flex items-center px-4 py-3 rounded-lg text-sm font-bold whitespace-nowrap transition-colors ${activeTab === "line" ? "bg-green-50 text-green-700" : "text-gray-600 hover:bg-gray-50"}`}>
+            <BellRing className="h-5 w-5 mr-3 md:inline hidden" /> LINE通知連携
+          </button>
+          <button onClick={() => setActiveTab("legal")} className={`flex items-center px-4 py-3 rounded-lg text-sm font-bold whitespace-nowrap transition-colors ${activeTab === "legal" ? "bg-rose-50 text-rose-700" : "text-gray-600 hover:bg-gray-50"}`}>
+            <Scale className="h-5 w-5 mr-3 md:inline hidden" /> 法務・規約管理
           </button>
           <button onClick={() => setActiveTab("account")} className={`flex items-center px-4 py-3 rounded-lg text-sm font-bold whitespace-nowrap transition-colors ${activeTab === "account" ? "bg-gray-100 text-gray-900" : "text-gray-600 hover:bg-gray-50"}`}>
             <UserCog className="h-5 w-5 mr-3 md:inline hidden" /> 管理者アカウント
@@ -185,8 +204,10 @@ export default function SystemAdminPage() {
         {activeTab === "dashboard" && <Dashboard tenants={tenants} users={users} />}
         {activeTab === "tenants" && <TenantManagement tenants={tenants} setTenants={setTenants} showAlert={showAlert} />}
         {activeTab === "users" && <GlobalUserManagement users={users} setUsers={setUsers} tenants={tenants} showAlert={showAlert} />}
+        {activeTab === "apps" && <AppManagement showAlert={showAlert} />}
         {activeTab === "messages" && <MessageDelivery tenants={tenants} users={users} showAlert={showAlert} />}
         {activeTab === "line" && <Line tenants={tenants} users={users} showAlert={showAlert} />}
+        {activeTab === "legal" && <LegalManagement showAlert={showAlert} />}
         {activeTab === "account" && <SystemAccount showAlert={showAlert} />}
       </div>
     </div>

@@ -7,11 +7,12 @@ import {
   Send, Trash2, BellRing, AlertTriangle, Loader2, Calendar, 
   Users, Building2, Globe, Edit2, X, Save, Info, Wrench, CalendarDays, Tag, Search, Pin, User
 } from "lucide-react";
-import { GlobalUserData, TenantData } from "../page";
+import { UserData, SchoolData } from "../page";
 
 type Props = {
-  tenants: TenantData[];
-  users: GlobalUserData[];
+  schoolData: SchoolData | null;
+  users: UserData[];
+  currentUser: UserData | null;
   showAlert: (type: "success" | "error", message: string) => void;
 };
 
@@ -45,7 +46,7 @@ const CATEGORIES: Record<MessageCategory, { label: string; icon: React.ReactNode
   event: { label: "イベント", icon: <CalendarDays className="h-4 w-4" />, color: "text-green-700 border-green-200", bgColor: "bg-green-50" },
 };
 
-export default function MessageDelivery({ tenants, users, showAlert }: Props) {
+export default function MessageDelivery({ schoolData, users, currentUser, showAlert }: Props) {
   const [messages, setMessages] = useState<SystemMessage[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -53,50 +54,33 @@ export default function MessageDelivery({ tenants, users, showAlert }: Props) {
   const [title, setTitle] = useState("");
   const [content, setContent] = useState("");
   const [category, setCategory] = useState<MessageCategory>("info");
-  const [targetType, setTargetType] = useState<"all" | "tenant" | "user">("all");
+  const [targetType, setTargetType] = useState<"tenant" | "user">("tenant");
   const [targetId, setTargetId] = useState("");
-  const [targetSearchQuery, setTargetSearchQuery] = useState(""); 
+  const [targetSearchQuery, setTargetSearchQuery] = useState("");
   const [startAt, setStartAt] = useState("");
   const [endAt, setEndAt] = useState("");
   const [isImportant, setIsImportant] = useState(false);
   const [isDismissible, setIsDismissible] = useState(true);
+  const [showSenderName, setShowSenderName] = useState(false);
 
   const [editingMessage, setEditingMessage] = useState<SystemMessage | null>(null);
   const [editData, setEditData] = useState<Partial<SystemMessage>>({});
-  const [editTargetSearchQuery, setEditTargetSearchQuery] = useState(""); 
+  const [editTargetSearchQuery, setEditTargetSearchQuery] = useState("");
   const [isSavingEdit, setIsSavingEdit] = useState(false);
 
   const [confirmDialog, setConfirmDialog] = useState<{ show: boolean; message: string; onConfirm: () => void } | null>(null);
 
-  const uniqueTenants = useMemo(() => {
-    const map = new Map<string, TenantData>();
-    tenants.forEach(t => { if (t && t.id) map.set(t.id, t); });
-    return Array.from(map.values());
-  }, [tenants]);
-
   const uniqueUsers = useMemo(() => {
-    const map = new Map<string, GlobalUserData>();
+    const map = new Map<string, UserData>();
     users.forEach(u => { if (u && u.id) map.set(u.id, u); });
     return Array.from(map.values());
   }, [users]);
-
-  const filteredTenants = useMemo(() => {
-    if (!targetSearchQuery) return uniqueTenants;
-    const q = targetSearchQuery.toLowerCase();
-    return uniqueTenants.filter(t => t.name.toLowerCase().includes(q) || t.schoolCode.toLowerCase().includes(q));
-  }, [uniqueTenants, targetSearchQuery]);
 
   const filteredUsers = useMemo(() => {
     if (!targetSearchQuery) return uniqueUsers;
     const q = targetSearchQuery.toLowerCase();
     return uniqueUsers.filter(u => u.name.toLowerCase().includes(q) || (u.email && u.email.toLowerCase().includes(q)));
   }, [uniqueUsers, targetSearchQuery]);
-
-  const editFilteredTenants = useMemo(() => {
-    if (!editTargetSearchQuery) return uniqueTenants;
-    const q = editTargetSearchQuery.toLowerCase();
-    return uniqueTenants.filter(t => t.name.toLowerCase().includes(q) || t.schoolCode.toLowerCase().includes(q));
-  }, [uniqueTenants, editTargetSearchQuery]);
 
   const editFilteredUsers = useMemo(() => {
     if (!editTargetSearchQuery) return uniqueUsers;
@@ -105,13 +89,28 @@ export default function MessageDelivery({ tenants, users, showAlert }: Props) {
   }, [uniqueUsers, editTargetSearchQuery]);
 
   const fetchMessages = async () => {
+    if (!schoolData) return;
     setIsLoading(true);
     try {
       const q = query(collection(db, "system_messages"), orderBy("createdAt", "desc"));
       const snap = await getDocs(q);
       const fetched: SystemMessage[] = [];
-      snap.forEach(doc => {
-        fetched.push({ id: doc.id, ...doc.data() } as SystemMessage);
+      const myUserIds = new Set(uniqueUsers.map(u => u.id));
+      
+      snap.forEach(docSnap => {
+        // idの重複警告を避けるため、doc.data()からidがあれば除外、または上書き順序を明示
+        const rawData = docSnap.data() as SystemMessage;
+        const { id, ...dataWithoutId } = rawData; 
+        const messageData = { id: docSnap.id, ...dataWithoutId } as SystemMessage;
+
+        const isAll = messageData.targetType === "all";
+        const isMyTenant = messageData.targetType === "tenant" && messageData.targetId === schoolData.id;
+        const isMyUser = messageData.targetType === "user" && myUserIds.has(messageData.targetId);
+        const isFromMySchool = messageData.schoolId === schoolData.id || messageData.senderSchoolId === schoolData.id;
+        
+        if (isAll || isMyTenant || isMyUser || isFromMySchool) {
+          fetched.push(messageData);
+        }
       });
       setMessages(fetched);
     } catch (error) {
@@ -124,19 +123,20 @@ export default function MessageDelivery({ tenants, users, showAlert }: Props) {
 
   useEffect(() => {
     fetchMessages();
-  }, []);
+  }, [schoolData]);
 
   const resetForm = () => {
     setTitle("");
     setContent("");
     setCategory("info");
-    setTargetType("all");
+    setTargetType("tenant");
     setTargetId("");
     setTargetSearchQuery("");
     setStartAt("");
     setEndAt("");
     setIsImportant(false);
     setIsDismissible(true);
+    setShowSenderName(false);
   };
 
   const validateDates = (start: string, end: string) => {
@@ -150,12 +150,13 @@ export default function MessageDelivery({ tenants, users, showAlert }: Props) {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!schoolData || !currentUser) return;
     if (!title || !content) {
       showAlert("error", "タイトルと本文は必須です。");
       return;
     }
-    if (targetType !== "all" && !targetId) {
-      showAlert("error", "配信先のテナントまたはユーザーを選択してください。");
+    if (targetType === "user" && !targetId) {
+      showAlert("error", "配信先のユーザーを選択してください。");
       return;
     }
     if (!validateDates(startAt, endAt)) {
@@ -170,27 +171,26 @@ export default function MessageDelivery({ tenants, users, showAlert }: Props) {
         content,
         category,
         targetType,
-        targetId: targetType === "all" ? "" : targetId,
+        targetId: targetType === "tenant" ? schoolData.id : targetId,
         startAt,
         endAt,
         isImportant,
         isDismissible,
         createdAt: new Date().toISOString(),
         readBy: [],
-        schoolId: "SYSTEM",
-        senderId: "SYSTEM",
-        senderName: "システム管理者",
-        senderRole: "system_admin",
-        senderSchoolId: "SYSTEM",
-        showSenderName: true,
+        schoolId: schoolData.id,
+        senderId: currentUser.id,
+        senderName: currentUser.name,
+        senderRole: currentUser.role,
+        senderSchoolId: schoolData.id,
+        showSenderName,
       };
 
       await addDoc(collection(db, "system_messages"), newMessage);
-      showAlert("success", "システムメッセージを配信しました。");
+      showAlert("success", "メッセージを配信しました。");
       resetForm();
       fetchMessages();
     } catch (error) {
-      console.error("Message send error:", error);
       showAlert("error", "メッセージの配信に失敗しました。");
     } finally {
       setIsSubmitting(false);
@@ -231,14 +231,14 @@ export default function MessageDelivery({ tenants, users, showAlert }: Props) {
   const handleEditChange = (field: keyof SystemMessage, value: any) => {
     setEditData(prev => ({ ...prev, [field]: value }));
     if (field === "targetType") {
-      setEditData(prev => ({ ...prev, targetId: value === "all" ? "" : "" }));
+      setEditData(prev => ({ ...prev, targetId: value === "tenant" ? schoolData!.id : "" }));
       setEditTargetSearchQuery("");
     }
   };
 
   const handleSaveEdit = async () => {
     if (!editingMessage) return;
-    if (editData.targetType !== "all" && !editData.targetId) {
+    if (editData.targetType === "user" && !editData.targetId) {
       showAlert("error", "配信先を選択してください。");
       return;
     }
@@ -266,23 +266,21 @@ export default function MessageDelivery({ tenants, users, showAlert }: Props) {
   };
 
   const getTargetName = (type: string, id: string) => {
-    if (type === "all") return "全システムユーザー";
-    if (type === "tenant") {
-      const t = uniqueTenants.find(t => t.id === id);
-      return t ? `[テナント] ${t.name}` : "不明なテナント";
-    }
+    if (type === "tenant") return "組織（テナント）全体";
     if (type === "user") {
       const u = uniqueUsers.find(u => u.id === id);
-      return u ? `[ユーザー] ${u.name}` : "不明なユーザー";
+      return u ? `個人: ${u.name}` : "不明なユーザー";
     }
+    if (type === "all") return "システム全体（特権）";
     return "不明";
   };
 
   const getSenderNameDisplay = (msg: SystemMessage) => {
     if (msg.senderRole === "system_admin") return "システム管理者";
-    const tenant = uniqueTenants.find(t => t.id === msg.schoolId || t.id === msg.senderSchoolId);
-    const tenantName = tenant ? tenant.name : "不明なテナント";
-    return `${msg.senderName || "テナント管理者"} (${tenantName})`;
+    if (msg.schoolId === schoolData?.id || msg.senderSchoolId === schoolData?.id) {
+      return msg.senderName || "テナント管理者";
+    }
+    return "不明な配信者";
   };
 
   return (
@@ -337,7 +335,6 @@ export default function MessageDelivery({ tenants, users, showAlert }: Props) {
 
             <div className="p-6 overflow-y-auto flex-1 space-y-6 bg-white">
               
-              {/* カテゴリ選択 */}
               <div>
                 <label className="block text-sm font-bold text-gray-700 mb-2 flex items-center"><Tag className="h-4 w-4 mr-1"/> カテゴリ</label>
                 <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
@@ -355,27 +352,22 @@ export default function MessageDelivery({ tenants, users, showAlert }: Props) {
                 </div>
               </div>
 
-              {/* ターゲット選択 */}
               <div>
                 <label className="block text-sm font-bold text-gray-700 mb-2">配信ターゲット</label>
                 <div className="flex flex-wrap gap-4 p-3 bg-gray-50 rounded-lg border border-gray-200">
                   <label className="flex items-center space-x-2 cursor-pointer">
-                    <input type="radio" checked={editData.targetType === "all"} onChange={() => handleEditChange("targetType", "all")} className="text-blue-600 focus:ring-blue-500 border-gray-300 h-4 w-4" />
-                    <span className="text-sm font-bold text-gray-900">全ユーザー</span>
-                  </label>
-                  <label className="flex items-center space-x-2 cursor-pointer">
                     <input type="radio" checked={editData.targetType === "tenant"} onChange={() => handleEditChange("targetType", "tenant")} className="text-blue-600 focus:ring-blue-500 border-gray-300 h-4 w-4" />
-                    <span className="text-sm font-bold text-gray-900">特定のテナント</span>
+                    <span className="text-sm font-bold text-gray-900">組織（テナント）全体</span>
                   </label>
                   <label className="flex items-center space-x-2 cursor-pointer">
                     <input type="radio" checked={editData.targetType === "user"} onChange={() => handleEditChange("targetType", "user")} className="text-blue-600 focus:ring-blue-500 border-gray-300 h-4 w-4" />
-                    <span className="text-sm font-bold text-gray-900">個別ユーザー</span>
+                    <span className="text-sm font-bold text-gray-900">個人（個別ユーザー）</span>
                   </label>
                 </div>
               </div>
 
               {/* 検索付きターゲットリスト (編集モーダル用) */}
-              {(editData.targetType === "tenant" || editData.targetType === "user") && (
+              {editData.targetType === "user" && (
                 <div className="border border-gray-300 rounded-lg overflow-hidden bg-white shadow-sm">
                   <div className="p-2 border-b border-gray-200 bg-gray-50">
                     <div className="relative">
@@ -387,13 +379,7 @@ export default function MessageDelivery({ tenants, users, showAlert }: Props) {
                     </div>
                   </div>
                   <div className="max-h-48 overflow-y-auto p-1 bg-white">
-                    {editData.targetType === "tenant" && editFilteredTenants.map(t => (
-                      <label key={t.id} className={`flex items-center p-3 rounded-md cursor-pointer transition-colors ${editData.targetId === t.id ? 'bg-blue-50 border border-blue-200' : 'hover:bg-gray-50 border border-transparent'}`}>
-                        <input type="radio" checked={editData.targetId === t.id} onChange={() => handleEditChange("targetId", t.id)} className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 mr-3" />
-                        <span className="text-sm text-gray-800 font-bold">{t.name} <span className="text-gray-500 font-normal">({t.schoolCode})</span></span>
-                      </label>
-                    ))}
-                    {editData.targetType === "user" && editFilteredUsers.map(u => (
+                    {editFilteredUsers.map(u => (
                       <label key={u.id} className={`flex items-center p-3 rounded-md cursor-pointer transition-colors ${editData.targetId === u.id ? 'bg-blue-50 border border-blue-200' : 'hover:bg-gray-50 border border-transparent'}`}>
                         <input type="radio" checked={editData.targetId === u.id} onChange={() => handleEditChange("targetId", u.id)} className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 mr-3" />
                         <div className="flex flex-col">
@@ -402,14 +388,13 @@ export default function MessageDelivery({ tenants, users, showAlert }: Props) {
                         </div>
                       </label>
                     ))}
-                    {((editData.targetType === "tenant" && editFilteredTenants.length === 0) || (editData.targetType === "user" && editFilteredUsers.length === 0)) && (
+                    {editFilteredUsers.length === 0 && (
                       <div className="p-4 text-center text-sm font-bold text-gray-500">一致する検索結果がありません</div>
                     )}
                   </div>
                 </div>
               )}
 
-              {/* メッセージ入力 */}
               <div>
                 <label className="block text-sm font-bold text-gray-700">件名</label>
                 <input type="text" value={editData.title || ""} onChange={e => handleEditChange("title", e.target.value)} className="mt-1 block w-full bg-white border border-gray-300 rounded-lg py-2.5 px-3 text-gray-900 focus:ring-blue-500 focus:border-blue-500 text-sm shadow-sm" />
@@ -463,10 +448,9 @@ export default function MessageDelivery({ tenants, users, showAlert }: Props) {
         </div>
       )}
 
-      {/* メイン画面レイアウト：左側フォーム、右側履歴リスト */}
       <div>
-        <h3 className="text-xl font-extrabold text-gray-900">特権システムメッセージ配信</h3>
-        <p className="text-sm text-gray-500 mt-1">ポータルのトップ画面に表示される全体通知や、特定テナント・特定ユーザー向けのメッセージを配信します。</p>
+        <h3 className="text-xl font-extrabold text-gray-900">組織内メッセージ配信</h3>
+        <p className="text-sm text-gray-500 mt-1">テナント内の全ユーザー、または特定のユーザーのトップ画面にお知らせを配信します。</p>
       </div>
 
       <div className="grid grid-cols-1 xl:grid-cols-5 gap-6">
@@ -504,7 +488,7 @@ export default function MessageDelivery({ tenants, users, showAlert }: Props) {
                 <input 
                   type="text" required value={title} onChange={e => setTitle(e.target.value)} 
                   className="w-full border border-gray-300 rounded-lg py-2.5 px-3 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all shadow-sm"
-                  placeholder="例: システムメンテナンスのお知らせ"
+                  placeholder="例: 生徒総会のお知らせ"
                 />
               </div>
 
@@ -522,12 +506,8 @@ export default function MessageDelivery({ tenants, users, showAlert }: Props) {
                   <label className="block text-sm font-bold text-gray-700 mb-2">配信ターゲット</label>
                   <div className="flex flex-wrap gap-4">
                     <label className="flex items-center cursor-pointer">
-                      <input type="radio" name="targetType" value="all" checked={targetType === "all"} onChange={() => { setTargetType("all"); setTargetId(""); setTargetSearchQuery(""); }} className="h-4 w-4 text-blue-600 focus:ring-blue-500" />
-                      <span className="ml-2 text-sm text-gray-800 flex items-center"><Globe className="h-4 w-4 mr-1 text-gray-500" />全体</span>
-                    </label>
-                    <label className="flex items-center cursor-pointer">
                       <input type="radio" name="targetType" value="tenant" checked={targetType === "tenant"} onChange={() => { setTargetType("tenant"); setTargetId(""); setTargetSearchQuery(""); }} className="h-4 w-4 text-blue-600 focus:ring-blue-500" />
-                      <span className="ml-2 text-sm text-gray-800 flex items-center"><Building2 className="h-4 w-4 mr-1 text-gray-500" />テナント</span>
+                      <span className="ml-2 text-sm text-gray-800 flex items-center"><Globe className="h-4 w-4 mr-1 text-gray-500" />テナント全体</span>
                     </label>
                     <label className="flex items-center cursor-pointer">
                       <input type="radio" name="targetType" value="user" checked={targetType === "user"} onChange={() => { setTargetType("user"); setTargetId(""); setTargetSearchQuery(""); }} className="h-4 w-4 text-blue-600 focus:ring-blue-500" />
@@ -536,8 +516,7 @@ export default function MessageDelivery({ tenants, users, showAlert }: Props) {
                   </div>
                 </div>
 
-                {/* 検索付きターゲットリスト */}
-                {(targetType === "tenant" || targetType === "user") && (
+                {targetType === "user" && (
                   <div className="animate-fade-in border border-gray-300 rounded-lg overflow-hidden bg-white shadow-sm">
                     <div className="p-2 border-b border-gray-200 bg-gray-50">
                       <div className="relative">
@@ -549,13 +528,7 @@ export default function MessageDelivery({ tenants, users, showAlert }: Props) {
                       </div>
                     </div>
                     <div className="max-h-48 overflow-y-auto p-1 bg-white">
-                      {targetType === "tenant" && filteredTenants.map(t => (
-                        <label key={t.id} className={`flex items-center p-3 rounded-md cursor-pointer transition-colors ${targetId === t.id ? 'bg-blue-50 border border-blue-200' : 'hover:bg-gray-50 border border-transparent'}`}>
-                          <input type="radio" checked={targetId === t.id} onChange={() => setTargetId(t.id)} className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 mr-3" />
-                          <span className="text-sm text-gray-800 font-bold">{t.name} <span className="text-gray-500 font-normal">({t.schoolCode})</span></span>
-                        </label>
-                      ))}
-                      {targetType === "user" && filteredUsers.map(u => (
+                      {filteredUsers.map(u => (
                         <label key={u.id} className={`flex items-center p-3 rounded-md cursor-pointer transition-colors ${targetId === u.id ? 'bg-blue-50 border border-blue-200' : 'hover:bg-gray-50 border border-transparent'}`}>
                           <input type="radio" checked={targetId === u.id} onChange={() => setTargetId(u.id)} className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 mr-3" />
                           <div className="flex flex-col">
@@ -564,8 +537,8 @@ export default function MessageDelivery({ tenants, users, showAlert }: Props) {
                           </div>
                         </label>
                       ))}
-                      {((targetType === "tenant" && filteredTenants.length === 0) || (targetType === "user" && filteredUsers.length === 0)) && (
-                        <div className="p-4 text-center text-sm font-bold text-gray-500">一致する検索結果がありません</div>
+                      {filteredUsers.length === 0 && (
+                        <div className="p-4 text-center text-sm font-bold text-gray-500">一致するユーザーがいません</div>
                       )}
                     </div>
                   </div>
@@ -584,19 +557,27 @@ export default function MessageDelivery({ tenants, users, showAlert }: Props) {
               </div>
 
               <div className="flex flex-col gap-3 pt-2">
-                <label className="flex items-center p-3 border border-red-100 bg-red-50 rounded-lg cursor-pointer transition-colors hover:bg-red-100 shadow-sm">
+                <label className="flex items-center p-3 border border-gray-200 bg-gray-50 hover:bg-gray-100 rounded-lg cursor-pointer transition-colors shadow-sm">
                   <input type="checkbox" checked={isImportant} onChange={e => setIsImportant(e.target.checked)} className="h-4 w-4 text-red-600 border-gray-300 rounded" />
                   <div className="ml-3">
-                    <span className="block text-sm font-bold text-red-800 flex items-center"><Pin className="h-4 w-4 mr-1"/> 上部にピン留め</span>
-                    <span className="block text-[10px] text-red-600 mt-0.5">赤い「重要なお知らせ」バッジがつき、常に上部に表示されます。</span>
+                    <span className="block text-sm font-bold text-gray-900 flex items-center"><Pin className="h-4 w-4 mr-1"/> 上部にピン留め</span>
+                    <span className="block text-[10px] text-gray-500 mt-0.5">赤い「重要なお知らせ」バッジがつき、常に上部に表示されます。</span>
                   </div>
                 </label>
 
-                <label className="flex items-center p-3 border border-gray-200 bg-gray-50 rounded-lg cursor-pointer transition-colors hover:bg-gray-100 shadow-sm">
+                <label className="flex items-center p-3 border border-gray-200 bg-gray-50 hover:bg-gray-100 rounded-lg cursor-pointer transition-colors shadow-sm">
                   <input type="checkbox" checked={isDismissible} onChange={e => setIsDismissible(e.target.checked)} className="h-4 w-4 text-blue-600 border-gray-300 rounded" />
                   <div className="ml-3">
                     <span className="block text-sm font-bold text-gray-800">ユーザーによる非表示（既読）を許可</span>
                     <span className="block text-[10px] text-gray-500 mt-0.5">オフにすると、期間終了まで強制的に表示され続けます。</span>
+                  </div>
+                </label>
+
+                <label className="flex items-center p-3 border border-gray-200 bg-gray-50 hover:bg-gray-100 rounded-lg cursor-pointer transition-colors shadow-sm">
+                  <input type="checkbox" checked={showSenderName} onChange={e => setShowSenderName(e.target.checked)} className="h-4 w-4 text-blue-600 border-gray-300 rounded" />
+                  <div className="ml-3">
+                    <span className="block text-sm font-bold text-gray-900">配信者名を表示する</span>
+                    <span className="block text-[10px] text-gray-500 mt-0.5">ユーザーの画面にあなたの名前を表示します。（OFFの場合は「テナント管理者」）</span>
                   </div>
                 </label>
               </div>
@@ -639,6 +620,8 @@ export default function MessageDelivery({ tenants, users, showAlert }: Props) {
                 messages.map(msg => {
                   const isActive = (!msg.startAt || new Date(msg.startAt) <= new Date()) && (!msg.endAt || new Date(msg.endAt) >= new Date());
                   const catInfo = CATEGORIES[msg.category || "info"];
+                  
+                  const canEdit = msg.schoolId === schoolData?.id || msg.senderSchoolId === schoolData?.id;
 
                   return (
                     <div key={msg.id} className={`bg-white border rounded-xl p-5 shadow-sm relative transition-colors ${msg.isImportant ? 'border-red-300 ring-1 ring-red-100' : 'border-gray-200'} hover:shadow-md`}>
@@ -660,12 +643,18 @@ export default function MessageDelivery({ tenants, users, showAlert }: Props) {
                           )}
                         </div>
                         <div className="flex gap-2">
-                          <button onClick={() => openEditModal(msg)} className="text-blue-600 hover:text-blue-900 transition-colors p-1.5 bg-blue-50 hover:bg-blue-100 rounded-md border border-blue-100 shadow-sm" title="編集">
-                            <Edit2 className="h-4 w-4" />
-                          </button>
-                          <button onClick={() => requestDelete(msg.id)} className="text-red-600 hover:text-red-900 transition-colors p-1.5 bg-red-50 hover:bg-red-100 rounded-md border border-red-100 shadow-sm" title="削除">
-                            <Trash2 className="h-4 w-4" />
-                          </button>
+                          {canEdit ? (
+                            <>
+                              <button onClick={() => openEditModal(msg)} className="text-blue-600 hover:text-blue-900 transition-colors p-1.5 bg-blue-50 hover:bg-blue-100 rounded-md border border-blue-100 shadow-sm" title="編集">
+                                <Edit2 className="h-4 w-4" />
+                              </button>
+                              <button onClick={() => requestDelete(msg.id)} className="text-red-600 hover:text-red-900 transition-colors p-1.5 bg-red-50 hover:bg-red-100 rounded-md border border-red-100 shadow-sm" title="削除">
+                                <Trash2 className="h-4 w-4" />
+                              </button>
+                            </>
+                          ) : (
+                            <span className="text-[10px] font-bold text-gray-400 bg-gray-100 px-2 py-1 rounded-md border border-gray-200">閲覧専用</span>
+                          )}
                         </div>
                       </div>
 

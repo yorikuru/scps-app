@@ -1,26 +1,71 @@
+/* Tailwind v4 互換のインポート */
 @import "tailwindcss";
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
 
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
-}
-
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+  --foreground-rgb: 0, 0, 0;
+  --background-start-rgb: 214, 219, 220;
+  --background-end-rgb: 255, 255, 255;
 }
 
 @media (prefers-color-scheme: dark) {
   :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
+    --foreground-rgb: 249, 250, 251; /* gray-50 */
+    --background-start-rgb: 17, 24, 39; /* gray-900 */
+    --background-end-rgb: 17, 24, 39; /* gray-900 */
   }
 }
 
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  color: rgb(var(--foreground-rgb));
+  background: linear-gradient(
+      to bottom,
+      transparent,
+      rgb(var(--background-end-rgb))
+    )
+    rgb(var(--background-start-rgb));
+}
+
+@layer base {
+  /* * Tailwind v4の @apply ビルドエラーを回避するため、
+   * HEXコード（16進数）を使って直接ダークモードの色を上書きします
+   */
+  .dark body {
+    background-color: #111827; /* bg-gray-900 */
+    color: #f3f4f6; /* text-gray-100 */
+  }
+
+  .dark .bg-white {
+    background-color: #1f2937; /* bg-gray-800 */
+  }
+
+  .dark .bg-gray-50 {
+    background-color: #111827; /* bg-gray-900 */
+  }
+
+  .dark .text-gray-900,
+  .dark .text-gray-800 {
+    color: #f9fafb; /* text-gray-50 */
+  }
+
+  .dark .text-gray-700,
+  .dark .text-gray-600,
+  .dark .text-gray-500 {
+    color: #d1d5db; /* text-gray-300 */
+  }
+
+  .dark .text-gray-400 {
+    color: #9ca3af; /* text-gray-400 */
+  }
+
+  .dark .border-gray-300,
+  .dark .border-gray-200 {
+    border-color: #374151; /* border-gray-700 */
+  }
+
+  .dark .border-gray-100 {
+    border-color: #1f2937; /* border-gray-800 */
+  }
 }

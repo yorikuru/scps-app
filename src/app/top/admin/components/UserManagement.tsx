@@ -2,7 +2,6 @@
 
 import React, { useState, useMemo, useEffect } from "react";
 import { doc, updateDoc } from "firebase/firestore";
-import { sendPasswordResetEmail } from "firebase/auth";
 import { auth, db } from "@/lib/firebase";
 import { 
   Search, Loader2, FileSpreadsheet, Printer, Key, Eye, ArrowUpDown, FileText, CheckCircle2, XCircle
@@ -42,7 +41,6 @@ export type ExtendedUserData = UserData & {
   authProviders?: string[];
   accountStatus: "active" | "pending" | "rejected" | "unaccessed";
   requireMfa?: boolean;
-  // ★ 個別MFA設定用プロパティ
   useCustomMfaPolicy?: boolean;
   mfaPolicies?: {
     email: MfaPolicy;
@@ -63,7 +61,6 @@ export default function UserManagement({ users, setUsers, schoolData, fetchUsers
   const [searchQuery, setSearchQuery] = useState("");
   const [filterRole, setFilterRole] = useState("all");
   const [filterStatus, setFilterStatus] = useState("all");
-  // ★ デフォルトのソート順をシステム利用番号(systemId)の昇順に設定
   const [sortConfig, setSortConfig] = useState<{ key: string, direction: 'asc' | 'desc' } | null>({ key: 'systemId', direction: 'asc' });
   
   const [selectedUserDetails, setSelectedUserDetails] = useState<ExtendedUserData | null>(null);
@@ -101,7 +98,6 @@ export default function UserManagement({ users, setUsers, schoolData, fetchUsers
       return;
     }
     
-    // Firebaseの標準機能ではなく、独自API（Microsoft Graph経由）を呼び出す
     try {
       const res = await fetch('/api/send-password-reset', {
         method: 'POST',
@@ -144,7 +140,6 @@ export default function UserManagement({ users, setUsers, schoolData, fetchUsers
           }
         }
 
-        // ダウンロードファイル名の動的生成
         let fileName = "account_sheets_一括出力.pdf";
         if (printTargets.length === 1) {
           const target = printTargets[0];
@@ -167,13 +162,27 @@ export default function UserManagement({ users, setUsers, schoolData, fetchUsers
   }, [printTargets]);
 
   const processedUsers = useMemo(() => {
-    let result = [...(users as ExtendedUserData[])];
+    // 1. まず配列内の重複を完全に排除する（親から重複データが来ても最新のもので上書きして一意にする）
+    const uniqueMap = new Map<string, ExtendedUserData>();
+    (users as ExtendedUserData[]).forEach((u) => {
+      if (u && u.id) {
+        uniqueMap.set(u.id, u);
+      }
+    });
+    
+    let result = Array.from(uniqueMap.values());
+
+    // 2. キーワード検索
     if (searchQuery) {
       const q = searchQuery.toLowerCase();
       result = result.filter(u => u.name.toLowerCase().includes(q) || (u.email && u.email.toLowerCase().includes(q)) || (u.systemId && u.systemId.toLowerCase().includes(q)));
     }
+    
+    // 3. フィルター処理
     if (filterRole !== "all") result = result.filter(u => u.role === filterRole);
     if (filterStatus !== "all") result = result.filter(u => u.accountStatus === filterStatus);
+    
+    // 4. ソート処理
     if (sortConfig !== null) {
       result.sort((a, b) => {
         const valA = (a as any)[sortConfig.key] || "";
@@ -183,6 +192,7 @@ export default function UserManagement({ users, setUsers, schoolData, fetchUsers
         return 0;
       });
     }
+    
     return result;
   }, [users, searchQuery, filterRole, filterStatus, sortConfig]);
 
@@ -202,7 +212,7 @@ export default function UserManagement({ users, setUsers, schoolData, fetchUsers
         </div>
       )}
 
-      {/* PDF非表示出力エリア（A4サイズ1ページに美しく収まる絶妙なバランス調整版） */}
+      {/* PDF非表示出力エリア */}
       <div style={{ position: "absolute", left: "-9999px", top: 0 }}>
         {printTargets.map((user) => (
           <div key={user.id} id={`print-sheet-${user.id}`} style={{ display: "none", width: "210mm", height: "297mm", backgroundColor: "#ffffff", padding: "32px 36px", boxSizing: "border-box", fontFamily: "sans-serif", color: "#111827", overflow: "hidden" }}>
@@ -405,7 +415,7 @@ export default function UserManagement({ users, setUsers, schoolData, fetchUsers
                     <div className="text-xs text-gray-500 mt-0.5">{user.email || "メール未登録"}</div>
                   </td>
                   <td className="px-6 py-3 whitespace-nowrap">
-                    <div className="text-sm font-mono font-bold text-gray-900 bg-gray-100 px-2.5 py-1 rounded-md inline-block border border-gray-200">{(user as ExtendedUserData).systemId || "未設定"}</div>
+                    <div className="text-sm font-mono font-bold text-gray-900 bg-gray-100 px-2.5 py-1 rounded-md inline-block border border-gray-200">{user.systemId || "未設定"}</div>
                   </td>
                   <td className="px-6 py-3 whitespace-nowrap">
                     <div className="text-sm font-bold text-gray-900">{user.role === "admin" ? "管理者" : user.role === "officer" ? "生徒会役員" : "一般生徒"}</div>
@@ -425,9 +435,9 @@ export default function UserManagement({ users, setUsers, schoolData, fetchUsers
                   </td>
                   <td className="px-6 py-3 whitespace-nowrap text-right text-sm font-medium">
                     <div className="flex justify-end gap-2 items-center">
-                      <button onClick={() => setSelectedUserDetails(user as ExtendedUserData)} className="text-gray-600 hover:text-gray-900 font-bold bg-white border border-gray-300 hover:bg-gray-100 px-3 py-1.5 rounded-md transition-colors inline-flex items-center"><Eye className="h-3 w-3 mr-1" /> 詳細</button>
+                      <button onClick={() => setSelectedUserDetails(user)} className="text-gray-600 hover:text-gray-900 font-bold bg-white border border-gray-300 hover:bg-gray-100 px-3 py-1.5 rounded-md transition-colors inline-flex items-center"><Eye className="h-3 w-3 mr-1" /> 詳細</button>
                       {user.accountStatus === "unaccessed" ? (
-                        <button onClick={() => handlePrint([user as ExtendedUserData])} className="text-blue-700 hover:text-blue-900 font-bold bg-blue-50 border border-blue-200 hover:bg-blue-100 px-3 py-1.5 rounded-md transition-colors inline-flex items-center"><FileText className="h-3 w-3 mr-1" /> シート出力</button>
+                        <button onClick={() => handlePrint([user])} className="text-blue-700 hover:text-blue-900 font-bold bg-blue-50 border border-blue-200 hover:bg-blue-100 px-3 py-1.5 rounded-md transition-colors inline-flex items-center"><FileText className="h-3 w-3 mr-1" /> シート出力</button>
                       ) : (
                         <button onClick={() => handlePasswordReset(user.email)} className="text-yellow-700 hover:text-yellow-900 font-bold bg-yellow-50 border border-yellow-200 hover:bg-yellow-100 px-3 py-1.5 rounded-md transition-colors inline-flex items-center"><Key className="h-3 w-3 mr-1" /> PASS 変更</button>
                       )}

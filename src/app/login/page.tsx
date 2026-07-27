@@ -38,15 +38,14 @@ export default function LoginPage() {
 
   const showAlert = (type: "success" | "error", message: string) => {
     setAlert({ show: true, type, message });
-    setTimeout(() => setAlert((prev) => ({ ...prev, show: false })), 6000);
+    setTimeout(() => setAlert((prev) => ({ ...prev, show: false })), 8000);
   };
 
-  // IPv6とIPv4の両方に完全対応したAPIを使用
   const getClientIp = async (): Promise<string> => {
     try {
       const res = await fetch("https://api64.ipify.org?format=json");
       const data = await res.json();
-      return data.ip;
+      return data.ip || "";
     } catch {
       return "";
     }
@@ -80,71 +79,122 @@ export default function LoginPage() {
     if (!userDoc.exists()) throw new Error("ユーザー情報が見つかりません。");
     const userData = userDoc.data();
     
+    if (userData.accountStatus === "pending") {
+      throw new Error("このアカウントは管理者の承認待ちです。承認が完了するまでログインできません。詳しくはテナント管理者へお問い合わせください。");
+    }
+    if (userData.accountStatus === "rejected") {
+      throw new Error("このユーザーは管理者によってロック（利用停止）されています。詳しくはテナント管理者へお問い合わせください。");
+    }
+
+    if (userData.accountValidEndDate) {
+      const today = new Date().toISOString().split("T")[0];
+      if (userData.accountValidEndDate < today) {
+        throw new Error("このアカウントの利用有効期限が切れています。詳しくはテナント管理者へお問い合わせください。");
+      }
+    }
+
+    if (userData.accountStatus === "unaccessed") {
+      return { isSystemAdmin: false, userData, isMfaRequired: false, isSafeIpSkipped: true, isMfaSetupNeeded: false, allowedMfaMethods: [], isUnaccessed: true };
+    }
+
     if (userData.role === "system_admin") {
-      return { isSystemAdmin: true, userData, isMfaRequired: false, isSafeIpSkipped: false, allowedMfaMethods: [] };
+      return { isSystemAdmin: true, userData, isMfaRequired: false, isSafeIpSkipped: false, isMfaSetupNeeded: false, allowedMfaMethods: [], isUnaccessed: false };
+    }
+
+    if (!userData.schoolId) {
+      throw new Error("所属組織が設定されていません。詳しくはテナント管理者へお問い合わせください。");
     }
 
     const schoolDoc = await getDoc(doc(db, "schools", userData.schoolId));
-    if (!schoolDoc.exists()) throw new Error("組織データがありません。");
+    if (!schoolDoc.exists()) throw new Error("所属する組織データが存在しません。");
     const schoolData = schoolDoc.data();
+
+    if (schoolData.status === "suspended") {
+      throw new Error("現在、所属する組織（テナント）のシステム利用が停止されています。詳しくはテナント管理者へお問い合わせください。");
+    }
 
     let isMfaRequired = false;
     let isSafeIpSkipped = false;
-    const allowedMfaMethods = schoolData.allowedMfaMethods || ["email"];
+    let isMfaSetupNeeded = false;
+    let allowedMfaMethods: string[] = [];
     
-    if (userData.accountStatus !== "unaccessed") {
-      // 取得したIPと登録IPを小文字化・空白除去して厳密に比較する
-      const rawClientIp = await getClientIp();
-      const clientIp = rawClientIp.trim().toLowerCase();
-      
-      const safeIps: string[] = schoolData.safeIps || [];
-      const safeNetworkIps = Array.isArray(schoolData.safeNetworks) ? schoolData.safeNetworks.map((n: any) => n.ip) : [];
-      
-      // 統合してすべて小文字・空白除去で統一
-      const allSafeIps = [...safeIps, ...safeNetworkIps].map(ip => ip.trim().toLowerCase());
-      
-      console.log("--- IP Verification Debug ---");
-      console.log("Current Client IP:", clientIp);
-      console.log("Registered Safe IPs:", allSafeIps);
-      
-      const isSafeIp = allSafeIps.includes(clientIp) && clientIp !== "";
-      
-      const tenantRequiresMfa = schoolData.requireMfa === true;
-      const userRequiresMfa = userData.requireMfa === true;
+    const tenantRequiresMfa = schoolData.requireMfa === true || schoolData.requireMfa === "true";
+    const userRequiresMfa = userData.requireMfa === true || userData.requireMfa === "true";
 
-      if (tenantRequiresMfa || userRequiresMfa) {
-        if (isSafeIp) {
-          isSafeIpSkipped = true;
-          console.log("MATCH! Skipping 2FA...");
+    const activePolicies = userData.useCustomMfaPolicy && userData.mfaPolicies 
+      ? userData.mfaPolicies 
+      : (schoolData.mfaPolicies || {
+          email: { allowUsage: true },
+          totp: { allowUsage: false },
+          passkey: { allowUsage: false },
+        });
+
+    if ((activePolicies.email?.allowUsage === true || activePolicies.email?.allowUsage === "true") && userData.email) {
+      allowedMfaMethods.push("email");
+    }
+    if ((activePolicies.totp?.allowUsage === true || activePolicies.totp?.allowUsage === "true") && userData.totpSecret) {
+      allowedMfaMethods.push("totp");
+    }
+    if ((activePolicies.passkey?.allowUsage === true || activePolicies.passkey?.allowUsage === "true") && Array.isArray(userData.passkeys) && userData.passkeys.length > 0) {
+      allowedMfaMethods.push("passkey");
+    }
+
+    const rawClientIp = await getClientIp();
+    const clientIp = rawClientIp.trim().toLowerCase();
+    
+    const safeIps: string[] = schoolData.safeIps || [];
+    const safeNetworkIps = Array.isArray(schoolData.safeNetworks) ? schoolData.safeNetworks.map((n: any) => n.ip) : [];
+    
+    const allSafeIps = [...safeIps, ...safeNetworkIps].filter(Boolean).map(ip => ip.trim().toLowerCase());
+    const isSafeIp = clientIp !== "" && allSafeIps.includes(clientIp);
+
+    if (tenantRequiresMfa || userRequiresMfa) {
+      if (isSafeIp) {
+        isSafeIpSkipped = true; 
+      } else {
+        // ★変更点: MFAが必要なのに利用できるメソッドが無い（初期設定未完了）場合
+        // エラーで弾かず、トップページの設定チュートリアル画面へ誘導するためフラグを立てる
+        if (allowedMfaMethods.length === 0) {
+          isMfaSetupNeeded = true;
+          isMfaRequired = false;
         } else {
           isMfaRequired = true;
-          console.log("NO MATCH. 2FA is required.");
         }
       }
     }
 
-    return { isSystemAdmin: false, userData, isMfaRequired, allowedMfaMethods, isSafeIpSkipped };
+    return { isSystemAdmin: false, userData, isMfaRequired, allowedMfaMethods, isSafeIpSkipped, isMfaSetupNeeded, isUnaccessed: false };
   };
 
   const handlePostLogin = (uid: string, userData: any, isSystemAdmin: boolean) => {
-    showAlert("success", "ログインに成功しました。移動します...");
     setTimeout(() => {
-      if (userData.accountStatus === "unaccessed") {
-        router.push(`/password-reset?uid=${uid}`);
-      } else {
-        router.push(isSystemAdmin ? "/system-admin" : "/top");
-      }
+      router.push(isSystemAdmin ? "/system-admin" : "/top");
     }, 1000);
   };
 
   const processLoginFlow = async (userCredential: any, currentProviderType: string, userDataParam?: any) => {
     try {
-      const { isSystemAdmin, userData, isMfaRequired, allowedMfaMethods, isSafeIpSkipped } = await checkUserAndTenantSettings(userCredential.user.uid, currentProviderType);
+      const { isSystemAdmin, userData, isMfaRequired, allowedMfaMethods, isSafeIpSkipped, isMfaSetupNeeded, isUnaccessed } = await checkUserAndTenantSettings(userCredential.user.uid, currentProviderType);
       const finalUserData = userDataParam || userData;
 
+      if (isUnaccessed) {
+        showAlert("success", "初回ログインを確認しました。パスワード設定画面へ移動します...");
+        setTimeout(() => {
+          router.push(`/password-reset?uid=${userCredential.user.uid}`);
+        }, 1200);
+        return;
+      }
+
+      // ★追加: 2段階認証が未設定（初回）の場合はセットアップチュートリアルへ送る
+      if (isMfaSetupNeeded) {
+        showAlert("success", "2段階認証の初期設定が完了していません。セットアップ画面へ移動します...");
+        handlePostLogin(userCredential.user.uid, finalUserData, isSystemAdmin);
+        return;
+      }
+
       if (isSafeIpSkipped) {
-        showAlert("success", "学校内（許可済み）ネットワークからのアクセスのため、2段階認証を自動的にスキップしました。");
-        setTimeout(() => handlePostLogin(userCredential.user.uid, finalUserData, isSystemAdmin), 1500);
+        showAlert("success", "許可済みネットワークからのアクセスのため、2段階認証をスキップしました。");
+        handlePostLogin(userCredential.user.uid, finalUserData, isSystemAdmin);
         return;
       }
 
@@ -157,8 +207,10 @@ export default function LoginPage() {
         return;
       }
 
+      showAlert("success", "ログインに成功しました。移動します...");
       handlePostLogin(userCredential.user.uid, finalUserData, isSystemAdmin);
     } catch (e: any) {
+      await signOut(auth);
       showAlert("error", e.message || "ログイン処理に失敗しました。");
       setIsLoading(false);
     }
@@ -170,8 +222,12 @@ export default function LoginPage() {
     try {
       const userCredential = await signInWithEmailAndPassword(auth, email, password);
       await processLoginFlow(userCredential, "password");
-    } catch {
-      showAlert("error", "メールアドレスまたはパスワードが間違っています。");
+    } catch (err: any) {
+      if (err.code === "auth/invalid-credential" || err.code === "auth/user-not-found" || err.code === "auth/wrong-password") {
+        showAlert("error", "メールアドレスまたはパスワードが間違っています。");
+      } else {
+        showAlert("error", err.message || "ログインに失敗しました。");
+      }
       setIsLoading(false);
     }
   };
@@ -182,25 +238,34 @@ export default function LoginPage() {
     try {
       const schoolQ = query(collection(db, "schools"), where("schoolCode", "==", `SCPS-${tenantId}`));
       const schoolSnap = await getDocs(schoolQ);
-      if (schoolSnap.empty) throw new Error("テナントIDが無効です。");
+      if (schoolSnap.empty) throw new Error("入力された組織コード（テナントID）が存在しません。");
       
       const schoolId = schoolSnap.docs[0].id;
       const userQ = query(collection(db, "users"), where("schoolId", "==", schoolId), where("systemId", "==", systemId));
       const userSnap = await getDocs(userQ);
-      if (userSnap.empty) throw new Error("利用番号またはパスワードが違います。");
+      if (userSnap.empty) throw new Error("利用番号またはパスワードが正しくありません。");
       
       const userDoc = userSnap.docs[0];
       const userData = userDoc.data();
 
-      if (userData.accountStatus === "unaccessed") {
-        if (userData.initialPassword !== password) throw new Error("利用番号または初期パスワードが違います。");
-        handlePostLogin(userDoc.id, userData, false);
-      } else {
-        const userCredential = await signInWithEmailAndPassword(auth, userData.email, password);
-        await processLoginFlow(userCredential, "password", userData);
+      if (!userData.email) {
+        throw new Error("このアカウントにはログイン用情報が同期されていません。管理者にCSVの再アップロードを依頼してください。");
       }
+
+      if (userData.accountStatus === "unaccessed" && userData.initialPassword !== password) {
+        throw new Error("利用番号または初期パスワードが違います。");
+      }
+
+      const userCredential = await signInWithEmailAndPassword(auth, userData.email, password);
+      await processLoginFlow(userCredential, "password", userData);
+      
     } catch (err: any) {
-      showAlert("error", err.message || "ログイン失敗");
+      await signOut(auth);
+      if (err.code === "auth/invalid-credential" || err.code === "auth/user-not-found" || err.code === "auth/invalid-email") {
+        showAlert("error", "アカウント情報が認証サーバーと同期されていません。管理者にCSVの再アップロードを依頼してください。");
+      } else {
+        showAlert("error", err.message || "ログインに失敗しました。");
+      }
       setIsLoading(false);
     }
   };
@@ -210,8 +275,9 @@ export default function LoginPage() {
     try {
       const userCredential = await signInWithPopup(auth, provider);
       await processLoginFlow(userCredential, provider.providerId);
-    } catch {
-      showAlert("error", "外部連携ログインがキャンセルされました。");
+    } catch (err: any) {
+      await signOut(auth);
+      showAlert("error", err.message || "外部連携ログインがキャンセルされたか、失敗しました。");
       setIsLoading(false);
     }
   };
@@ -244,7 +310,7 @@ export default function LoginPage() {
         body: JSON.stringify({ uid: targetUid })
       });
       const optionsJSON = await optionsResp.json();
-      if (!optionsResp.ok) throw new Error(optionsJSON.error || "鍵オプション生成失敗");
+      if (!optionsResp.ok) throw new Error(optionsJSON.error || "鍵オプションの生成に失敗しました。");
 
       const asseResp = await startAuthentication({ optionsJSON });
       const verifyResp = await fetch('/api/webauthn/auth-verify', {
@@ -254,9 +320,10 @@ export default function LoginPage() {
       });
       if (!verifyResp.ok) throw new Error();
 
+      showAlert("success", "認証に成功しました。移動します...");
       handlePostLogin(targetUid, mfaState.userData, mfaState.isSystemAdmin);
     } catch {
-      showAlert("error", "生体認証ポップアップが閉じられたか、認証に失敗しました。");
+      showAlert("error", "生体認証（パスキー）がキャンセルされたか、検証に失敗しました。");
     } finally {
       setIsVerifyingPasskey(false);
     }
@@ -271,9 +338,10 @@ export default function LoginPage() {
         const userDoc = await getDoc(doc(db, "users", mfaState.uid));
         const data = userDoc.data();
         if (data?.mfaTempCode !== mfaCode || new Date() > new Date(data?.mfaExpiresAt)) {
-          throw new Error("コードが正しくないか、有効期限切れです。");
+          throw new Error("認証コードが一致しないか、有効期限が切れています。");
         }
         await updateDoc(doc(db, "users", mfaState.uid), { mfaTempCode: null, mfaExpiresAt: null });
+        showAlert("success", "認証に成功しました。移動します...");
         handlePostLogin(mfaState.uid, mfaState.userData, mfaState.isSystemAdmin);
         
       } else if (mfaState.selectedMethod === "totp") {
@@ -287,10 +355,11 @@ export default function LoginPage() {
         });
         
         if (!res.ok) throw new Error("認証コードが一致しません。");
+        showAlert("success", "認証に成功しました。移動します...");
         handlePostLogin(mfaState.uid, mfaState.userData, mfaState.isSystemAdmin);
       }
     } catch (err: any) {
-      showAlert("error", err.message || "検証エラー");
+      showAlert("error", err.message || "認証コードの検証に失敗しました。");
     } finally {
       setIsLoading(false);
     }
@@ -306,7 +375,6 @@ export default function LoginPage() {
     <div className="min-h-screen bg-gradient-to-br from-gray-50 via-gray-100 to-blue-50/30 flex flex-col justify-center py-12 px-4 sm:px-6 lg:px-8 relative overflow-hidden">
       
       <div className="sm:mx-auto sm:w-full sm:max-w-md text-center mb-6">
-        {/* ロゴ画像を復活 */}
         <div className="flex items-center justify-center mb-4">
           <img 
             src="/icon.png" 
@@ -321,8 +389,12 @@ export default function LoginPage() {
 
       <div className="w-full sm:max-w-md mx-auto relative z-10">
         {alert.show && (
-          <div className={`mb-4 p-4 rounded-xl text-xs font-bold shadow-sm flex items-center border animate-fade-in ${alert.type === "success" ? "bg-green-50 text-green-800 border-green-200" : "bg-red-50 text-red-800 border-red-200"}`}>
-            {alert.message}
+          <div className={`mb-4 p-4 rounded-xl text-xs font-bold shadow-md flex items-start border animate-fade-in ${
+            alert.type === "success" 
+              ? "bg-green-50 text-green-800 border-green-200" 
+              : "bg-red-50 text-red-800 border-red-200"
+          }`}>
+            <span className="leading-relaxed">{alert.message}</span>
           </div>
         )}
 
