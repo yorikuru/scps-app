@@ -31,7 +31,7 @@ export default function LandingPage() {
                 onError={(e) => { e.currentTarget.style.display = 'none'; }}
               />
               <span className="font-extrabold text-xl tracking-tight text-gray-900">
-                SCPS
+                生徒会ポータルシステム <span className="text-xs text-blue-600 font-bold ml-1">SCPS</span>
               </span>
             </div>
             
@@ -68,7 +68,7 @@ export default function LandingPage() {
               </span>
             </h1>
             <p className="mt-4 max-w-2xl text-lg text-gray-600 mx-auto mb-10 leading-relaxed font-medium">
-              SCPS（Student Council Portal System）は、役員間の連携から全校生徒への情報発信までをワンストップでサポート。ペーパーレス化と業務効率化を実現し、新しい生徒会活動の形を創造します。
+              <strong>生徒会ポータルシステム（SCPS）</strong>は、役員間の連携から全校生徒への情報発信までをワンストップでサポート。ペーパーレス化と業務効率化を実現し、新しい生徒会活動の形を創造します。
             </p>
             <div className="flex flex-col sm:flex-row justify-center gap-4">
               <Link 
@@ -158,7 +158,7 @@ export default function LandingPage() {
                   次世代リーダーのための<br />強固なインフラストラクチャ
                 </h2>
                 <p className="text-gray-400 text-lg mb-8 leading-relaxed">
-                  学校ごとの独立したテナント環境により、安全かつ柔軟な運用を実現。スマートフォンのLINE連携にも対応し、現代の生徒に最適な体験を提供します。
+                  学校ごとの独立したテナント環境により、安全かつ柔軟な運用を実現。スマートフォンのLINE連携やGoogleカレンダー連携にも対応し、現代の生徒に最適な体験を提供します。
                 </p>
                 <ul className="space-y-6">
                   <li className="flex items-start">
@@ -184,15 +184,14 @@ export default function LandingPage() {
                       <Smartphone className="h-5 w-5 text-purple-400" />
                     </div>
                     <div className="ml-4">
-                      <h4 className="text-base font-bold">マルチデバイス＆LINE連携</h4>
-                      <p className="mt-1 text-sm text-gray-400">スマホ、タブレット、PCに完全対応。使い慣れたLINEからの通知受け取りや操作も可能です。</p>
+                      <h4 className="text-base font-bold">マルチデバイス＆外部連携</h4>
+                      <p className="mt-1 text-sm text-gray-400">スマホ、タブレット、PCに対応。GoogleカレンダーやLINEとのスケジュール・通知連携が可能です。</p>
                     </div>
                   </li>
                 </ul>
               </div>
               <div className="relative">
                 <div className="aspect-w-5 aspect-h-4 bg-gradient-to-tr from-gray-800 to-gray-700 rounded-2xl border border-gray-600 shadow-2xl overflow-hidden flex items-center justify-center relative">
-                  {/* ダミーのUIモックアップ */}
                   <div className="w-full h-full p-6 flex flex-col">
                     <div className="flex items-center gap-2 mb-6">
                       <div className="w-3 h-3 rounded-full bg-red-400"></div>
@@ -237,26 +236,53 @@ export default function LandingPage() {
       </main>
 
       {/* Footer */}
-      <footer className="bg-gray-50 border-t border-gray-200 py-12">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex flex-col md:flex-row justify-between items-center">
-          <div className="flex items-center gap-2 mb-4 md:mb-0">
-            <img 
-              src="/icon.png" 
-              alt="SCPS Icon" 
-              className="h-6 w-6 object-cover rounded-full grayscale opacity-60"
-              onError={(e) => { e.currentTarget.style.display = 'none'; }}
-            />
-            <span className="text-gray-500 font-bold tracking-wider text-sm">SCPS</span>
-          </div>
+      <footer className="bg-gray-50 border-t border-gray-200 pt-12 pb-8">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           
-          <div className="flex space-x-6 text-sm font-medium text-gray-500">
-            <a href="#" className="hover:text-gray-900 transition-colors">利用規約</a>
-            <a href="#" className="hover:text-gray-900 transition-colors">プライバシーポリシー</a>
-            <a href="#" className="hover:text-gray-900 transition-colors">サポート</a>
+          {/* Google審査用：アプリ目的＆サービス説明 */}
+          <div className="mb-8 p-6 bg-white rounded-2xl border border-gray-200 text-xs text-gray-600 leading-relaxed shadow-xs">
+            <h3 className="font-extrabold text-sm text-gray-900 mb-2">
+              生徒会ポータルシステム（SCPS）について
+            </h3>
+            <p className="mb-3">
+              <strong>生徒会ポータルシステム</strong>は、中学校・高等学校における生徒会活動のデジタルトランスフォーメーション（DX）を推進し、役員業務の効率化や全校生徒への情報共有を円滑にするポータルWebアプリケーションです。
+            </p>
+            <h4 className="font-bold text-gray-800 mb-1">【Googleカレンダー連携機能の目的】</h4>
+            <p>
+              本システムで登録された生徒会行事や委員会ミーティング等のスケジュールを、ユーザー自身のGoogleカレンダーへ自動同期・一括登録するためにGoogle Calendar APIを利用しています。これにより、スケジュール管理の効率化と予定の見落とし防止を実現します。
+            </p>
           </div>
-        </div>
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 mt-8 text-center md:text-left text-xs text-gray-400">
-          &copy; {new Date().getFullYear()} Student Council Portal System. All rights reserved.
+
+          <div className="flex flex-col md:flex-row justify-between items-center border-t border-gray-200 pt-6">
+            <div className="flex items-center gap-2 mb-4 md:mb-0">
+              <img 
+                src="/icon.png" 
+                alt="SCPS Icon" 
+                className="h-6 w-6 object-cover rounded-full grayscale opacity-60"
+                onError={(e) => { e.currentTarget.style.display = 'none'; }}
+              />
+              <span className="text-gray-600 font-extrabold tracking-wider text-sm">
+                生徒会ポータルシステム (SCPS)
+              </span>
+            </div>
+            
+            {/* ★法務・規約ページへの各種リンク★ */}
+            <div className="flex flex-wrap gap-6 text-sm font-bold text-gray-600">
+              <Link href="/legal/terms" className="hover:text-blue-600 transition-colors">
+                利用規約
+              </Link>
+              <Link href="/legal/privacy" className="hover:text-blue-600 transition-colors">
+                プライバシーポリシー
+              </Link>
+              <Link href="/legal/commercial" className="hover:text-blue-600 transition-colors">
+                特定商取引法に基づく表記
+              </Link>
+            </div>
+          </div>
+
+          <div className="mt-8 text-center text-xs text-gray-400">
+            &copy; {new Date().getFullYear()} YORIKURU / 生徒会ポータルシステム All rights reserved.
+          </div>
         </div>
       </footer>
     </div>
