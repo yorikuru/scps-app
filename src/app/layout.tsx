@@ -16,11 +16,10 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    // ★ html と body に h-full と overflow-hidden を持たせてスクロールを防ぎます
     <html lang="ja" className="h-full overflow-hidden">
       <body className="h-full overflow-hidden antialiased">
-        {/* ★ アプリ全体を画面いっぱいに固定するラッパー */}
-        <div className="h-full w-full overflow-hidden flex flex-col fixed inset-0">
+        {/* ★ 変更：overflow-hidden を外し、縦方向のスクロール（overflow-y-auto）を許可します */}
+        <div className="h-full w-full overflow-y-auto overflow-x-hidden flex flex-col fixed inset-0">
           <DialogProvider>
             {children}
           </DialogProvider>

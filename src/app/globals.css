@@ -10,12 +10,10 @@
   --background-end-rgb: 255, 255, 255;
 }
 
-
-/* ★ 変更：ブラウザ全体（html, body）のスクロールを完全にロックし、アプリ風に固定します */
+/* ★ 変更：position: fixed; を削除し、入力時のバグを防ぎつつスクロールロックを維持 */
 html, body {
   height: 100%;
   overflow: hidden;
-  position: fixed;
   width: 100%;
   -webkit-overflow-scrolling: touch;
 }
