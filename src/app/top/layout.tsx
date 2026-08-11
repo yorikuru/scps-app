@@ -9,15 +9,14 @@ import { Loader2, ShieldAlert } from "lucide-react";
 
 import Sidebar from "./components/Sidebar";
 import Header from "./components/Header";
-import DisasterAlertWidget from "./components/DisasterAlertWidget"; // ★ 災害アラートをインポート
+import DisasterAlertWidget from "./components/DisasterAlertWidget";
 import { UserData, SchoolData, SystemMessage, SystemApp } from "./page";
 
-// 型エラー回避のための拡張
 type ExtendedSchoolData = SchoolData & {
   availableModules?: string[];
   customAppNames?: Record<string, string>;
-  photoURL?: string; // Sidebar用
-  logoURL?: string;  // Sidebar用
+  photoURL?: string; 
+  logoURL?: string;  
 };
 
 export default function TopLayout({ children }: { children: React.ReactNode }) {
@@ -40,7 +39,6 @@ export default function TopLayout({ children }: { children: React.ReactNode }) {
   const [accessDeniedApp, setAccessDeniedApp] = useState<string | null>(null);
   const [accountStatusError, setAccountStatusError] = useState<string | null>(null);
 
-  // 1. ユーザーデータのリアルタイム監視
   useEffect(() => {
     const unsubscribeAuth = onAuthStateChanged(auth, (user) => {
       if (user) {
@@ -57,7 +55,6 @@ export default function TopLayout({ children }: { children: React.ReactNode }) {
     return () => unsubscribeAuth();
   }, [router]);
 
-  // アカウントステータス (active以外) の監視と排除ガード
   useEffect(() => {
     if (!userData) return;
     if (userData.accountStatus !== "active") {
@@ -71,7 +68,6 @@ export default function TopLayout({ children }: { children: React.ReactNode }) {
     }
   }, [userData, pathname]);
 
-  // 2. 学校（テナント）データ & 同一テナントユーザーのリアルタイム監視
   useEffect(() => {
     if (!userData?.schoolId) return;
     
@@ -93,7 +89,6 @@ export default function TopLayout({ children }: { children: React.ReactNode }) {
     };
   }, [userData?.schoolId]);
 
-  // 3. アプリ、メッセージ、イベントのリアルタイム監視
   useEffect(() => {
     if (!userData?.schoolId) return;
 
@@ -125,7 +120,6 @@ export default function TopLayout({ children }: { children: React.ReactNode }) {
     };
   }, [userData?.schoolId]);
 
-  // 4. アカウントブロック判定
   useEffect(() => {
     if (!userData || !schoolData) return;
 
@@ -152,7 +146,6 @@ export default function TopLayout({ children }: { children: React.ReactNode }) {
     setIsLoading(false); 
   }, [userData, schoolData]);
 
-  // 5. アプリのアクセス権限リアルタイム自動ガード
   useEffect(() => {
     if (isLoading || !userData || !schoolData || systemApps.length === 0) return;
 
@@ -185,7 +178,7 @@ export default function TopLayout({ children }: { children: React.ReactNode }) {
   };
 
   if (isLoading) {
-    return <div className="flex h-screen items-center justify-center bg-[#F9FAFB]"><Loader2 className="w-8 h-8 animate-spin text-indigo-600" /></div>;
+    return <div className="flex h-[100dvh] items-center justify-center bg-[#F9FAFB]"><Loader2 className="w-8 h-8 animate-spin text-indigo-600" /></div>;
   }
 
   const isPrintPage = pathname.includes("/equipment/print");
@@ -261,7 +254,7 @@ export default function TopLayout({ children }: { children: React.ReactNode }) {
     return (
       <>
         {renderModals()}
-        <div className={`min-h-screen bg-white ${isBlurNeeded ? "pointer-events-none select-none blur-[4px] transition-all" : ""}`}>
+        <div className={`min-h-[100dvh] bg-white ${isBlurNeeded ? "pointer-events-none select-none blur-[4px] transition-all" : ""}`}>
           {children}
         </div>
       </>
@@ -296,11 +289,12 @@ export default function TopLayout({ children }: { children: React.ReactNode }) {
   return (
     <>
       {renderModals()}
-      <div className="flex h-screen bg-white text-gray-900 font-sans overflow-hidden">
+      {/* ★ h-screen を h-[100dvh] に変更し、スマホのアドレスバーの動きに追従させます */}
+      <div className="flex h-[100dvh] w-full bg-white text-gray-900 font-sans overflow-hidden">
         
         <Sidebar 
           isSidebarOpen={isSidebarOpen} 
-          setIsSidebarOpen={setIsSidebarOpen} // ★ Props として渡す
+          setIsSidebarOpen={setIsSidebarOpen}
           schoolData={schoolData} 
           userData={userData}
           availableApps={availableApps} 
@@ -309,7 +303,7 @@ export default function TopLayout({ children }: { children: React.ReactNode }) {
           allEvents={allEvents} 
         />
         
-        <div className="flex-1 flex flex-col min-w-0 bg-[#F9FAFB] h-screen overflow-hidden">
+        <div className="flex-1 flex flex-col min-w-0 bg-[#F9FAFB] h-[100dvh] overflow-hidden">
           <Header 
             isSidebarOpen={isSidebarOpen} 
             setIsSidebarOpen={setIsSidebarOpen}
@@ -322,6 +316,7 @@ export default function TopLayout({ children }: { children: React.ReactNode }) {
             setIsProfileMenuOpen={setIsProfileMenuOpen}
           />
           
+          {/* ★ ここのみスクロール可能にする */}
           <main className="flex-1 overflow-y-auto custom-scrollbar w-full min-w-0 relative flex flex-col">
             <div className={isBlurNeeded ? "pointer-events-none select-none blur-[4px] transition-all h-full flex flex-col" : "h-full flex flex-col"}>
               

@@ -13,7 +13,6 @@
 /* ★ 変更：position: fixed; を削除し、入力時のバグを防ぎつつスクロールロックを維持 */
 html, body {
   height: 100%;
-  overflow: hidden;
   width: 100%;
   -webkit-overflow-scrolling: touch;
 }

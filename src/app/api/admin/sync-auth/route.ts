@@ -5,17 +5,13 @@ import { getAuth } from 'firebase-admin/auth';
 // Firebase Admin SDKの安全な初期化
 if (!getApps().length) {
   try {
-    const serviceAccountKeyStr = process.env.GOOGLE_SERVICE_ACCOUNT_KEY;
-    if (serviceAccountKeyStr) {
-      let jsonString = serviceAccountKeyStr;
-      if (!serviceAccountKeyStr.trim().startsWith('{')) {
-        jsonString = Buffer.from(serviceAccountKeyStr, 'base64').toString('utf-8');
-      }
-      const serviceAccount = JSON.parse(jsonString);
-      initializeApp({ credential: cert(serviceAccount) });
-    } else {
-      initializeApp();
-    }
+    initializeApp({
+      credential: cert({
+        projectId: process.env.FIREBASE_PROJECT_ID,
+        clientEmail: process.env.FIREBASE_CLIENT_EMAIL,
+        privateKey: process.env.FIREBASE_PRIVATE_KEY?.replace(/\\n/g, '\n'),
+      }),
+    });
   } catch (error) {
     console.error("Firebase Admin initialization error:", error);
   }
