@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useState, useRef } from "react";
+import React, { useEffect, useState, useRef, Suspense } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { onAuthStateChanged, signOut } from "firebase/auth";
@@ -14,7 +14,7 @@ import ChatList from "../top/chat/components/ChatList";
 import ChatRoomWindow from "../top/chat/components/ChatRoomWindow";
 import UserProfileModal from "../top/chat/components/UserProfileModal";
 
-export default function ExternalChatMainPage() {
+function ExternalChatContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const roomQuery = searchParams.get("room");
@@ -334,6 +334,17 @@ export default function ExternalChatMainPage() {
       )}
 
     </div>
-    
+  );
+}
+
+export default function ExternalChatMainPage() {
+  return (
+    <Suspense fallback={
+      <div className="h-screen flex justify-center items-center bg-gray-50">
+        <Loader2 className="w-8 h-8 animate-spin text-indigo-500" />
+      </div>
+    }>
+      <ExternalChatContent />
+    </Suspense>
   );
 }
