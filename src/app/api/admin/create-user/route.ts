@@ -1,35 +1,8 @@
 import { NextResponse } from 'next/server';
-import { getApps, initializeApp, cert } from 'firebase-admin/app';
-import { getAuth } from 'firebase-admin/auth';
-
-function initFirebaseAdmin() {
-  if (!getApps().length) {
-    try {
-      const serviceAccountKeyStr = process.env.GOOGLE_SERVICE_ACCOUNT_KEY;
-      if (serviceAccountKeyStr) {
-        let jsonString = serviceAccountKeyStr;
-        if (!serviceAccountKeyStr.trim().startsWith('{')) {
-          jsonString = Buffer.from(serviceAccountKeyStr, 'base64').toString('utf-8');
-        }
-        initializeApp({ credential: cert(JSON.parse(jsonString)) });
-        console.log("[create-user] Firebase Admin Initialized successfully.");
-      } else {
-        console.warn('[create-user] WARNING: GOOGLE_SERVICE_ACCOUNT_KEY is missing.');
-        initializeApp();
-      }
-    } catch (error) {
-      console.error("[create-user] Firebase Admin init error:", error);
-      throw new Error("Firebase Adminの初期化に失敗しました。環境変数を確認してください。");
-    }
-  }
-}
+import { adminAuth } from '@/lib/firebase-admin'; // ★ 共通インスタンスをインポート
 
 export async function POST(request: Request) {
   try {
-    // まず初期化を確実に行う
-    initFirebaseAdmin();
-    const auth = getAuth();
-    
     const body = await request.json();
     const { action, uid, email, password, displayName } = body;
 
@@ -53,10 +26,10 @@ export async function POST(request: Request) {
 
     try {
       // 1. まずUIDでFirebase Auth上のユーザーが存在するか直接確認する
-      await auth.getUser(targetUid);
+      await adminAuth.getUser(targetUid);
 
       // 存在する場合は情報を更新
-      await auth.updateUser(targetUid, userParams);
+      await adminAuth.updateUser(targetUid, userParams);
       console.log(`User ${targetUid} successfully updated in Auth.`);
 
     } catch (error: any) {
@@ -68,11 +41,11 @@ export async function POST(request: Request) {
 
         try {
           // 同じメールアドレスですでに別のAuthアカウントが存在するか確認
-          const existingUser = await auth.getUserByEmail(email);
+          const existingUser = await adminAuth.getUserByEmail(email);
           targetUid = existingUser.uid;
           
           // 既存メアドのアカウントのパスワード等を更新
-          await auth.updateUser(targetUid, userParams);
+          await adminAuth.updateUser(targetUid, userParams);
           console.log(`Email ${email} already existed under UID ${targetUid}, updated instead.`);
 
         } catch (emailErr: any) {
@@ -84,7 +57,7 @@ export async function POST(request: Request) {
               password: password,
               displayName: displayName || ""
             };
-            await auth.createUser(createParams);
+            await adminAuth.createUser(createParams);
             console.log(`User ${targetUid} successfully created in Auth.`);
           } else {
             throw emailErr;

@@ -1,5 +1,6 @@
 import { initializeApp, getApps, cert, getApp } from 'firebase-admin/app';
 import { getFirestore } from 'firebase-admin/firestore';
+import { getAuth } from 'firebase-admin/auth'; // ★ 追加
 
 const initializeFirebaseAdmin = () => {
   // Cloud Run や Next.js のホットリロード対策：すでに初期化済みの場合は既存のインスタンスを返す
@@ -42,5 +43,6 @@ const initializeFirebaseAdmin = () => {
 // 安全に初期化されたアプリインスタンスを取得
 const app = initializeFirebaseAdmin();
 
-// インスタンス再利用時のエラーを防ぐため、明示的に app を渡して Firestore を取得
+// インスタンス再利用時のエラーを防ぐため、明示的に app を渡して Firestore と Auth を取得
 export const adminDb = getFirestore(app);
+export const adminAuth = getAuth(app); // ★ 追加
