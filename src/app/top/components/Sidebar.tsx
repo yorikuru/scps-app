@@ -626,7 +626,7 @@ export default function Sidebar({
             </div>
             <div className="text-[8px] text-gray-600 mt-0.5">
               &copy; {new Date().getFullYear()} YORIKURU / 生徒会ポータルシステム
-            </div>
+            </div><br/><br/>
           </div>
         </div>
 
