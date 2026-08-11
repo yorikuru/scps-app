@@ -322,6 +322,97 @@ export default function Sidebar({
         />
       )}
 
+      {/* ★ ワッフルメニューのポップアップ（画面全体を基準とした固定配置に変更） */}
+      {isAppMenuOpen && (
+        <div 
+          ref={appMenuRef}
+          className="fixed left-4 md:left-[272px] bottom-16 md:bottom-auto md:top-auto w-[270px] bg-[#2C2C2E] border border-[#3A3A3C] rounded-2xl shadow-2xl z-[100] p-4 animate-fade-in flex flex-col"
+        >
+          <div className="flex items-center justify-between pb-2 mb-2 border-b border-[#3A3A3C]">
+            <span className="text-[11px] font-bold text-gray-400">すべてのアプリ</span>
+            <button 
+              onClick={() => setIsAppMenuOpen(false)}
+              className="text-gray-400 hover:text-white p-1 rounded-lg hover:bg-[#3A3A3C]"
+            >
+              <X className="w-4 h-4" />
+            </button>
+          </div>
+
+          <div className="grid grid-cols-3 gap-2">
+            {currentApps.length === 0 ? (
+              <div className="col-span-3 text-center text-[10px] font-bold text-gray-500 py-6">利用可能なアプリがありません</div>
+            ) : (
+              currentApps.map(app => {
+                const colorConfig = COLOR_MAPPINGS[app.color] || COLOR_MAPPINGS.default;
+                const isTasksApp = app.id === "tasks" || app.id === "task";
+                const isChatApp = app.id === "chat";
+                const isEquipmentApp = app.id === "equipment" || app.id === "rentals";
+
+                const unread = isChatApp ? chatUnreadCount : (unreadCounts[app.id] || 0);
+
+                return (
+                  <Link 
+                    key={app.id} 
+                    href={app.path}
+                    onClick={() => { setIsAppMenuOpen(false); handleMenuClick(); }}
+                    className="flex flex-col items-center justify-start gap-1.5 p-2 rounded-xl hover:bg-[#3A3A3C] transition-colors group relative"
+                  >
+                    <div className={`w-10 h-10 rounded-2xl flex items-center justify-center transition-transform group-hover:scale-110 shadow-sm ${colorConfig.bg} ${colorConfig.text} border ${colorConfig.border}`}>
+                      <DynamicIcon name={app.icon} className="w-5 h-5" />
+                    </div>
+                    
+                    {/* ワッフルメニュー内の通知バッジ */}
+                    {isTasksApp ? (
+                      <div className="absolute -top-1 -right-1 flex gap-0.5 z-10">
+                        {taskRedCount > 0 && <span className="w-4 h-4 bg-red-500 border-2 border-[#2C2C2E] rounded-full flex items-center justify-center text-[8px] font-black text-white shadow-sm">{taskRedCount > 99 ? '99+' : taskRedCount}</span>}
+                        {taskBlueCount > 0 && <span className="w-4 h-4 bg-blue-500 border-2 border-[#2C2C2E] rounded-full flex items-center justify-center text-[8px] font-black text-white shadow-sm">{taskBlueCount > 99 ? '99+' : taskBlueCount}</span>}
+                      </div>
+                    ) : isEquipmentApp ? (
+                      <div className="absolute -top-1 -right-1 flex gap-0.5 z-10">
+                        {unread > 0 && <span className="w-4 h-4 bg-red-500 border-2 border-[#2C2C2E] rounded-full flex items-center justify-center text-[8px] font-black text-white shadow-sm">{unread > 99 ? '99+' : unread}</span>}
+                        {activeRentalsCount > 0 && <span className="w-4 h-4 bg-blue-500 border-2 border-[#2C2C2E] rounded-full flex items-center justify-center text-[8px] font-black text-white shadow-sm">{activeRentalsCount > 99 ? '99+' : activeRentalsCount}</span>}
+                      </div>
+                    ) : (
+                      unread > 0 && (
+                        <span className="absolute top-1 right-2 w-4 h-4 bg-red-500 border-2 border-[#2C2C2E] rounded-full flex items-center justify-center text-[8px] font-black text-white shadow-sm z-10">
+                          {unread > 99 ? '99+' : unread}
+                        </span>
+                      )
+                    )}
+
+                    <span className="text-[9px] font-bold text-gray-300 truncate w-full text-center leading-tight">
+                      {app.displayName}
+                    </span>
+                  </Link>
+                );
+              })
+            )}
+          </div>
+
+          {totalPages > 1 && (
+            <div className="flex items-center justify-between mt-3 pt-3 border-t border-[#3A3A3C]">
+              <button 
+                onClick={(e) => { e.stopPropagation(); setCurrentPage(p => Math.max(0, p - 1)); }}
+                disabled={currentPage === 0}
+                className="p-1.5 text-gray-400 hover:text-white disabled:opacity-30 transition-colors bg-[#1C1C1E] hover:bg-[#3A3A3C] rounded-lg"
+              >
+                <ChevronLeft className="w-4 h-4" />
+              </button>
+              <span className="text-[10px] font-bold text-gray-400">
+                {currentPage + 1} / {totalPages}
+              </span>
+              <button 
+                onClick={(e) => { e.stopPropagation(); setCurrentPage(p => Math.min(totalPages - 1, p + 1)); }}
+                disabled={currentPage === totalPages - 1}
+                className="p-1.5 text-gray-400 hover:text-white disabled:opacity-30 transition-colors bg-[#1C1C1E] hover:bg-[#3A3A3C] rounded-lg"
+              >
+                <ChevronRight className="w-4 h-4" />
+              </button>
+            </div>
+          )}
+        </div>
+      )}
+
       <aside 
         className={`
           fixed md:relative top-0 left-0 h-screen bg-[#1C1C1E] text-gray-300 transition-all duration-300 ease-in-out z-50 flex flex-col border-r border-[#2C2C2E] overflow-hidden whitespace-nowrap
@@ -354,86 +445,6 @@ export default function Sidebar({
             <X className="w-5 h-5" />
           </button>
         </div>
-
-        {isAppMenuOpen && isSidebarOpen && (
-          <div 
-            ref={appMenuRef}
-            className="absolute left-[268px] top-28 w-[270px] bg-[#2C2C2E] border border-[#3A3A3C] rounded-2xl shadow-2xl z-[100] p-4 animate-fade-in flex flex-col"
-          >
-            <div className="grid grid-cols-3 gap-2">
-              {currentApps.length === 0 ? (
-                <div className="col-span-3 text-center text-[10px] font-bold text-gray-500 py-6">利用可能なアプリがありません</div>
-              ) : (
-                currentApps.map(app => {
-                  const colorConfig = COLOR_MAPPINGS[app.color] || COLOR_MAPPINGS.default;
-                  const isTasksApp = app.id === "tasks" || app.id === "task";
-                  const isChatApp = app.id === "chat";
-                  const isEquipmentApp = app.id === "equipment" || app.id === "rentals";
-
-                  const unread = isChatApp ? chatUnreadCount : (unreadCounts[app.id] || 0);
-
-                  return (
-                    <Link 
-                      key={app.id} 
-                      href={app.path}
-                      onClick={() => { setIsAppMenuOpen(false); handleMenuClick(); }}
-                      className="flex flex-col items-center justify-start gap-1.5 p-2 rounded-xl hover:bg-[#3A3A3C] transition-colors group relative"
-                    >
-                      <div className={`w-10 h-10 rounded-2xl flex items-center justify-center transition-transform group-hover:scale-110 shadow-sm ${colorConfig.bg} ${colorConfig.text} border ${colorConfig.border}`}>
-                        <DynamicIcon name={app.icon} className="w-5 h-5" />
-                      </div>
-                      
-                      {/* ワッフルメニュー内の通知バッジ */}
-                      {isTasksApp ? (
-                        <div className="absolute -top-1 -right-1 flex gap-0.5 z-10">
-                          {taskRedCount > 0 && <span className="w-4 h-4 bg-red-500 border-2 border-[#2C2C2E] rounded-full flex items-center justify-center text-[8px] font-black text-white shadow-sm">{taskRedCount > 99 ? '99+' : taskRedCount}</span>}
-                          {taskBlueCount > 0 && <span className="w-4 h-4 bg-blue-500 border-2 border-[#2C2C2E] rounded-full flex items-center justify-center text-[8px] font-black text-white shadow-sm">{taskBlueCount > 99 ? '99+' : taskBlueCount}</span>}
-                        </div>
-                      ) : isEquipmentApp ? (
-                        <div className="absolute -top-1 -right-1 flex gap-0.5 z-10">
-                          {unread > 0 && <span className="w-4 h-4 bg-red-500 border-2 border-[#2C2C2E] rounded-full flex items-center justify-center text-[8px] font-black text-white shadow-sm">{unread > 99 ? '99+' : unread}</span>}
-                          {activeRentalsCount > 0 && <span className="w-4 h-4 bg-blue-500 border-2 border-[#2C2C2E] rounded-full flex items-center justify-center text-[8px] font-black text-white shadow-sm">{activeRentalsCount > 99 ? '99+' : activeRentalsCount}</span>}
-                        </div>
-                      ) : (
-                        unread > 0 && (
-                          <span className="absolute top-1 right-2 w-4 h-4 bg-red-500 border-2 border-[#2C2C2E] rounded-full flex items-center justify-center text-[8px] font-black text-white shadow-sm z-10">
-                            {unread > 99 ? '99+' : unread}
-                          </span>
-                        )
-                      )}
-
-                      <span className="text-[9px] font-bold text-gray-300 truncate w-full text-center leading-tight">
-                        {app.displayName}
-                      </span>
-                    </Link>
-                  );
-                })
-              )}
-            </div>
-
-            {totalPages > 1 && (
-              <div className="flex items-center justify-between mt-3 pt-3 border-t border-[#3A3A3C]">
-                <button 
-                  onClick={(e) => { e.stopPropagation(); setCurrentPage(p => Math.max(0, p - 1)); }}
-                  disabled={currentPage === 0}
-                  className="p-1.5 text-gray-400 hover:text-white disabled:opacity-30 transition-colors bg-[#1C1C1E] hover:bg-[#3A3A3C] rounded-lg"
-                >
-                  <ChevronLeft className="w-4 h-4" />
-                </button>
-                <span className="text-[10px] font-bold text-gray-400">
-                  {currentPage + 1} / {totalPages}
-                </span>
-                <button 
-                  onClick={(e) => { e.stopPropagation(); setCurrentPage(p => Math.min(totalPages - 1, p + 1)); }}
-                  disabled={currentPage === totalPages - 1}
-                  className="p-1.5 text-gray-400 hover:text-white disabled:opacity-30 transition-colors bg-[#1C1C1E] hover:bg-[#3A3A3C] rounded-lg"
-                >
-                  <ChevronRight className="w-4 h-4" />
-                </button>
-              </div>
-            )}
-          </div>
-        )}
 
         <div className="flex-1 flex flex-col p-3 space-y-4 overflow-hidden">
           
@@ -616,7 +627,7 @@ export default function Sidebar({
           </div>
         </div>
 
-        {/* ★ 追加：フッター（法的表記） */}
+        {/* フッター（法的表記） */}
         <div className="flex-shrink-0 p-3 mt-1 border-t border-[#2C2C2E] bg-[#1C1C1E]">
           <div className="flex flex-col gap-1.5 text-[9px] font-bold text-gray-500 text-center">
             <div className="flex flex-wrap items-center justify-center gap-x-3 gap-y-1.5">
