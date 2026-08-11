@@ -4,6 +4,8 @@ import React from "react";
 import { Loader2, Mail, Building2, KeyRound, ArrowRight } from "lucide-react";
 import { AuthProvider } from "firebase/auth";
 
+
+
 type Props = {
   loginMode: "email" | "system";
   setLoginMode: (mode: "email" | "system") => void;
