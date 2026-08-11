@@ -6,7 +6,7 @@ import { onAuthStateChanged, User } from "firebase/auth";
 import { doc, getDoc, updateDoc } from "firebase/firestore";
 import { auth, db } from "@/lib/firebase";
 import { Loader2, ArrowLeft, UserCircle, ShieldCheck, Link as LinkIcon, Calendar } from "lucide-react";
-import { useDialog } from "@/components/DialogContext"; // ★追加
+import { useDialog } from "@/components/DialogContext";
 
 import ProfileSection from "./components/ProfileSection";
 import SecuritySection from "./components/SecuritySection";
@@ -18,7 +18,7 @@ type TabType = "profile" | "security" | "integrations" | "calendar";
 function AccountContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const { showAlert } = useDialog(); // ★追加
+  const { showAlert } = useDialog();
   
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [userData, setUserData] = useState<any>(null);
@@ -68,7 +68,7 @@ function AccountContent() {
           }
         } catch (error) {
           console.error("データ取得エラー:", error);
-          showAlert("プロフィール情報の取得に失敗しました。", "error"); // ★変更
+          showAlert("プロフィール情報の取得に失敗しました。", "error");
         }
       } else {
         window.location.href = "/login";
@@ -104,11 +104,11 @@ function AccountContent() {
       setUserData((prev: any) => prev ? { ...prev, lineUserId: newLineUserId, lineNotificationEnabled: true } : null);
       
       router.replace(window.location.pathname);
-      showAlert("LINEアカウントとの連携が完了しました！", "success"); // ★変更
+      showAlert("LINEアカウントとの連携が完了しました！", "success");
 
     } catch (error: any) {
       console.error("LINE linking error:", error);
-      showAlert(error.message || "LINE連携処理中にエラーが発生しました。", "error"); // ★変更
+      showAlert(error.message || "LINE連携処理中にエラーが発生しました。", "error");
     } finally {
       setIsProcessingLine(false);
     }
@@ -132,31 +132,31 @@ function AccountContent() {
   }
 
   return (
-    <div className="min-h-screen bg-[#F4F5F7] dark:bg-gray-950 py-8 px-4 sm:px-6 lg:px-8 relative">
+    <div className="min-h-screen bg-[#F4F5F7] py-8 px-4 sm:px-6 lg:px-8 relative">
       <div className="max-w-4xl mx-auto">
-        <div className="flex items-center justify-between pb-4 border-b border-gray-200 dark:border-gray-800 mb-6">
+        <div className="flex items-center justify-between pb-4 border-b border-gray-200 mb-6">
           <div>
-            <h1 className="text-2xl sm:text-3xl font-extrabold text-gray-900 dark:text-white flex items-center tracking-tight">
+            <h1 className="text-2xl sm:text-3xl font-extrabold text-gray-900 flex items-center tracking-tight">
               マイアカウント設定
             </h1>
-            <p className="mt-2 text-sm text-gray-500 dark:text-gray-400 font-medium">プロフィール情報の確認と、システムの設定を行います。</p>
+            <p className="mt-2 text-sm text-gray-500 font-medium">プロフィール情報の確認と、システムの設定を行います。</p>
           </div>
           <button
             onClick={() => router.push("/top")}
-            className="hidden sm:flex items-center text-sm font-bold text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300 transition-colors bg-white dark:bg-gray-900 px-4 py-2 border border-gray-200 dark:border-gray-700 rounded-xl shadow-sm"
+            className="hidden sm:flex items-center text-sm font-bold text-blue-600 hover:text-blue-800 transition-colors bg-white px-4 py-2 border border-gray-200 rounded-xl shadow-sm"
           >
             <ArrowLeft className="h-4 w-4 mr-2" /> トップへ戻る
           </button>
         </div>
 
         {/* タブメニュー */}
-        <div className="flex overflow-x-auto space-x-2 bg-gray-100 dark:bg-gray-800/60 p-1.5 rounded-2xl mb-8 no-scrollbar border border-gray-200 dark:border-gray-800">
+        <div className="flex overflow-x-auto space-x-2 bg-gray-100 p-1.5 rounded-2xl mb-8 no-scrollbar border border-gray-200">
           <button
             onClick={() => handleTabChange("profile")}
             className={`flex items-center px-5 py-2.5 rounded-xl text-sm font-bold whitespace-nowrap transition-all flex-1 justify-center ${
               activeTab === "profile" 
-                ? "bg-white dark:bg-gray-700 text-blue-600 dark:text-blue-400 shadow-sm" 
-                : "text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 hover:bg-gray-200/50 dark:hover:bg-gray-700/50"
+                ? "bg-white text-blue-600 shadow-sm" 
+                : "text-gray-500 hover:text-gray-700 hover:bg-gray-200/50"
             }`}
           >
             <UserCircle className="h-4 w-4 mr-2" />
@@ -167,8 +167,8 @@ function AccountContent() {
             onClick={() => handleTabChange("security")}
             className={`flex items-center px-5 py-2.5 rounded-xl text-sm font-bold whitespace-nowrap transition-all flex-1 justify-center ${
               activeTab === "security" 
-                ? "bg-white dark:bg-gray-700 text-blue-600 dark:text-blue-400 shadow-sm" 
-                : "text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 hover:bg-gray-200/50 dark:hover:bg-gray-700/50"
+                ? "bg-white text-blue-600 shadow-sm" 
+                : "text-gray-500 hover:text-gray-700 hover:bg-gray-200/50"
             }`}
           >
             <ShieldCheck className="h-4 w-4 mr-2" />
@@ -179,8 +179,8 @@ function AccountContent() {
             onClick={() => handleTabChange("integrations")}
             className={`flex items-center px-5 py-2.5 rounded-xl text-sm font-bold whitespace-nowrap transition-all flex-1 justify-center ${
               activeTab === "integrations" 
-                ? "bg-white dark:bg-gray-700 text-blue-600 dark:text-blue-400 shadow-sm" 
-                : "text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 hover:bg-gray-200/50 dark:hover:bg-gray-700/50"
+                ? "bg-white text-blue-600 shadow-sm" 
+                : "text-gray-500 hover:text-gray-700 hover:bg-gray-200/50"
             }`}
           >
             <LinkIcon className="h-4 w-4 mr-2" />
@@ -191,8 +191,8 @@ function AccountContent() {
             onClick={() => handleTabChange("calendar")}
             className={`flex items-center px-5 py-2.5 rounded-xl text-sm font-bold whitespace-nowrap transition-all flex-1 justify-center ${
               activeTab === "calendar" 
-                ? "bg-white dark:bg-gray-700 text-blue-600 dark:text-blue-400 shadow-sm" 
-                : "text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 hover:bg-gray-200/50 dark:hover:bg-gray-700/50"
+                ? "bg-white text-blue-600 shadow-sm" 
+                : "text-gray-500 hover:text-gray-700 hover:bg-gray-200/50"
             }`}
           >
             <Calendar className="h-4 w-4 mr-2" />
