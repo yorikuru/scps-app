@@ -5,21 +5,28 @@ import { getAuth } from 'firebase-admin/auth';
 function initFirebaseAdmin() {
   if (!getApps().length) {
     try {
-      initializeApp({
-        credential: cert({
-          projectId: process.env.FIREBASE_PROJECT_ID,
-          clientEmail: process.env.FIREBASE_CLIENT_EMAIL,
-          privateKey: process.env.FIREBASE_PRIVATE_KEY?.replace(/\\n/g, '\n'),
-        }),
-      });
+      const serviceAccountKeyStr = process.env.GOOGLE_SERVICE_ACCOUNT_KEY;
+      if (serviceAccountKeyStr) {
+        let jsonString = serviceAccountKeyStr;
+        if (!serviceAccountKeyStr.trim().startsWith('{')) {
+          jsonString = Buffer.from(serviceAccountKeyStr, 'base64').toString('utf-8');
+        }
+        initializeApp({ credential: cert(JSON.parse(jsonString)) });
+        console.log("[create-user] Firebase Admin Initialized successfully.");
+      } else {
+        console.warn('[create-user] WARNING: GOOGLE_SERVICE_ACCOUNT_KEY is missing.');
+        initializeApp();
+      }
     } catch (error) {
-      console.error("Firebase Admin init error:", error);
+      console.error("[create-user] Firebase Admin init error:", error);
+      throw new Error("Firebase Adminの初期化に失敗しました。環境変数を確認してください。");
     }
   }
 }
 
 export async function POST(request: Request) {
   try {
+    // まず初期化を確実に行う
     initFirebaseAdmin();
     const auth = getAuth();
     

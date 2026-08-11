@@ -289,7 +289,6 @@ export default function TopLayout({ children }: { children: React.ReactNode }) {
   return (
     <>
       {renderModals()}
-      {/* ★ h-screen を h-[100dvh] に変更し、スマホのアドレスバーの動きに追従させます */}
       <div className="flex h-[100dvh] w-full bg-white text-gray-900 font-sans overflow-hidden">
         
         <Sidebar 
@@ -316,8 +315,8 @@ export default function TopLayout({ children }: { children: React.ReactNode }) {
             setIsProfileMenuOpen={setIsProfileMenuOpen}
           />
           
-          {/* ★ ここのみスクロール可能にする */}
-          <main className="flex-1 overflow-y-auto custom-scrollbar w-full min-w-0 relative flex flex-col">
+          {/* ★ スクロール制御は個別ページで行うため、ここでは overflow-y-auto を外し、min-h-0 を設定して枠のサイズだけ固定します */}
+          <main className="flex-1 min-h-0 w-full min-w-0 relative flex flex-col">
             <div className={isBlurNeeded ? "pointer-events-none select-none blur-[4px] transition-all h-full flex flex-col" : "h-full flex flex-col"}>
               
               <div className="w-full max-w-7xl mx-auto px-3 sm:px-4 lg:px-6 pt-3 sm:pt-4 lg:pt-6 empty:hidden flex-shrink-0 z-40">
