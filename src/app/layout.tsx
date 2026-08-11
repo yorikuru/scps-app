@@ -8,7 +8,6 @@ export const metadata: Metadata = {
     default: "生徒会ポータルシステム | SCPS",
   },
   description: "生徒会ポータルシステム（SCPS）",
-  // ※ src/app/icon.png が自動的にファビコンとして読み込まれます。
 };
 
 export default function RootLayout({
@@ -17,11 +16,15 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="ja">
-      <body>
-        <DialogProvider>
-          {children}
-        </DialogProvider>
+    // ★ html と body に h-full と overflow-hidden を持たせてスクロールを防ぎます
+    <html lang="ja" className="h-full overflow-hidden">
+      <body className="h-full overflow-hidden antialiased">
+        {/* ★ アプリ全体を画面いっぱいに固定するラッパー */}
+        <div className="h-full w-full overflow-hidden flex flex-col fixed inset-0">
+          <DialogProvider>
+            {children}
+          </DialogProvider>
+        </div>
       </body>
     </html>
   );

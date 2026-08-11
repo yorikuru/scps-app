@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useState, useRef } from "react";
+import React, { useEffect, useState, useRef, useCallback } from "react";
 import { collection, query, where, orderBy, onSnapshot, addDoc, updateDoc, deleteDoc, doc, serverTimestamp, writeBatch } from "firebase/firestore";
 import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
 import { db, storage } from "@/lib/firebase";
@@ -52,6 +52,8 @@ export default function ChatRoomWindow({ userData, tenantUsers, externalUsers, p
   const [showSettings, setShowSettings] = useState(false);
 
   const [showReactionMenuFor, setShowReactionMenuFor] = useState<string | null>(null);
+  const [longPressedMsgId, setLongPressedMsgId] = useState<string | null>(null); // スマホ長押し用
+
   const [editingMessageId, setEditingMessageId] = useState<string | null>(null);
   const [reactionDetailMsg, setReactionDetailMsg] = useState<ChatMessage | null>(null);
   const [readDetailMsg, setReadDetailMsg] = useState<ChatMessage | null>(null); 
@@ -60,7 +62,7 @@ export default function ChatRoomWindow({ userData, tenantUsers, externalUsers, p
   const [savedRange, setSavedRange] = useState<Range | null>(null);
   const [mentionState, setMentionState] = useState<{ show: boolean; query: string }>({ show: false, query: "" });
   const [mentionIndex, setMentionIndex] = useState(0);
-  const [showToolbar, setShowToolbar] = useState(false); // スマホでは初期表示オフがおすすめ
+  const [showToolbar, setShowToolbar] = useState(false);
 
   const [replyingTo, setReplyingTo] = useState<ChatMessage | null>(null);
 
@@ -69,6 +71,21 @@ export default function ChatRoomWindow({ userData, tenantUsers, externalUsers, p
   const imageInputRef = useRef<HTMLInputElement>(null);
   const editorRef = useRef<HTMLDivElement>(null);
   const editEditorRef = useRef<HTMLDivElement>(null);
+
+  // 長押しタイマー管理用
+  const longPressTimerRef = useRef<NodeJS.Timeout | null>(null);
+
+  const handleTouchStart = (msgId: string) => {
+    longPressTimerRef.current = setTimeout(() => {
+      setLongPressedMsgId(msgId);
+    }, 500); // 0.5秒長押しでメニュー表示
+  };
+
+  const handleTouchEnd = () => {
+    if (longPressTimerRef.current) {
+      clearTimeout(longPressTimerRef.current);
+    }
+  };
 
   const isInternalUser = !("category" in userData);
   const perms = isInternalUser ? getDefaultChatPermissions(userData as UserData) : {
@@ -446,7 +463,7 @@ export default function ChatRoomWindow({ userData, tenantUsers, externalUsers, p
   };
 
   return (
-    <div className="flex flex-col h-full bg-[#eaf0ed] sm:bg-[#f3f4f6] relative font-sans">
+    <div className="flex flex-col h-full bg-[#eaf0ed] sm:bg-[#f3f4f6] relative font-sans" onClick={() => { setShowReactionMenuFor(null); setLongPressedMsgId(null); }}>
       <style dangerouslySetInnerHTML={{__html: `
         .chat-html-content a { color: #3b82f6; text-decoration: underline; cursor: pointer; }
         .chat-html-content .mention { 
@@ -482,8 +499,8 @@ export default function ChatRoomWindow({ userData, tenantUsers, externalUsers, p
         isExternalMode={"category" in userData}
       />
 
-      {/* ★ スマホ画面向けのパディング縮小 (p-4 -> p-2 sm:p-4)、gap縮小 (space-y-6 -> space-y-4) */}
-      <div className="flex-1 overflow-y-auto p-2 sm:p-4 space-y-3 sm:space-y-4 custom-scrollbar" onClick={() => setShowReactionMenuFor(null)}>
+      {/* メッセージ一覧 */}
+      <div className="flex-1 overflow-y-auto p-2 sm:p-4 space-y-3 sm:space-y-4 custom-scrollbar">
         {displayedMessages.map((msg, idx) => {
           const isMe = msg.senderId === userData.id;
           const isSystem = msg.senderId === "system";
@@ -492,6 +509,8 @@ export default function ChatRoomWindow({ userData, tenantUsers, externalUsers, p
           const readCount = msg.readBy ? msg.readBy.filter(id => id !== msg.senderId).length : 0;
           const prevMsg = displayedMessages[idx - 1];
           const isNewDay = !prevMsg || new Date(msg.createdAt).toDateString() !== new Date(prevMsg.createdAt).toDateString();
+
+          const isMenuVisible = longPressedMsgId === msg.id;
 
           return (
             <React.Fragment key={msg.id}>
@@ -502,18 +521,26 @@ export default function ChatRoomWindow({ userData, tenantUsers, externalUsers, p
               {isSystem ? (
                 <div className="flex justify-center my-2"><span className="px-3 py-1.5 bg-black/5 rounded-lg text-[9px] sm:text-[10px] font-bold text-gray-500 text-center whitespace-pre-wrap leading-relaxed max-w-[90%]"><span className="chat-html-content" dangerouslySetInnerHTML={{ __html: msg.text }} /></span></div>
               ) : (
-                <div className={`flex items-start gap-1.5 sm:gap-2 relative group w-full transition-colors ${isMe ? 'flex-row-reverse' : 'flex-row'}`}>
+                <div 
+                  className={`flex items-start gap-1.5 sm:gap-2 relative group w-full transition-colors ${isMe ? 'flex-row-reverse' : 'flex-row'}`}
+                  onTouchStart={() => handleTouchStart(msg.id)}
+                  onTouchEnd={handleTouchEnd}
+                  onMouseDown={() => handleTouchStart(msg.id)}
+                  onMouseUp={handleTouchEnd}
+                  onMouseLeave={handleTouchEnd}
+                >
                   
-                  <div className={`absolute -top-4 opacity-0 group-hover:opacity-100 transition-opacity z-20 flex items-center gap-0.5 bg-white p-0.5 rounded-lg shadow-md border border-gray-200 w-max ${isMe ? 'right-0' : 'left-0'}`}>
-                    <button onClick={(e) => { e.stopPropagation(); setShowReactionMenuFor(msg.id); }} className="p-1.5 text-gray-500 hover:text-indigo-600 hover:bg-gray-100 rounded-md transition-colors" title="リアクション"><SmilePlus className="w-3.5 h-3.5" /></button>
+                  {/* PCホバー または スマホ長押しで表示されるアクションメニュー */}
+                  <div className={`absolute -top-4 transition-opacity z-20 flex items-center gap-0.5 bg-white p-0.5 rounded-lg shadow-md border border-gray-200 w-max ${isMenuVisible ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'} ${isMe ? 'right-0' : 'left-0'}`}>
+                    <button onClick={(e) => { e.stopPropagation(); setShowReactionMenuFor(msg.id); setLongPressedMsgId(null); }} className="p-1.5 text-gray-500 hover:text-indigo-600 hover:bg-gray-100 rounded-md transition-colors" title="リアクション"><SmilePlus className="w-3.5 h-3.5" /></button>
                     
-                    <button onClick={(e) => { e.stopPropagation(); setReplyingTo(msg); editorRef.current?.focus(); }} className="p-1.5 text-gray-500 hover:text-blue-600 hover:bg-gray-100 rounded-md transition-colors" title="リプライ"><Reply className="w-3.5 h-3.5" /></button>
+                    <button onClick={(e) => { e.stopPropagation(); setReplyingTo(msg); editorRef.current?.focus(); setLongPressedMsgId(null); }} className="p-1.5 text-gray-500 hover:text-blue-600 hover:bg-gray-100 rounded-md transition-colors" title="リプライ"><Reply className="w-3.5 h-3.5" /></button>
                     
                     {isMe && readCount === 0 && !editingMessageId && (
                       <>
                         <div className="w-px h-3 bg-gray-200 mx-0.5"></div>
-                        <button onClick={(e) => { e.stopPropagation(); startEditing(msg); }} className="p-1.5 text-gray-500 hover:text-indigo-600 hover:bg-gray-100 rounded-md transition-colors" title="編集"><Pencil className="w-3.5 h-3.5" /></button>
-                        <button onClick={(e) => { e.stopPropagation(); handleDeleteMessage(msg.id); }} className="p-1.5 text-gray-500 hover:text-red-600 hover:bg-gray-100 rounded-md transition-colors" title="送信取消"><Trash2 className="w-3.5 h-3.5" /></button>
+                        <button onClick={(e) => { e.stopPropagation(); startEditing(msg); setLongPressedMsgId(null); }} className="p-1.5 text-gray-500 hover:text-indigo-600 hover:bg-gray-100 rounded-md transition-colors" title="編集"><Pencil className="w-3.5 h-3.5" /></button>
+                        <button onClick={(e) => { e.stopPropagation(); handleDeleteMessage(msg.id); setLongPressedMsgId(null); }} className="p-1.5 text-gray-500 hover:text-red-600 hover:bg-gray-100 rounded-md transition-colors" title="送信取消"><Trash2 className="w-3.5 h-3.5" /></button>
                       </>
                     )}
                   </div>
@@ -537,7 +564,6 @@ export default function ChatRoomWindow({ userData, tenantUsers, externalUsers, p
                     </div>
                   )}
 
-                  {/* ★ 吹き出しの幅とパディングを調整 */}
                   <div className={`flex flex-col ${isMe ? 'items-end' : 'items-start'} max-w-[85%] sm:max-w-[75%]`}>
                     {!isMe && <span className="text-[9px] font-bold text-gray-500 ml-1 mb-0.5">{senderUser?.name || "退会ユーザー"}</span>}
                     <div className={`flex items-end gap-1.5 ${isMe ? 'flex-row-reverse' : 'flex-row'}`}>
@@ -610,7 +636,7 @@ export default function ChatRoomWindow({ userData, tenantUsers, externalUsers, p
         <div ref={messagesEndRef} />
       </div>
 
-      {/* ★ 入力欄エリアのコンパクト化 */}
+      {/* 入力欄エリア */}
       <div className="m-2 sm:m-4 bg-white border border-gray-300 rounded-xl shadow-sm shrink-0 flex flex-col focus-within:border-indigo-500 focus-within:ring-1 focus-within:ring-indigo-500 transition-all relative z-30">
         
         {mentionState.show && filteredMentionUsers.length > 0 && (
@@ -654,13 +680,12 @@ export default function ChatRoomWindow({ userData, tenantUsers, externalUsers, p
           </div>
         )}
 
-        {/* スマホで無駄なスクロールを防ぐため min-h を縮小 */}
         <div ref={editorRef} contentEditable onInput={handleEditorInput} onKeyDown={(e) => handleKeyDown(e, false)} data-placeholder="メッセージを入力... (@でメンション)" className={`flex-1 max-h-32 min-h-[36px] px-3 py-2 text-[13px] sm:text-[14px] focus:outline-none overflow-y-auto custom-scrollbar placeholder-empty chat-html-content bg-white ${showToolbar && !replyingTo ? '' : 'rounded-t-xl'}`} />
 
         <div className="flex items-center justify-between px-1.5 py-1 bg-white border-t border-gray-100 rounded-b-xl">
           <div className="flex items-center gap-0.5">
             <button type="button" onClick={() => setShowToolbar(!showToolbar)} className={`p-1.5 rounded transition-colors ${showToolbar ? 'text-indigo-600 bg-indigo-50' : 'text-gray-400 hover:bg-gray-100 hover:text-gray-600'}`} title="書式設定"><Type className="w-4 h-4" /></button>
-            <div className="w-px h-3 bg-gray-200 mx-0.5"></div>
+            <div className="w-px h-3 bg-gray-300 mx-0.5"></div>
             
             {perms.canSendPhoto && (
               <>

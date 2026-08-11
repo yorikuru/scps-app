@@ -10,12 +10,14 @@
   --background-end-rgb: 255, 255, 255;
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --foreground-rgb: 249, 250, 251; /* gray-50 */
-    --background-start-rgb: 17, 24, 39; /* gray-900 */
-    --background-end-rgb: 17, 24, 39; /* gray-900 */
-  }
+
+/* ★ 変更：ブラウザ全体（html, body）のスクロールを完全にロックし、アプリ風に固定します */
+html, body {
+  height: 100%;
+  overflow: hidden;
+  position: fixed;
+  width: 100%;
+  -webkit-overflow-scrolling: touch;
 }
 
 body {
@@ -29,9 +31,6 @@ body {
 }
 
 @layer base {
-  /* * Tailwind v4の @apply ビルドエラーを回避するため、
-   * HEXコード（16進数）を使って直接ダークモードの色を上書きします
-   */
   .dark body {
     background-color: #111827; /* bg-gray-900 */
     color: #f3f4f6; /* text-gray-100 */
@@ -75,19 +74,14 @@ body {
    =================================================== */
 @media (max-width: 640px) {
   html {
-    /* デフォルト(16px)から約12.5%小さく(14px基準)設定 */
-    /* これにより text-sm, text-xs, p-4, gap-3 などのサイズ・余白が一括で縮小されます */
     font-size: 14px;
   }
 
-  /* 入力フォーム（input / select / textarea）で拡大ズームが発生するのを防ぐ設定 */
-  /* iOS Safariの仕様上、16px未満だと勝手にズームされてしまうためこれらだけは16pxに固定します */
   input, select, textarea {
     font-size: 16px !important;
   }
 }
 
-/* さらに画面が小さいスマホ（iPhone SEなど）向けに、もう一段コンパクトにする設定 */
 @media (max-width: 380px) {
   html {
     font-size: 13px;
