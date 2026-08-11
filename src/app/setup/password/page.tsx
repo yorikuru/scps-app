@@ -29,16 +29,35 @@ export default function SetupPasswordPage() {
     isAllValid: false
   });
 
-  // ログイン状態およびユーザー情報の取得
+  // ログイン状態およびユーザー情報・テナント情報の取得
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (authUser) => {
       if (authUser) {
         setUser(authUser);
         try {
-          const userDoc = await getDoc(doc(db, "users", authUser.uid));
+          // 1. users コレクションからユーザー情報を取得
+          const userDocRef = doc(db, "users", authUser.uid);
+          const userDoc = await getDoc(userDocRef);
+          
+          let fetchedUserData: any = {};
           if (userDoc.exists()) {
-            setUserData(userDoc.data());
+            fetchedUserData = userDoc.data();
           }
+
+          // 2. 学校名（テナント名）がユーザーデータに直接ない場合、テナント情報等から補完する
+          if (!fetchedUserData.schoolName && fetchedUserData.schoolId) {
+            try {
+              const schoolDocRef = doc(db, "schools", fetchedUserData.schoolId);
+              const schoolDoc = await getDoc(schoolDocRef);
+              if (schoolDoc.exists()) {
+                fetchedUserData.schoolName = schoolDoc.data().name || schoolDoc.data().schoolName;
+              }
+            } catch (err) {
+              console.warn("Failed to fetch school info:", err);
+            }
+          }
+
+          setUserData(fetchedUserData);
         } catch (e) {
           console.error("Fetch user error:", e);
         } finally {
@@ -95,8 +114,6 @@ export default function SetupPasswordPage() {
     setIsSubmitting(true);
 
     try {
-      // ★1. Client SDK の updatePassword ではなく、サーバー側API (Admin SDK) を経由して更新
-      // これにより「requires-recent-login」のセキュリティエラーを100%回避します
       const res = await fetch("/api/admin/create-user", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -114,7 +131,6 @@ export default function SetupPasswordPage() {
         throw new Error(errorData.error || "パスワード更新APIでエラーが発生しました。");
       }
 
-      // ★2. Firestore の情報を更新 (初期パスワードクリア & アクティブ化)
       await updateDoc(doc(db, "users", user.uid), {
         initialPassword: null,
         accountStatus: "active",
@@ -133,40 +149,43 @@ export default function SetupPasswordPage() {
 
   if (isLoading) {
     return (
-      <div className="min-h-screen bg-gray-50 dark:bg-gray-950 flex items-center justify-center">
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
         <Loader2 className="w-8 h-8 animate-spin text-indigo-600" />
       </div>
     );
   }
 
+  // テナント名（学校名）の解決
+  const tenantName = userData?.schoolName || userData?.tenantName || userData?.schoolId || "所属テナント";
+
   return (
-    <div className="min-h-screen bg-gradient-to-br from-gray-50 via-gray-100 to-indigo-50/30 dark:from-gray-950 dark:via-gray-900 dark:to-indigo-950/20 flex flex-col justify-center py-12 px-4 sm:px-6 lg:px-8 relative overflow-hidden transition-colors">
+    <div className="min-h-screen bg-gradient-to-br from-gray-50 via-gray-100 to-indigo-50/30 flex flex-col justify-center py-12 px-4 sm:px-6 lg:px-8 relative overflow-hidden">
       <div className="sm:mx-auto sm:w-full sm:max-w-md text-center mb-6">
         <div className="flex items-center justify-center mb-4">
-          <div className="p-3 bg-indigo-100 dark:bg-indigo-900/50 rounded-2xl text-indigo-600 dark:text-indigo-400">
+          <div className="p-3 bg-indigo-100 rounded-2xl text-indigo-600">
             <Lock className="h-8 w-8" />
           </div>
         </div>
-        <h2 className="text-2xl font-black text-gray-900 dark:text-white tracking-tight">初期パスワードの変更</h2>
-        <p className="text-xs text-gray-500 dark:text-gray-400 font-bold mt-1.5">
+        <h2 className="text-2xl font-black text-gray-900 tracking-tight">初期パスワードの変更</h2>
+        <p className="text-xs text-gray-500 font-bold mt-1.5">
           {userData?.name ? `${userData.name} 様` : "アカウント初期セットアップ"}
         </p>
       </div>
 
       <div className="w-full sm:max-w-md mx-auto relative z-10">
-        <div className="bg-white/90 dark:bg-gray-900/90 backdrop-blur-md py-8 px-5 sm:px-10 shadow-xl shadow-gray-200/50 dark:shadow-none rounded-2xl border border-gray-100 dark:border-gray-800">
+        <div className="bg-white/90 backdrop-blur-md py-8 px-5 sm:px-10 shadow-xl shadow-gray-200/50 rounded-2xl border border-gray-100">
           
           {/* 所属組織・ユーザー表示カード */}
           {userData && (
-            <div className="bg-gradient-to-br from-indigo-50/60 to-blue-50/40 dark:from-indigo-950/40 dark:to-blue-950/20 p-4 rounded-xl border border-indigo-100/70 dark:border-indigo-900/50 space-y-2 mb-5">
-              <div className="flex items-center text-xs font-bold text-indigo-800 dark:text-indigo-300">
+            <div className="bg-gradient-to-br from-indigo-50/60 to-blue-50/40 p-4 rounded-xl border border-indigo-100/70 space-y-2 mb-5">
+              <div className="flex items-center text-xs font-bold text-indigo-800">
                 <Building2 className="h-3.5 w-3.5 mr-1.5 flex-shrink-0 text-indigo-500" />
-                <span className="text-gray-500 dark:text-gray-400 mr-2">所属組織:</span>
-                <span className="truncate">{userData.schoolName || "所属テナント"}</span>
+                <span className="text-gray-500 mr-2">所属組織:</span>
+                <span className="truncate text-gray-900">{tenantName}</span>
               </div>
-              <div className="flex items-center text-sm font-black text-gray-900 dark:text-white">
+              <div className="flex items-center text-sm font-black text-gray-900">
                 <User className="h-4 w-4 mr-1.5 flex-shrink-0 text-indigo-500" />
-                <span className="text-xs text-gray-500 dark:text-gray-400 font-bold mr-2">対象ユーザー:</span>
+                <span className="text-xs text-gray-500 font-bold mr-2">対象ユーザー:</span>
                 <span className="tracking-wide">{userData.name || "一般ユーザー"} 様</span>
               </div>
             </div>
@@ -175,8 +194,8 @@ export default function SetupPasswordPage() {
           {alert && (
             <div className={`mb-5 p-4 rounded-xl text-xs font-bold border flex items-center gap-2 ${
               alert.type === "success" 
-                ? "bg-green-50 text-green-800 border-green-200 dark:bg-green-950/40 dark:text-green-300 dark:border-green-800" 
-                : "bg-red-50 text-red-800 border-red-200 dark:bg-red-950/40 dark:text-red-300 dark:border-red-800"
+                ? "bg-green-50 text-green-800 border-green-200" 
+                : "bg-red-50 text-red-800 border-red-200"
             }`}>
               {alert.type === "success" ? <CheckCircle2 className="w-4 h-4 flex-shrink-0" /> : <AlertCircle className="w-4 h-4 flex-shrink-0" />}
               <span>{alert.message}</span>
@@ -185,12 +204,12 @@ export default function SetupPasswordPage() {
 
           {isSuccess ? (
             <div className="text-center py-6 space-y-5 animate-fade-in">
-              <div className="w-14 h-14 bg-green-100 dark:bg-green-900/50 rounded-full flex items-center justify-center mx-auto shadow-sm">
-                <CheckCircle2 className="h-7 w-7 text-green-600 dark:text-green-400" />
+              <div className="w-14 h-14 bg-green-100 rounded-full flex items-center justify-center mx-auto shadow-sm">
+                <CheckCircle2 className="h-7 w-7 text-green-600" />
               </div>
               <div>
-                <h3 className="text-lg font-extrabold text-gray-900 dark:text-white">変更が完了しました</h3>
-                <p className="text-xs text-gray-500 dark:text-gray-400 mt-1.5 font-medium leading-relaxed">
+                <h3 className="text-lg font-extrabold text-gray-900">変更が完了しました</h3>
+                <p className="text-xs text-gray-500 mt-1.5 font-medium leading-relaxed">
                   初期パスワードの変更が正常に完了しました。<br/>セットアップ画面へ進みます。
                 </p>
               </div>
@@ -206,7 +225,7 @@ export default function SetupPasswordPage() {
             <form onSubmit={handleSubmit} className="space-y-5">
               
               <div>
-                <label className="block text-xs font-bold text-gray-700 dark:text-gray-300 mb-1">新しいパスワード</label>
+                <label className="block text-xs font-bold text-gray-700 mb-1">新しいパスワード</label>
                 <div className="relative rounded-xl shadow-sm">
                   <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
                     <Key className="h-4 w-4 text-gray-400" />
@@ -216,13 +235,13 @@ export default function SetupPasswordPage() {
                     required
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
-                    className="block w-full pl-10 pr-10 border border-gray-200 dark:border-gray-700 rounded-xl py-3 text-sm transition-all bg-gray-50 dark:bg-gray-800 text-gray-900 dark:text-white focus:bg-white focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 outline-none font-mono"
+                    className="block w-full pl-10 pr-10 border border-gray-200 rounded-xl py-3 text-sm transition-all bg-gray-50 text-gray-900 focus:bg-white focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 outline-none font-mono"
                     placeholder="新しいパスワードを入力"
                   />
                   <button
                     type="button"
                     onClick={() => setShowPassword(!showPassword)}
-                    className="absolute inset-y-0 right-0 pr-3 flex items-center text-gray-400 hover:text-gray-600 dark:hover:text-gray-200"
+                    className="absolute inset-y-0 right-0 pr-3 flex items-center text-gray-400 hover:text-gray-600"
                   >
                     {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                   </button>
@@ -230,7 +249,7 @@ export default function SetupPasswordPage() {
               </div>
 
               <div>
-                <label className="block text-xs font-bold text-gray-700 dark:text-gray-300 mb-1">新しいパスワード（確認用）</label>
+                <label className="block text-xs font-bold text-gray-700 mb-1">新しいパスワード（確認用）</label>
                 <div className="relative rounded-xl shadow-sm">
                   <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
                     <Key className="h-4 w-4 text-gray-400" />
@@ -240,33 +259,33 @@ export default function SetupPasswordPage() {
                     required
                     value={confirmPassword}
                     onChange={(e) => setConfirmPassword(e.target.value)}
-                    className="block w-full pl-10 border border-gray-200 dark:border-gray-700 rounded-xl py-3 text-sm transition-all bg-gray-50 dark:bg-gray-800 text-gray-900 dark:text-white focus:bg-white focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 outline-none font-mono"
+                    className="block w-full pl-10 border border-gray-200 rounded-xl py-3 text-sm transition-all bg-gray-50 text-gray-900 focus:bg-white focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 outline-none font-mono"
                     placeholder="確認のためもう一度入力"
                   />
                 </div>
               </div>
 
               {/* リアルタイムチェックリストUI */}
-              <div className="bg-white dark:bg-gray-800/80 p-4 rounded-xl border border-gray-200 dark:border-gray-700 shadow-sm space-y-2.5">
-                <p className="text-xs font-extrabold text-gray-800 dark:text-gray-200 border-b border-gray-100 dark:border-gray-700 pb-1.5">🔐 パスワードの要件</p>
+              <div className="bg-white p-4 rounded-xl border border-gray-200 shadow-sm space-y-2.5">
+                <p className="text-xs font-extrabold text-gray-800 border-b border-gray-100 pb-1.5">🔐 パスワードの要件</p>
                 
                 <div className="flex items-center text-xs font-bold transition-colors">
-                  <CheckCircle2 className={`h-4 w-4 mr-2 flex-shrink-0 transition-transform ${validation.isMinLength ? "text-green-500 scale-110" : "text-gray-300 dark:text-gray-600"}`} />
-                  <span className={validation.isMinLength ? "text-green-700 dark:text-green-400 line-through opacity-80" : "text-gray-600 dark:text-gray-400"}>8文字以上であること</span>
+                  <CheckCircle2 className={`h-4 w-4 mr-2 flex-shrink-0 transition-transform ${validation.isMinLength ? "text-green-500 scale-110" : "text-gray-300"}`} />
+                  <span className={validation.isMinLength ? "text-green-700 line-through opacity-80" : "text-gray-600"}>8文字以上であること</span>
                 </div>
 
                 <div className="flex items-start text-xs font-bold transition-colors">
-                  <CheckCircle2 className={`h-4 w-4 mr-2 flex-shrink-0 mt-0.5 transition-transform ${validation.hasThreeTypes ? "text-green-500 scale-110" : "text-gray-300 dark:text-gray-600"}`} />
+                  <CheckCircle2 className={`h-4 w-4 mr-2 flex-shrink-0 mt-0.5 transition-transform ${validation.hasThreeTypes ? "text-green-500 scale-110" : "text-gray-300"}`} />
                   <div className="flex flex-col">
-                    <span className={validation.hasThreeTypes ? "text-green-700 dark:text-green-400 line-through opacity-80" : "text-gray-600 dark:text-gray-400"}>
+                    <span className={validation.hasThreeTypes ? "text-green-700 line-through opacity-80" : "text-gray-600"}>
                       英大文字、英小文字、数字、記号のうちいずれか3種以上を使用
                     </span>
                   </div>
                 </div>
 
-                <div className="flex items-center text-xs font-bold transition-colors border-t border-gray-50 dark:border-gray-700/50 pt-2">
-                  <CheckCircle2 className={`h-4 w-4 mr-2 flex-shrink-0 transition-transform ${validation.matchConfirm ? "text-green-500 scale-110" : "text-gray-300 dark:text-gray-600"}`} />
-                  <span className={validation.matchConfirm ? "text-green-700 dark:text-green-400" : "text-gray-600 dark:text-gray-400"}>パスワードが一致していること</span>
+                <div className="flex items-center text-xs font-bold transition-colors border-t border-gray-50 pt-2">
+                  <CheckCircle2 className={`h-4 w-4 mr-2 flex-shrink-0 transition-transform ${validation.matchConfirm ? "text-green-500 scale-110" : "text-gray-300"}`} />
+                  <span className={validation.matchConfirm ? "text-green-700" : "text-gray-600"}>パスワードが一致していること</span>
                 </div>
               </div>
 
@@ -276,8 +295,8 @@ export default function SetupPasswordPage() {
                   disabled={isSubmitting || !validation.isAllValid}
                   className={`w-full flex justify-center items-center py-3.5 px-4 border border-transparent rounded-xl shadow-md text-sm font-bold text-white transition-all active:scale-[0.98] ${
                     validation.isAllValid && !isSubmitting 
-                      ? "bg-indigo-600 hover:bg-indigo-700 shadow-indigo-200 dark:shadow-none" 
-                      : "bg-gray-300 dark:bg-gray-700 cursor-not-allowed shadow-none"
+                      ? "bg-indigo-600 hover:bg-indigo-700 shadow-indigo-200" 
+                      : "bg-gray-300 cursor-not-allowed shadow-none"
                   }`}
                 >
                   {isSubmitting ? (

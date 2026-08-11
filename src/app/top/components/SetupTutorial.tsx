@@ -36,11 +36,11 @@ export default function SetupTutorial({ setupStatus, userData, onCompleted, hand
   });
 
   return (
-    <div className="min-h-screen bg-gray-50 dark:bg-gray-950 flex flex-col items-center justify-center p-4 sm:p-6 transition-colors duration-300 animate-fade-in z-50 relative">
-      <div className="w-full max-w-2xl bg-white dark:bg-gray-900 rounded-2xl shadow-xl overflow-hidden border border-gray-100 dark:border-gray-800">
+    <div className="min-h-screen bg-gray-50 flex flex-col items-center justify-center p-4 sm:p-6 animate-fade-in z-50 relative">
+      <div className="w-full max-w-2xl bg-white rounded-2xl shadow-xl overflow-hidden border border-gray-100">
         
         {/* ヘッダー */}
-        <div className="bg-gradient-to-r from-blue-600 to-indigo-700 dark:from-blue-700 dark:to-indigo-800 p-8 text-center relative overflow-hidden">
+        <div className="bg-gradient-to-r from-blue-600 to-indigo-700 p-8 text-center relative overflow-hidden">
           <div className="absolute top-0 right-0 -mt-4 -mr-4 w-24 h-24 bg-white opacity-10 rounded-full blur-2xl"></div>
           <div className="absolute bottom-0 left-0 -mb-4 -ml-4 w-20 h-20 bg-white opacity-10 rounded-full blur-xl"></div>
           <AlertCircle className="h-14 w-14 text-white mx-auto mb-4 relative z-10" />
@@ -55,15 +55,14 @@ export default function SetupTutorial({ setupStatus, userData, onCompleted, hand
           
           {/* パスワード変更チェック */}
           {status.needsPassword ? (
-            // ★ Link先を /setup/password に変更
             <Link href="/setup/password" className="block group">
-              <div className="flex items-center p-5 rounded-xl border-2 border-red-200 bg-red-50/50 hover:bg-red-100 dark:border-red-800 dark:bg-red-950/30 dark:hover:bg-red-900/50 transition-all duration-300">
-                <div className="flex-shrink-0 text-red-500 dark:text-red-400">
+              <div className="flex items-center p-5 rounded-xl border-2 border-red-200 bg-red-50/50 hover:bg-red-100 transition-all duration-300">
+                <div className="flex-shrink-0 text-red-500">
                   <Lock className="h-7 w-7" />
                 </div>
                 <div className="ml-4 flex-1">
-                  <h3 className="text-base font-bold text-red-900 dark:text-red-300 group-hover:underline">初期パスワードの変更</h3>
-                  <p className="text-sm mt-1 text-red-700 dark:text-red-400">管理者から発行された初期パスワードを変更してください。</p>
+                  <h3 className="text-base font-bold text-red-900 group-hover:underline">初期パスワードの変更</h3>
+                  <p className="text-sm mt-1 text-red-700">管理者から発行された初期パスワードを変更してください。</p>
                 </div>
                 <div className="ml-4 flex-shrink-0 flex items-center text-red-600 font-bold">
                   設定する <ArrowRight className="ml-1 h-4 w-4 transition-transform group-hover:translate-x-1" />
@@ -71,11 +70,11 @@ export default function SetupTutorial({ setupStatus, userData, onCompleted, hand
               </div>
             </Link>
           ) : (
-            <div className="flex items-center p-5 rounded-xl border-2 border-green-200 bg-green-50 dark:border-green-800 dark:bg-green-950/30 opacity-70">
-              <div className="flex-shrink-0 text-green-500 dark:text-green-400"><CheckCircle2 className="h-7 w-7" /></div>
+            <div className="flex items-center p-5 rounded-xl border-2 border-green-200 bg-green-50 opacity-70">
+              <div className="flex-shrink-0 text-green-500"><CheckCircle2 className="h-7 w-7" /></div>
               <div className="ml-4 flex-1">
-                <h3 className="text-base font-bold text-green-900 dark:text-green-300">初期パスワードの変更</h3>
-                <p className="text-sm mt-1 text-green-700 dark:text-green-400">設定完了済みです</p>
+                <h3 className="text-base font-bold text-green-900">初期パスワードの変更</h3>
+                <p className="text-sm mt-1 text-green-700">設定完了済みです</p>
               </div>
             </div>
           )}
@@ -84,13 +83,13 @@ export default function SetupTutorial({ setupStatus, userData, onCompleted, hand
           {(userData?.requireMfa || status.needsMfa) && (
             status.needsMfa ? (
               <Link href="/setup/mfa" className="block group">
-                <div className="flex items-center p-5 rounded-xl border-2 border-red-200 bg-red-50/50 hover:bg-red-100 dark:border-red-800 dark:bg-red-950/30 dark:hover:bg-red-900/50 transition-all duration-300">
-                  <div className="flex-shrink-0 text-red-500 dark:text-red-400">
+                <div className="flex items-center p-5 rounded-xl border-2 border-red-200 bg-red-50/50 hover:bg-red-100 transition-all duration-300">
+                  <div className="flex-shrink-0 text-red-500">
                     <ShieldCheck className="h-7 w-7" />
                   </div>
                   <div className="ml-4 flex-1">
-                    <h3 className="text-base font-bold text-red-900 dark:text-red-300 group-hover:underline">2段階認証（MFA）の初期設定</h3>
-                    <p className="text-sm mt-1 text-red-700 dark:text-red-400">アカウント保護のため、認証アプリやパスキー等の登録が必要です。</p>
+                    <h3 className="text-base font-bold text-red-900 group-hover:underline">2段階認証（MFA）の初期設定</h3>
+                    <p className="text-sm mt-1 text-red-700">アカウント保護のため、認証アプリやパスキー等の登録が必要です。</p>
                   </div>
                   <div className="ml-4 flex-shrink-0 flex items-center text-red-600 font-bold">
                     設定する <ArrowRight className="ml-1 h-4 w-4 transition-transform group-hover:translate-x-1" />
@@ -98,11 +97,11 @@ export default function SetupTutorial({ setupStatus, userData, onCompleted, hand
                 </div>
               </Link>
             ) : (
-              <div className="flex items-center p-5 rounded-xl border-2 border-green-200 bg-green-50 dark:border-green-800 dark:bg-green-950/30 opacity-70">
-                <div className="flex-shrink-0 text-green-500 dark:text-green-400"><CheckCircle2 className="h-7 w-7" /></div>
+              <div className="flex items-center p-5 rounded-xl border-2 border-green-200 bg-green-50 opacity-70">
+                <div className="flex-shrink-0 text-green-500"><CheckCircle2 className="h-7 w-7" /></div>
                 <div className="ml-4 flex-1">
-                  <h3 className="text-base font-bold text-green-900 dark:text-green-300">2段階認証（MFA）の初期設定</h3>
-                  <p className="text-sm mt-1 text-green-700 dark:text-green-400">設定完了済みです</p>
+                  <h3 className="text-base font-bold text-green-900">2段階認証（MFA）の初期設定</h3>
+                  <p className="text-sm mt-1 text-green-700">設定完了済みです</p>
                 </div>
               </div>
             )
@@ -112,13 +111,13 @@ export default function SetupTutorial({ setupStatus, userData, onCompleted, hand
           {(userData?.lineConnectionEnforced || status.needsLine) && (
             status.needsLine ? (
               <Link href="/top/account?tab=line" className="block group">
-                <div className="flex items-center p-5 rounded-xl border-2 border-red-200 bg-red-50/50 hover:bg-red-100 dark:border-red-800 dark:bg-red-950/30 dark:hover:bg-red-900/50 transition-all duration-300">
-                  <div className="flex-shrink-0 text-red-500 dark:text-red-400">
+                <div className="flex items-center p-5 rounded-xl border-2 border-red-200 bg-red-50/50 hover:bg-red-100 transition-all duration-300">
+                  <div className="flex-shrink-0 text-red-500">
                     <Smartphone className="h-7 w-7" />
                   </div>
                   <div className="ml-4 flex-1">
-                    <h3 className="text-base font-bold text-red-900 dark:text-red-300 group-hover:underline">LINEアカウントとの連携</h3>
-                    <p className="text-sm mt-1 text-red-700 dark:text-red-400">重要な通知を受け取るため、LINE連携が必須とされています。</p>
+                    <h3 className="text-base font-bold text-red-900 group-hover:underline">LINEアカウントとの連携</h3>
+                    <p className="text-sm mt-1 text-red-700">重要な通知を受け取るため、LINE連携が必須とされています。</p>
                   </div>
                   <div className="ml-4 flex-shrink-0 flex items-center text-red-600 font-bold">
                     設定する <ArrowRight className="ml-1 h-4 w-4 transition-transform group-hover:translate-x-1" />
@@ -126,20 +125,20 @@ export default function SetupTutorial({ setupStatus, userData, onCompleted, hand
                 </div>
               </Link>
             ) : (
-              <div className="flex items-center p-5 rounded-xl border-2 border-green-200 bg-green-50 dark:border-green-800 dark:bg-green-950/30 opacity-70">
-                <div className="flex-shrink-0 text-green-500 dark:text-green-400"><CheckCircle2 className="h-7 w-7" /></div>
+              <div className="flex items-center p-5 rounded-xl border-2 border-green-200 bg-green-50 opacity-70">
+                <div className="flex-shrink-0 text-green-500"><CheckCircle2 className="h-7 w-7" /></div>
                 <div className="ml-4 flex-1">
-                  <h3 className="text-base font-bold text-green-900 dark:text-green-300">LINEアカウントとの連携</h3>
-                  <p className="text-sm mt-1 text-green-700 dark:text-green-400">連携完了済みです</p>
+                  <h3 className="text-base font-bold text-green-900">LINEアカウントとの連携</h3>
+                  <p className="text-sm mt-1 text-green-700">連携完了済みです</p>
                 </div>
               </div>
             )
           )}
 
-          <div className="mt-8 text-center pt-6 border-t border-gray-100 dark:border-gray-800">
+          <div className="mt-8 text-center pt-6 border-t border-gray-100">
             <button 
               onClick={doLogout} 
-              className="text-sm font-bold text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white transition-colors duration-300 inline-flex items-center"
+              className="text-sm font-bold text-gray-500 hover:text-gray-900 transition-colors duration-300 inline-flex items-center"
             >
               <LogOut className="h-4 w-4 mr-1" />
               ログアウトしてやり直す

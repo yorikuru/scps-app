@@ -259,7 +259,7 @@ export default function ScCodeScannerModal({ onClose, onLoginSuccess, showAlert 
                 {step === "success" ? "認証に成功しました！" : "SCコードを認識しました"}
               </h3>
               <div className="flex items-center justify-center text-gray-500 text-xs font-bold bg-gray-50 px-4 py-2 rounded-xl border border-gray-200 shadow-2xs">
-                <Loader2 className="w-3.5 h-3.5 animate-spin mr-2 text-indigo-600" /> Firebaseから認証情報を照会中...
+                <Loader2 className="w-3.5 h-3.5 animate-spin mr-2 text-indigo-600" /> データベースから認証情報を照会中...
               </div>
             </div>
           )}
