@@ -1,27 +1,24 @@
 "use client";
 
-import React, { useEffect, useState, useRef } from "react";
-import Link from "next/link";
-import { 
-  User as UserIcon, Settings, LogOut, LayoutDashboard,
-  BellRing, X, ShieldCheck, ChevronRight,
-  Info, Wrench, CalendarDays, Pin, MessageSquareText, Send
-} from "lucide-react";
+import React, { useEffect, useState, useMemo } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
+import { collection, query, where, onSnapshot } from "firebase/firestore";
+import { db } from "@/lib/firebase";
 import * as LucideIcons from "lucide-react";
-import { UserData, SchoolData, SystemMessage, SystemApp } from "../page";
+import { 
+  ChevronRight, AlertTriangle, Calendar as CalendarIcon, Flag, CheckCircle2, BarChart3, ArrowRightLeft
+} from "lucide-react";
+import { UserData, SchoolData, SystemApp } from "../page";
 
-import MiniCalendar from "./MiniCalendar";
 import ScheduleWidget from "./ScheduleWidget";
 import MemberStatusBoard from "./MemberStatusBoard";
+import AdminNotificationWidget, { ExtendedSystemMessage } from "./AdminNotificationWidget";
+import BoardWidget from "./BoardWidget";
+import WeatherWidget from "./WeatherWidget";
 
-type Props = {
-  userData: UserData | null;
-  schoolData: SchoolData | null;
-  messages: SystemMessage[];
-  systemApps: SystemApp[];
-  tenantUsers: UserData[];
-  markMessageAsRead: (messageId: string) => void;
-  handleLogout: () => void;
+type ExtendedSchoolData = SchoolData & {
+  availableModules?: string[];
+  customAppNames?: Record<string, string>;
 };
 
 const DynamicIcon = ({ name, className }: { name: string, className?: string }) => {
@@ -29,351 +26,317 @@ const DynamicIcon = ({ name, className }: { name: string, className?: string }) 
   return <IconComponent className={className} />;
 };
 
-const COLOR_CLASSES: Record<string, { bg: string, text: string, hover: string }> = {
-  indigo: { bg: "bg-indigo-50 dark:bg-indigo-900/30", text: "text-indigo-600 dark:text-indigo-400", hover: "group-hover:bg-indigo-100 dark:group-hover:bg-indigo-900/50" },
-  blue: { bg: "bg-blue-50 dark:bg-blue-900/30", text: "text-blue-600 dark:text-blue-400", hover: "group-hover:bg-blue-100 dark:group-hover:bg-blue-900/50" },
-  green: { bg: "bg-green-50 dark:bg-green-900/30", text: "text-green-600 dark:text-green-400", hover: "group-hover:bg-green-100 dark:group-hover:bg-green-900/50" },
-  purple: { bg: "bg-purple-50 dark:bg-purple-900/30", text: "text-purple-600 dark:text-purple-400", hover: "group-hover:bg-purple-100 dark:group-hover:bg-purple-900/50" },
-  orange: { bg: "bg-orange-50 dark:bg-orange-900/30", text: "text-orange-600 dark:text-orange-400", hover: "group-hover:bg-orange-100 dark:group-hover:bg-orange-900/50" },
-  rose: { bg: "bg-rose-50 dark:bg-rose-900/30", text: "text-rose-600 dark:text-rose-400", hover: "group-hover:bg-rose-100 dark:group-hover:bg-rose-900/50" },
+type Props = {
+  userData: UserData | null;
+  schoolData: SchoolData | null;
+  messages: ExtendedSystemMessage[]; 
+  systemApps: SystemApp[];
+  tenantUsers: UserData[];
+  markMessageAsRead: (messageId: string) => void;
+  handleLogout: () => void;
 };
 
-const CATEGORIES: Record<string, { label: string; badgeBg: string }> = {
-  info: { label: "お知らせ", badgeBg: "bg-blue-100 text-blue-800" },
-  warning: { label: "警告・重要", badgeBg: "bg-red-100 text-red-800" },
-  maintenance: { label: "メンテナンス", badgeBg: "bg-orange-100 text-orange-800" },
-  event: { label: "イベント", badgeBg: "bg-green-100 text-green-800" },
+const APP_COLOR_MAPPINGS: Record<string, { lightBg: string, text: string, hoverBg: string, iconText: string, badgeBg: string, badgeText: string }> = {
+  indigo: { lightBg: "bg-indigo-50", text: "text-indigo-600", hoverBg: "hover:bg-indigo-100", iconText: "text-indigo-600", badgeBg: "bg-indigo-100", badgeText: "text-indigo-800" },
+  blue: { lightBg: "bg-blue-50", text: "text-blue-600", hoverBg: "hover:bg-blue-100", iconText: "text-blue-600", badgeBg: "bg-blue-100", badgeText: "text-blue-800" },
+  green: { lightBg: "bg-emerald-50", text: "text-emerald-600", hoverBg: "hover:bg-emerald-100", iconText: "text-emerald-600", badgeBg: "bg-emerald-100", badgeText: "text-emerald-800" },
+  purple: { lightBg: "bg-purple-50", text: "text-purple-600", hoverBg: "hover:bg-purple-100", iconText: "text-purple-600", badgeBg: "bg-purple-100", badgeText: "text-purple-800" },
+  orange: { lightBg: "bg-orange-50", text: "text-orange-600", hoverBg: "hover:bg-orange-100", iconText: "text-orange-600", badgeBg: "bg-orange-100", badgeText: "text-orange-800" },
+  rose: { lightBg: "bg-rose-50", text: "text-rose-600", hoverBg: "hover:bg-rose-100", iconText: "text-rose-600", badgeBg: "bg-rose-100", badgeText: "text-rose-800" },
+  amber: { lightBg: "bg-amber-50", text: "text-amber-600", hoverBg: "hover:bg-amber-100", iconText: "text-amber-600", badgeBg: "bg-amber-100", badgeText: "text-amber-800" },
+  default: { lightBg: "bg-indigo-50", text: "text-indigo-600", hoverBg: "hover:bg-indigo-100", iconText: "text-indigo-600", badgeBg: "bg-indigo-100", badgeText: "text-indigo-800" }
+};
+
+type TaskStatus = "not_started" | "in_progress" | "waiting" | "pending" | "done";
+type TaskPriority = "urgent" | "high" | "medium" | "low";
+
+const TASK_STATUS_CONFIG: Record<TaskStatus, { label: string, color: string, dot: string }> = {
+  not_started: { label: "未着手", color: "text-gray-600 bg-gray-100", dot: "bg-gray-400" },
+  in_progress: { label: "進行中", color: "text-blue-700 bg-blue-100", dot: "bg-blue-500" },
+  waiting: { label: "確認待ち", color: "text-amber-700 bg-amber-100", dot: "bg-amber-500" },
+  pending: { label: "保留", color: "text-purple-700 bg-purple-100", dot: "bg-purple-500" },
+  done: { label: "完了", color: "text-emerald-700 bg-emerald-100", dot: "bg-emerald-500" },
+};
+
+const TASK_PRIORITY_CONFIG: Record<TaskPriority, { label: string, color: string, icon: React.ReactNode }> = {
+  urgent: { label: "緊急", color: "text-red-700 border-red-500 bg-red-50", icon: <AlertTriangle className="w-2.5 h-2.5 text-red-600" /> },
+  high: { label: "高", color: "text-orange-700 border-orange-200 bg-orange-50", icon: <Flag className="w-2.5 h-2.5 text-orange-600" /> },
+  medium: { label: "中", color: "text-blue-700 border-blue-200 bg-blue-50", icon: <Flag className="w-2.5 h-2.5 text-blue-600" /> },
+  low: { label: "低", color: "text-gray-600 border-gray-200 bg-gray-50", icon: <Flag className="w-2.5 h-2.5 text-gray-500" /> },
 };
 
 export default function NormalTop({ userData, schoolData, messages, systemApps, tenantUsers, markMessageAsRead, handleLogout }: Props) {
-  const [isProfileMenuOpen, setIsProfileMenuOpen] = useState(false);
-  const [selectedMessage, setSelectedMessage] = useState<SystemMessage | null>(null);
-  const profileRef = useRef<HTMLDivElement>(null);
-  
-  // ★カレンダー連動用のステート
-  const [selectedDate, setSelectedDate] = useState(new Date());
+  const router = useRouter();
+  const searchParams = useSearchParams();
 
-  const [bulletinNotices] = useState<any[]>([
-    {
-      id: "bulletin-1",
-      title: "【文化祭実行委員会】次回打ち合わせの教室変更について",
-      content: "今週金曜日の文化祭実行委員会の集まりは、第2視聴覚室から【会議室B】に変更になりました。委員の皆さんは各自移動をお願いします。",
-      senderName: "佐藤 健太（文化祭実行委員長）",
-      createdAt: new Date().toISOString(),
-    },
-    {
-      id: "bulletin-2",
-      title: "生徒会室の鍵の返却リマインド",
-      content: "昨日の放課後に生徒会室を利用した方、鍵がキーボックスに戻っていませんでした。最後に退出された方は確認をお願いします。",
-      senderName: "高橋 陸（総務）",
-      createdAt: new Date(Date.now() - 86400000).toISOString(),
-    }
-  ]);
-  const [selectedNotice, setSelectedNotice] = useState<any | null>(null);
+  const dateParam = searchParams.get("date");
+  const selectedDate = dateParam ? new Date(dateParam) : new Date();
+
+  const [allTasks, setAllTasks] = useState<any[]>([]);
+  const [rentals, setRentals] = useState<any[]>([]); 
 
   useEffect(() => {
-    const handleClickOutside = (event: MouseEvent) => {
-      if (profileRef.current && !profileRef.current.contains(event.target as Node)) {
-        setIsProfileMenuOpen(false);
-      }
-    };
-    document.addEventListener("mousedown", handleClickOutside);
-    return () => document.removeEventListener("mousedown", handleClickOutside);
-  }, []);
+    if (!schoolData) return;
 
-  const getRoleDisplayName = (role: string) => {
-    switch (role) {
-      case "officer": return "生徒会役員";
-      case "admin": return "テナント管理者";
-      case "system_admin": return "特権管理者";
-      case "guest": return "ゲスト";
-      default: return "一般生徒";
-    }
+    // Taskデータの取得
+    const qTasks = query(collection(db, "tasks"), where("schoolId", "==", schoolData.id));
+    const unsubTasks = onSnapshot(qTasks, (snapshot) => {
+      const fetched: any[] = [];
+      snapshot.forEach((d) => {
+        const td = d.data();
+        fetched.push({
+          id: d.id, title: td.title, status: td.status || "not_started", priority: td.priority || "medium",
+          dueDate: td.dueDate || null, dueTime: td.dueTime || null,
+          assignees: td.assignees || (td.assigneeId ? [td.assigneeId] : []),
+          createdAt: td.createdAt ? td.createdAt.toDate().toISOString() : new Date().toISOString(),
+        });
+      });
+      setAllTasks(fetched);
+    });
+
+    // 貸出データの取得
+    const qRentals = query(collection(db, "rentals"), where("schoolId", "==", schoolData.id));
+    const unsubRentals = onSnapshot(qRentals, (snapshot) => {
+      const fetched: any[] = [];
+      snapshot.forEach(d => fetched.push({ id: d.id, ...d.data() }));
+      setRentals(fetched);
+    });
+
+    return () => { unsubTasks(); unsubRentals(); };
+  }, [schoolData]);
+
+  const userAllowedApps = useMemo(() => {
+    if (!schoolData || !userData || !systemApps) return [];
+    
+    const exSchoolData = schoolData as ExtendedSchoolData;
+
+    return systemApps.filter(app => {
+      if (!app.isActive) return false;
+      const appId = (app as any).appId || app.id;
+      const isTenantAllowed = exSchoolData.availableModules?.includes(appId);
+      const isUserAllowed = userData.allowedModules?.includes(appId);
+
+      const roleKey = (userData?.role || "guest") as string;
+      const defaultRoles = (app as any).defaultRoles || { admin: true, it_manager: true, teacher: true, officer: true, guest: false };
+      const perms = (exSchoolData as any)?.appPermissions?.[appId] || defaultRoles;
+      if (perms[roleKey] === false) return false;
+
+      return isTenantAllowed && isUserAllowed;
+    }).map(app => {
+      const appId = (app as any).appId || app.id;
+      const customName = exSchoolData.customAppNames?.[appId];
+      return {
+        ...app,
+        id: appId,
+        displayName: customName || app.name || (app as any).displayName
+      };
+    }).sort((a, b) => ((a as any).order || 0) - ((b as any).order || 0));
+  }, [systemApps, schoolData, userData]);
+
+  const boardApp = userAllowedApps.find(app => app.id === "board");
+  const boardC = boardApp ? (APP_COLOR_MAPPINGS[(boardApp as any).color] || APP_COLOR_MAPPINGS.default) : APP_COLOR_MAPPINGS.default;
+
+  const tasksApp = userAllowedApps.find(app => app.id === "tasks");
+  const tasksC = tasksApp ? (APP_COLOR_MAPPINGS[(tasksApp as any).color] || APP_COLOR_MAPPINGS.default) : APP_COLOR_MAPPINGS.default;
+
+  const equipmentApp = userAllowedApps.find(app => app.id === "equipment");
+  const equipmentC = equipmentApp ? (APP_COLOR_MAPPINGS[(equipmentApp as any).color] || APP_COLOR_MAPPINGS.default) : APP_COLOR_MAPPINGS.default;
+
+  const isOverdue = (dueDate: string | null, dueTime: string | null | undefined, status: string) => {
+    if (!dueDate || status === "done") return false;
+    const now = new Date();
+    const [year, month, day] = dueDate.split('-').map(Number);
+    let hour = 23, minute = 59, second = 59;
+    if (dueTime) { const [h, m] = dueTime.split(':').map(Number); hour = h; minute = m; second = 0; }
+    const due = new Date(year, month - 1, day, hour, minute, second);
+    return due < now;
   };
 
-  const canAccessSettings = userData?.role === "admin" || userData?.isITManager === true || (userData?.positionName && (userData.positionName.includes("会長") || userData.positionName.includes("顧問")));
-
-  const availableApps = systemApps.filter(app => {
-    if (!app.isActive) return false;
-    const isAllowedInTenant = !schoolData?.availableModules || schoolData.availableModules.includes(app.appId);
-    const isAllowedForUser = !userData?.allowedModules || userData.allowedModules.includes(app.appId);
-    return isAllowedInTenant && isAllowedForUser;
+  const myTasks = allTasks.filter(t => t.assignees.includes(userData?.id || "") && t.status !== "done").sort((a, b) => {
+    const aOverdue = isOverdue(a.dueDate, a.dueTime, a.status);
+    const bOverdue = isOverdue(b.dueDate, b.dueTime, b.status);
+    if (aOverdue && !bOverdue) return -1;
+    if (!aOverdue && bOverdue) return 1;
+    if (a.priority === "urgent" && b.priority !== "urgent") return -1;
+    if (a.priority !== "urgent" && b.priority === "urgent") return 1;
+    return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
   });
 
-  const getSenderDisplay = (msg: SystemMessage) => {
-    if (msg.senderRole === "system_admin") return "システム管理者";
-    return msg.showSenderName && msg.senderName ? msg.senderName : "テナント管理者";
+  const statusCounts = {
+    not_started: allTasks.filter(t => t.status === "not_started").length,
+    in_progress: allTasks.filter(t => t.status === "in_progress").length,
+    waiting: allTasks.filter(t => t.status === "waiting").length,
+    pending: allTasks.filter(t => t.status === "pending").length,
+    done: allTasks.filter(t => t.status === "done").length,
   };
+  const totalTasks = allTasks.length;
+
+  const activeRentals = rentals.filter(r => r.status === "active" || r.status === "partial");
+  const overdueRentals = activeRentals.filter(r => {
+    if (!r.endDate) return false;
+    const end = new Date(r.endDate);
+    end.setHours(23, 59, 59);
+    return end < new Date();
+  });
 
   return (
-    <div className="min-h-screen bg-[#F4F5F7] dark:bg-gray-950 transition-colors duration-300 font-sans pb-12">
-      
-      {/* 1. お知らせ詳細モーダル */}
-      {selectedMessage && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-fade-in">
-          <div className="bg-white dark:bg-gray-900 rounded-2xl shadow-2xl max-w-lg w-full overflow-hidden border border-gray-100 dark:border-gray-800">
-            <div className="p-6 border-b border-gray-100 dark:border-gray-800 flex justify-between items-start bg-gray-50/50 dark:bg-gray-800/50">
-              <div className="flex items-center gap-2">
-                <span className={`px-2.5 py-1 rounded-lg text-xs font-bold ${CATEGORIES[selectedMessage.category || "info"]?.badgeBg || "bg-blue-100 text-blue-800"}`}>
-                  {CATEGORIES[selectedMessage.category || "info"]?.label || "お知らせ"}
-                </span>
-                {selectedMessage.isImportant && (
-                  <span className="px-2.5 py-1 rounded-lg text-xs font-bold bg-red-600 text-white flex items-center">
-                    <Pin className="h-3 w-3 mr-1" /> 重要なお知らせ
-                  </span>
-                )}
-              </div>
-              <button onClick={() => setSelectedMessage(null)} className="p-1 text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 rounded-full hover:bg-gray-200/50">
-                <X className="h-5 w-5" />
-              </button>
-            </div>
-            <div className="p-6 space-y-4">
-              <h3 className="text-lg font-extrabold text-gray-900 dark:text-white leading-snug">{selectedMessage.title}</h3>
-              <div className="text-xs text-gray-500 dark:text-gray-400 flex items-center gap-3 font-medium">
-                <span>配信: {selectedMessage.startAt ? selectedMessage.startAt.replace("T", " ") : new Date(selectedMessage.createdAt).toLocaleString()}</span>
-                <span>配信者: {getSenderDisplay(selectedMessage)}</span>
-              </div>
-              <div className="p-4 bg-gray-50 dark:bg-gray-800/60 rounded-xl text-sm text-gray-700 dark:text-gray-300 whitespace-pre-wrap leading-relaxed border border-gray-100 dark:border-gray-700">
-                {selectedMessage.content}
-              </div>
-            </div>
-            <div className="p-4 bg-gray-50 dark:bg-gray-800/50 border-t border-gray-100 dark:border-gray-800 flex justify-between items-center">
-              {selectedMessage.isDismissible ? (
-                <button 
-                  onClick={() => { markMessageAsRead(selectedMessage.id); setSelectedMessage(null); }}
-                  className="text-xs font-bold text-blue-600 dark:text-blue-400 hover:underline"
-                >
-                  既読にして閉じる
-                </button>
-              ) : (
-                <span className="text-xs text-gray-400 font-bold">※このお知らせは既読削除できません</span>
-              )}
-              <button onClick={() => setSelectedMessage(null)} className="px-5 py-2 bg-gray-900 dark:bg-white text-white dark:text-gray-900 text-xs font-bold rounded-xl hover:bg-black">
-                閉じる
-              </button>
-            </div>
+    // ★ p-3 sm:p-4 -> p-2 sm:p-4 に変更し、スマホでの外側の無駄な余白を削減
+    <div className="p-2 sm:p-4 lg:p-6 w-full min-w-0">
+      {/* ★ space-y-4 -> space-y-2.5 sm:space-y-4 に変更し、縦のパーツ間隔を縮める */}
+      <div className="max-w-7xl mx-auto space-y-2.5 sm:space-y-4 w-full min-w-0">
+
+        {/* スケジュールと天気 */}
+        {/* ★ gap-4 -> gap-2.5 sm:gap-4 に変更 */}
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-2.5 sm:gap-4 lg:gap-5 w-full min-w-0">
+          <div className="lg:col-span-8 xl:col-span-9 min-w-0">
+            <ScheduleWidget userData={userData} schoolData={schoolData} selectedDate={selectedDate} />
+          </div>
+          <div className="lg:col-span-4 xl:col-span-3 min-w-0">
+            <WeatherWidget schoolData={schoolData} />
           </div>
         </div>
-      )}
 
-      {/* 2. 連絡事項詳細モーダル */}
-      {selectedNotice && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-fade-in">
-          <div className="bg-white dark:bg-gray-900 rounded-2xl shadow-2xl max-w-lg w-full overflow-hidden border border-gray-100 dark:border-gray-800">
-            <div className="p-6 border-b border-gray-100 dark:border-gray-800 flex justify-between items-start bg-gray-50/50 dark:bg-gray-800/50">
-              <span className="px-2.5 py-1 rounded-lg text-xs font-bold bg-indigo-100 text-indigo-800 dark:bg-indigo-900/50 dark:text-indigo-300">
-                連絡事項
-              </span>
-              <button onClick={() => setSelectedNotice(null)} className="p-1 text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 rounded-full hover:bg-gray-200/50">
-                <X className="h-5 w-5" />
-              </button>
-            </div>
-            <div className="p-6 space-y-4">
-              <h3 className="text-lg font-extrabold text-gray-900 dark:text-white leading-snug">{selectedNotice.title}</h3>
-              <div className="text-xs text-gray-500 dark:text-gray-400 flex items-center gap-3 font-medium">
-                <span>投稿日時: {new Date(selectedNotice.createdAt).toLocaleString()}</span>
-                <span>投稿者: {selectedNotice.senderName}</span>
-              </div>
-              <div className="p-4 bg-gray-50 dark:bg-gray-800/60 rounded-xl text-sm text-gray-700 dark:text-gray-300 whitespace-pre-wrap leading-relaxed border border-gray-100 dark:border-gray-700">
-                {selectedNotice.content}
-              </div>
-            </div>
-            <div className="p-4 bg-gray-50 dark:bg-gray-800/50 border-t border-gray-100 dark:border-gray-800 flex justify-end">
-              <button onClick={() => setSelectedNotice(null)} className="px-5 py-2 bg-gray-900 dark:bg-white text-white dark:text-gray-900 text-xs font-bold rounded-xl hover:bg-black">
-                閉じる
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* 固定ヘッダー */}
-      <header className="bg-white dark:bg-gray-900 border-b border-gray-200 dark:border-gray-800 sticky top-0 z-40 shadow-sm">
-        <div className="w-full px-4 sm:px-6 h-14 flex items-center justify-between">
-          <div className="flex items-center">
-            <div className="h-8 w-8 bg-blue-600 rounded-lg flex items-center justify-center shadow-inner mr-3">
-              <LayoutDashboard className="h-5 w-5 text-white" />
-            </div>
-            <h1 className="text-lg font-black text-gray-900 dark:text-white tracking-tight hidden sm:block">生徒会ポータル</h1>
-            <h1 className="text-lg font-black text-gray-900 dark:text-white tracking-tight sm:hidden">SCPS</h1>
-          </div>
-
-          <div className="flex items-center justify-end space-x-3">
-            <span className="hidden md:inline text-xs font-bold text-gray-500 dark:text-gray-400 bg-gray-100 dark:bg-gray-800 px-3 py-1.5 rounded-full">
-              {schoolData?.name}
-            </span>
+        {/* ★ gap-4 -> gap-2.5 sm:gap-4 に変更 */}
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-2.5 sm:gap-4 lg:gap-5 w-full min-w-0">
+          
+          <div className="lg:col-span-6 space-y-2.5 sm:space-y-4 min-w-0">
             
-            <div className="relative" ref={profileRef}>
-              <button onClick={() => setIsProfileMenuOpen(!isProfileMenuOpen)} className="flex items-center focus:outline-none focus:ring-2 focus:ring-blue-500 rounded-full">
-                <div className="h-9 w-9 rounded-full bg-gradient-to-tr from-blue-500 to-indigo-600 flex items-center justify-center text-white font-bold text-sm shadow-sm">
-                  {userData?.name.charAt(0) || <UserIcon className="h-4 w-4" />}
-                </div>
-              </button>
+            <AdminNotificationWidget 
+              userData={userData} 
+              messages={messages} 
+              tenantUsers={tenantUsers} 
+            />
 
-              {isProfileMenuOpen && (
-                <div className="absolute right-0 mt-2 w-72 rounded-2xl shadow-2xl bg-white dark:bg-gray-800 ring-1 ring-black ring-opacity-5 z-50 overflow-hidden border border-gray-100 dark:border-gray-700 animate-fade-in">
-                  <div className="p-5 border-b border-gray-100 dark:border-gray-700 bg-gray-50/50 dark:bg-gray-900 flex items-center">
-                    <div className="h-12 w-12 rounded-full bg-gradient-to-tr from-blue-500 to-indigo-600 flex items-center justify-center text-white font-bold text-xl shadow-inner flex-shrink-0">
-                      {userData?.name.charAt(0)}
+            <BoardWidget schoolData={schoolData} boardApp={boardApp} boardC={boardC} tenantUsers={tenantUsers} />
+
+            {equipmentApp && (
+              <div className="bg-white border border-gray-200 rounded-2xl shadow-2xs overflow-hidden flex flex-col min-w-0">
+                <div className="px-3.5 py-2.5 border-b border-gray-100 flex justify-between items-center bg-gray-50/50">
+                  <h2 className="text-xs sm:text-sm font-black text-gray-900 flex items-center gap-1.5 truncate">
+                    <DynamicIcon name={(equipmentApp as any).icon} className={`w-3.5 h-3.5 sm:w-4 sm:h-4 ${equipmentC.iconText}`} /> 
+                    {(equipmentApp as any).displayName}
+                  </h2>
+                  <button onClick={() => router.push((equipmentApp as any).path)} className={`px-2 py-0.5 sm:px-2.5 sm:py-1 ${equipmentC.lightBg} ${equipmentC.text} ${equipmentC.hoverBg} rounded-lg text-[10px] font-bold flex items-center transition-colors flex-shrink-0`}>
+                    開く <ChevronRight className="w-3 h-3 ml-0.5" />
+                  </button>
+                </div>
+                
+                {/* ★ p-3 -> p-2.5 に変更し、内部の余白を詰める */}
+                <div className="p-2.5 sm:p-4 flex flex-col gap-2.5 min-w-0">
+                  <div className="grid grid-cols-2 gap-2.5">
+                    <div className="bg-blue-50 rounded-xl p-2 sm:p-3 border border-blue-100 flex flex-col items-center justify-center shadow-sm">
+                      <span className="text-[10px] font-bold text-blue-700 mb-0.5 sm:mb-1 flex items-center gap-1"><ArrowRightLeft className="w-3 h-3"/> 貸出中</span>
+                      <span className="text-lg sm:text-xl font-black text-blue-800">{activeRentals.length} <span className="text-[9px] font-bold">件</span></span>
                     </div>
-                    <div className="ml-3 overflow-hidden">
-                      <p className="text-sm font-extrabold text-gray-900 dark:text-white truncate">{userData?.name}</p>
-                      <p className="text-[10px] font-bold text-gray-500 dark:text-gray-400 mt-1">{getRoleDisplayName(userData?.role || "")}</p>
+                    <div className={`rounded-xl p-2 sm:p-3 border flex flex-col items-center justify-center shadow-sm ${overdueRentals.length > 0 ? 'bg-red-50 border-red-200' : 'bg-gray-50 border-gray-100'}`}>
+                      <span className={`text-[10px] font-bold mb-0.5 sm:mb-1 flex items-center gap-1 ${overdueRentals.length > 0 ? 'text-red-700' : 'text-gray-500'}`}>
+                        <AlertTriangle className="w-3 h-3"/> 期限超過
+                      </span>
+                      <span className={`text-lg sm:text-xl font-black ${overdueRentals.length > 0 ? 'text-red-700' : 'text-gray-400'}`}>{overdueRentals.length} <span className="text-[9px] font-bold">件</span></span>
                     </div>
                   </div>
-                  <div className="p-2">
-                    <Link href="/account" className="flex items-center px-3 py-2.5 text-sm font-bold text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-xl group transition-colors">
-                      <Settings className="h-4 w-4 mr-3 text-gray-400 group-hover:text-blue-600" /> アカウント設定
-                    </Link>
-                    {canAccessSettings && (
-                      <Link href="/top/admin" className="flex items-center px-3 py-2.5 text-sm font-bold text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-xl group transition-colors">
-                        <ShieldCheck className="h-4 w-4 mr-3 text-gray-400 group-hover:text-gray-900" /> テナント管理
-                      </Link>
+                  
+                  {overdueRentals.length > 0 && (
+                    <div className="mt-1.5 space-y-1.5">
+                      <p className="text-[9px] font-black text-red-600 uppercase tracking-wider">要督促アラート</p>
+                      {overdueRentals.slice(0, 3).map(r => (
+                        <div key={r.id} onClick={() => router.push((equipmentApp as any).path)} className="flex justify-between items-center text-[10px] font-bold p-1.5 sm:p-2 bg-white border border-red-100 hover:border-red-300 rounded-lg cursor-pointer transition-colors group">
+                          <span className="truncate flex-1 text-gray-800 group-hover:text-red-700">{r.borrowerName} ({r.items?.length || 0}点)</span>
+                          <span className="text-red-600 flex-shrink-0 bg-red-50 px-1.5 py-0.5 rounded">期限: {r.endDate}</span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+
+          </div>
+
+          <div className="lg:col-span-6 space-y-2.5 sm:space-y-4 min-w-0">
+            
+            {tasksApp && (
+              <div className="bg-white border border-gray-200 rounded-2xl shadow-2xs overflow-hidden flex flex-col min-w-0">
+                <div className="px-3.5 py-2.5 border-b border-gray-100 flex justify-between items-center bg-gray-50/50">
+                  <h2 className="text-xs sm:text-sm font-black text-gray-900 flex items-center gap-1.5 truncate">
+                    <DynamicIcon name={(tasksApp as any).icon} className={`w-3.5 h-3.5 sm:w-4 sm:h-4 ${tasksC.iconText}`} /> 
+                    {(tasksApp as any).displayName}
+                  </h2>
+                  <button onClick={() => router.push((tasksApp as any).path)} className={`px-2 py-0.5 sm:px-2.5 sm:py-1 ${tasksC.lightBg} ${tasksC.text} ${tasksC.hoverBg} rounded-lg text-[10px] font-bold flex items-center transition-colors flex-shrink-0`}>
+                    開く <ChevronRight className="w-3 h-3 ml-0.5" />
+                  </button>
+                </div>
+
+                {/* ★ p-3 -> p-2.5 に変更し、内部の余白を詰める */}
+                <div className="p-2.5 sm:p-4 flex flex-col gap-2.5 min-w-0">
+                  
+                  <div className="bg-gray-50 rounded-xl p-2 sm:p-2.5 border border-gray-100/80">
+                    <div className="flex items-center justify-between mb-1.5">
+                      <span className="text-[9px] sm:text-[10px] font-bold text-gray-500 flex items-center gap-1"><BarChart3 className="w-3 h-3" /> 全体の進捗状況</span>
+                      <span className="text-[8px] sm:text-[9px] font-bold text-gray-400">計 {totalTasks} 件</span>
+                    </div>
+                    {totalTasks === 0 ? (
+                      <div className="h-1.5 w-full bg-gray-200 rounded-full"></div>
+                    ) : (
+                      <div className="flex h-1.5 w-full rounded-full overflow-hidden gap-[1px]">
+                        {statusCounts.done > 0 && <div style={{width: `${(statusCounts.done/totalTasks)*100}%`}} className="bg-emerald-500" title={`完了: ${statusCounts.done}`}></div>}
+                        {statusCounts.in_progress > 0 && <div style={{width: `${(statusCounts.in_progress/totalTasks)*100}%`}} className="bg-blue-500" title={`進行中: ${statusCounts.in_progress}`}></div>}
+                        {statusCounts.waiting > 0 && <div style={{width: `${(statusCounts.waiting/totalTasks)*100}%`}} className="bg-amber-500" title={`確認待ち: ${statusCounts.waiting}`}></div>}
+                        {statusCounts.pending > 0 && <div style={{width: `${(statusCounts.pending/totalTasks)*100}%`}} className="bg-purple-500" title={`保留: ${statusCounts.pending}`}></div>}
+                        {statusCounts.not_started > 0 && <div style={{width: `${(statusCounts.not_started/totalTasks)*100}%`}} className="bg-gray-300" title={`未着手: ${statusCounts.not_started}`}></div>}
+                      </div>
                     )}
                   </div>
-                  <div className="p-2 border-t border-gray-100 dark:border-gray-700">
-                    <button onClick={handleLogout} className="w-full flex items-center px-3 py-2.5 text-sm font-bold text-red-600 hover:bg-red-50 dark:hover:bg-red-950/30 rounded-xl transition-colors group">
-                      <LogOut className="h-4 w-4 mr-3 text-red-500 group-hover:text-red-600" /> ログアウト
-                    </button>
+
+                  <div>
+                    <h3 className="text-[10px] sm:text-xs font-bold text-gray-700 flex items-center gap-1 mb-1.5">
+                      <CheckCircle2 className="w-3.5 h-3.5 text-indigo-500" /> あなたの担当タスク
+                    </h3>
+                    <div className="space-y-1.5">
+                      {myTasks.length === 0 ? (
+                        <p className="text-[10px] sm:text-[11px] font-bold text-gray-400 text-center py-2.5 border border-dashed border-gray-200 rounded-xl">担当中の未完了タスクはありません</p>
+                      ) : (
+                        myTasks.slice(0, 3).map(t => {
+                          const overdue = isOverdue(t.dueDate, t.dueTime, t.status);
+                          return (
+                            <div key={t.id} onClick={() => router.push(`/top/tasks/detail/${t.id}`)} className={`p-2 sm:p-2.5 rounded-xl border transition-all cursor-pointer flex items-center justify-between gap-2 group min-w-0 ${overdue ? 'bg-red-50/80 border-red-300' : 'bg-white border-gray-200 hover:border-indigo-300'}`}>
+                              <div className="flex items-center gap-1.5 min-w-0 flex-1">
+                                <span className={`px-1 py-0.5 rounded text-[8px] font-bold border flex-shrink-0 ${TASK_PRIORITY_CONFIG[t.priority as TaskPriority].color}`}>
+                                  {TASK_PRIORITY_CONFIG[t.priority as TaskPriority].label}
+                                </span>
+                                <span className={`text-[10px] sm:text-xs font-black truncate group-hover:text-indigo-600 transition-colors ${overdue ? 'text-red-900' : 'text-gray-900'}`}>{t.title}</span>
+                              </div>
+                              
+                              <div className="flex items-center gap-1.5 flex-shrink-0">
+                                <span className={`px-1.5 py-0.5 rounded text-[8px] font-bold flex items-center gap-1 ${TASK_STATUS_CONFIG[t.status as TaskStatus].color}`}>
+                                  <span className={`w-1.5 h-1.5 rounded-full ${TASK_STATUS_CONFIG[t.status as TaskStatus].dot}`}></span>
+                                  <span className="hidden sm:inline">{TASK_STATUS_CONFIG[t.status as TaskStatus].label}</span>
+                                </span>
+                                {t.dueDate && (
+                                  <span className={`text-[8px] font-bold flex items-center gap-0.5 ${overdue ? 'text-red-600' : 'text-gray-400'}`}>
+                                    <CalendarIcon className="w-2.5 h-2.5" /> {new Date(t.dueDate).toLocaleDateString('ja-JP', {month:'numeric', day:'numeric'})}
+                                  </span>
+                                )}
+                              </div>
+                            </div>
+                          );
+                        })
+                      )}
+                    </div>
                   </div>
+
                 </div>
-              )}
-            </div>
-          </div>
-        </div>
-      </header>
+              </div>
+            )}
 
-      <main className="max-w-[1600px] mx-auto p-4 sm:p-6 lg:p-8">
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-          
-          <div className="lg:col-span-3 space-y-6">
-            
-            <div className="bg-white dark:bg-gray-900 rounded-2xl shadow-sm border border-gray-200 dark:border-gray-800 overflow-hidden">
-              <div className="px-5 py-4 border-b border-gray-100 dark:border-gray-800 bg-gray-50/50 dark:bg-gray-800/50 flex justify-between items-center">
-                <h3 className="text-sm font-extrabold text-gray-900 dark:text-white flex items-center">
-                  <LayoutDashboard className="h-4 w-4 mr-2 text-blue-600" /> テナントメニュー
-                </h3>
-              </div>
-              <div className="p-2 space-y-1">
-                {availableApps.length === 0 ? (
-                  <p className="p-4 text-xs text-center text-gray-500">利用可能なアプリがありません</p>
-                ) : (
-                  availableApps.map(app => {
-                    const c = COLOR_CLASSES[app.color] || COLOR_CLASSES.indigo;
-                    return (
-                      <Link key={app.id} href={app.path} className="flex items-center px-3 py-2.5 rounded-xl group transition-all hover:bg-gray-50 dark:hover:bg-gray-800">
-                        <div className={`p-2 rounded-lg ${c.bg} ${c.text} ${c.hover} transition-colors mr-3`}>
-                          <DynamicIcon name={app.icon} className="h-4 w-4" />
-                        </div>
-                        <span className="text-sm font-bold text-gray-700 dark:text-gray-300 group-hover:text-gray-900 dark:group-hover:text-white">
-                          {app.name}
-                        </span>
-                        <ChevronRight className="h-4 w-4 ml-auto text-gray-300 opacity-0 group-hover:opacity-100 transition-opacity" />
-                      </Link>
-                    );
-                  })
-                )}
-              </div>
+            <div className="min-w-0">
+              <MemberStatusBoard userData={userData} tenantUsers={tenantUsers} />
             </div>
 
-            {/* ★カレンダー連動 */}
-            <MiniCalendar selectedDate={selectedDate} onSelectDate={setSelectedDate} />
-
-          </div>
-
-          <div className="lg:col-span-6 space-y-6">
-            
-            {/* ★スケジュール連動 */}
-            <ScheduleWidget userData={userData} schoolData={schoolData} selectedDate={selectedDate} />
-
-            <div className="bg-white dark:bg-gray-900 rounded-2xl shadow-sm border border-gray-200 dark:border-gray-800 overflow-hidden">
-              <div className="px-5 py-4 border-b border-gray-100 dark:border-gray-800 bg-gray-50/50 dark:bg-gray-800/50 flex justify-between items-center">
-                <h3 className="text-sm font-extrabold text-gray-900 dark:text-white flex items-center">
-                  <BellRing className="h-4 w-4 mr-2 text-blue-600" /> お知らせ（学校・管理者通知）
-                </h3>
-                <span className="text-xs font-bold text-gray-400">{messages.length}件</span>
-              </div>
-              <div className="p-4 space-y-2.5">
-                {messages.length === 0 ? (
-                  <p className="text-xs font-bold text-gray-400 text-center py-6">現在、新しいお知らせはありません</p>
-                ) : (
-                  messages.map((msg) => {
-                    const catInfo = CATEGORIES[msg.category || "info"] || CATEGORIES.info;
-                    return (
-                      <div 
-                        key={msg.id} 
-                        onClick={() => setSelectedMessage(msg)}
-                        className="p-3.5 bg-gray-50 hover:bg-blue-50/50 dark:bg-gray-800/40 dark:hover:bg-gray-800/80 rounded-xl border border-gray-200/80 dark:border-gray-700 cursor-pointer transition-all flex items-center justify-between group"
-                      >
-                        <div className="flex items-center gap-3 overflow-hidden mr-2">
-                          <span className={`px-2 py-0.5 rounded text-[10px] font-bold flex-shrink-0 ${catInfo.badgeBg}`}>
-                            {catInfo.label}
-                          </span>
-                          {msg.isImportant && (
-                            <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-red-600 text-white flex-shrink-0 flex items-center">
-                              <Pin className="h-3 w-3 mr-0.5" /> 重要
-                            </span>
-                          )}
-                          <p className="text-xs font-bold text-gray-900 dark:text-white truncate group-hover:text-blue-600 dark:group-hover:text-blue-400">
-                            {msg.title}
-                          </p>
-                        </div>
-                        <div className="flex items-center text-[10px] font-bold text-gray-400 flex-shrink-0 gap-2">
-                          <span>{msg.startAt ? msg.startAt.split("T")[0] : new Date(msg.createdAt).toLocaleDateString()}</span>
-                          <ChevronRight className="h-4 w-4 text-gray-300 group-hover:text-blue-600 transition-colors" />
-                        </div>
-                      </div>
-                    );
-                  })
-                )}
-              </div>
-            </div>
-
-            <div className="bg-white dark:bg-gray-900 rounded-2xl shadow-sm border border-gray-200 dark:border-gray-800 overflow-hidden">
-              <div className="px-5 py-4 border-b border-gray-100 dark:border-gray-800 bg-gray-50/50 dark:bg-gray-800/50 flex justify-between items-center">
-                <h3 className="text-sm font-extrabold text-gray-900 dark:text-white flex items-center">
-                  <MessageSquareText className="h-4 w-4 mr-2 text-indigo-600" /> 連絡事項（校内共有・連絡）
-                </h3>
-                <button 
-                  onClick={() => alert("一般ユーザー向け投稿画面は次ステップで実装します")}
-                  className="px-3 py-1 bg-indigo-50 hover:bg-indigo-100 dark:bg-indigo-950/50 text-indigo-600 dark:text-indigo-400 rounded-lg text-xs font-bold flex items-center border border-indigo-100 dark:border-indigo-900 transition-colors"
-                >
-                  <Send className="h-3 w-3 mr-1" /> 投稿する
-                </button>
-              </div>
-              <div className="p-4 space-y-2.5">
-                {bulletinNotices.map((notice) => (
-                  <div 
-                    key={notice.id} 
-                    onClick={() => setSelectedNotice(notice)}
-                    className="p-3.5 bg-gray-50 hover:bg-indigo-50/50 dark:bg-gray-800/40 dark:hover:bg-gray-800/80 rounded-xl border border-gray-200/80 dark:border-gray-700 cursor-pointer transition-all flex items-center justify-between group"
-                  >
-                    <div className="flex items-center gap-3 overflow-hidden mr-2">
-                      <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-indigo-100 text-indigo-800 dark:bg-indigo-900/50 dark:text-indigo-300 flex-shrink-0">
-                        連絡
-                      </span>
-                      <p className="text-xs font-bold text-gray-900 dark:text-white truncate group-hover:text-indigo-600 dark:group-hover:text-indigo-400">
-                        {notice.title}
-                      </p>
-                    </div>
-                    <div className="flex items-center text-[10px] font-bold text-gray-400 flex-shrink-0 gap-2">
-                      <span>{notice.senderName}</span>
-                      <ChevronRight className="h-4 w-4 text-gray-300 group-hover:text-indigo-600 transition-colors" />
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-
-          </div>
-
-          <div className="lg:col-span-3 space-y-6">
-            <MemberStatusBoard userData={userData} tenantUsers={tenantUsers} />
           </div>
 
         </div>
-      </main>
-
+      </div>
     </div>
   );
 }

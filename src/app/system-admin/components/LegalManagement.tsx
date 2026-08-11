@@ -4,12 +4,11 @@ import React, { useState, useEffect } from "react";
 import { doc, getDoc, setDoc } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 import { Save, Loader2, ShieldCheck, FileText, Scale, Eye } from "lucide-react";
+import { useDialog } from "@/components/DialogContext"; // ★追加
 
-type Props = {
-  showAlert: (type: "success" | "error", message: string) => void;
-};
+export default function LegalManagement() {
+  const { showAlert } = useDialog(); // ★追加
 
-export default function LegalManagement({ showAlert }: Props) {
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
   const [activeTab, setActiveTab] = useState<"privacyPolicy" | "termsOfService" | "commercialLaw">("privacyPolicy");
@@ -35,7 +34,7 @@ export default function LegalManagement({ showAlert }: Props) {
         }
       } catch (error) {
         console.error("Failed to load legal docs", error);
-        showAlert("error", "規約データの読み込みに失敗しました。");
+        showAlert("規約データの読み込みに失敗しました。", "error"); // ★修正
       } finally {
         setIsLoading(false);
       }
@@ -52,10 +51,10 @@ export default function LegalManagement({ showAlert }: Props) {
         updatedAt: new Date().toISOString(),
       }, { merge: true });
       
-      showAlert("success", "法務ドキュメントを保存・公開しました。");
+      showAlert("法務ドキュメントを保存・公開しました。", "success"); // ★修正
     } catch (error) {
       console.error("Save error:", error);
-      showAlert("error", "保存に失敗しました。");
+      showAlert("保存に失敗しました。", "error"); // ★修正
     } finally {
       setIsSaving(false);
     }

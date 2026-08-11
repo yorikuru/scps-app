@@ -3,7 +3,7 @@
 import React, { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { onAuthStateChanged } from "firebase/auth";
-import { collection, doc, getDoc, getDocs } from "firebase/firestore";
+import { collection, doc, getDoc, getDocs, query, orderBy } from "firebase/firestore";
 import { auth, db } from "@/lib/firebase";
 import { 
   Building2, Users, BellRing, LayoutDashboard, 
@@ -16,8 +16,11 @@ import GlobalUserManagement from "./components/GlobalUserManagement";
 import MessageDelivery from "./components/MessageDelivery";
 import Line from "./components/line";
 import SystemAccount from "./components/SystemAccount";
-import LegalManagement from "./components/LegalManagement"; // ★追加
-import AppManagement from "./components/AppManagement";     // ★追加
+import LegalManagement from "./components/LegalManagement";
+import AppManagement, { SystemApp } from "./components/AppManagement";
+
+// ★ 共通ダイアログフックをインポート
+import { useDialog } from "@/components/DialogContext";
 
 export type TenantData = {
   id: string;
@@ -67,30 +70,20 @@ export type GlobalUserData = {
   useCustomMfaPolicy?: boolean;
 };
 
-export const SYSTEM_MODULES = [
-  { id: "board", name: "お知らせボード" },
-  { id: "tasks", name: "タスク・プロジェクト" },
-  { id: "approvals", name: "電子承認・稟議" },
-  { id: "surveys", name: "アンケート・目安箱" }
-];
-
 export default function SystemAdminPage() {
   const router = useRouter();
+  
+  // ★ フックを取得
+  const { showAlert } = useDialog();
+
   const [isLoading, setIsLoading] = useState(true);
-  // ★タブの型に apps と legal を追加
   const [activeTab, setActiveTab] = useState<"dashboard" | "tenants" | "users" | "apps" | "messages" | "line" | "legal" | "account">("dashboard");
   
   const [tenants, setTenants] = useState<TenantData[]>([]);
   const [users, setUsers] = useState<GlobalUserData[]>([]);
+  const [systemApps, setSystemApps] = useState<SystemApp[]>([]);
 
-  const [alert, setAlert] = useState<{ show: boolean; type: "success" | "error"; message: string }>({ 
-    show: false, type: "success", message: "" 
-  });
-
-  const showAlert = (type: "success" | "error", message: string) => {
-    setAlert({ show: true, type, message });
-    setTimeout(() => setAlert((prev) => ({ ...prev, show: false })), 4000);
-  };
+  // 古い alert ステートと showAlert 関数は削除しました
 
   const fetchAllData = async () => {
     try {
@@ -103,9 +96,16 @@ export default function SystemAdminPage() {
       const uData: GlobalUserData[] = [];
       usersSnap.forEach(doc => uData.push({ id: doc.id, ...doc.data() } as GlobalUserData));
       setUsers(uData);
+
+      const appsQuery = query(collection(db, "system_apps"), orderBy("order", "asc"));
+      const appsSnap = await getDocs(appsQuery);
+      const appData: SystemApp[] = [];
+      appsSnap.forEach(doc => appData.push({ id: doc.id, ...doc.data() } as SystemApp));
+      setSystemApps(appData);
+
     } catch (error) {
       console.error("Data fetch error:", error);
-      showAlert("error", "システムデータの取得に失敗しました。");
+      showAlert("システムデータの取得に失敗しました。", "error");
     }
   };
 
@@ -126,7 +126,7 @@ export default function SystemAdminPage() {
               router.push("/login");
             }
           } catch (error) {
-            showAlert("error", "権限の確認に失敗しました。");
+            showAlert("権限の確認に失敗しました。", "error");
           } finally {
             setIsLoading(false);
           }
@@ -136,7 +136,7 @@ export default function SystemAdminPage() {
       });
     };
     init();
-  }, [router]);
+  }, [router, showAlert]);
 
   if (isLoading) {
     return (
@@ -194,21 +194,17 @@ export default function SystemAdminPage() {
 
       {/* メインコンテンツ */}
       <div className="flex-1 overflow-y-auto p-4 md:p-8 bg-gray-50">
-        {alert.show && (
-          <div className={`mb-6 p-4 rounded-md text-sm font-bold flex items-center shadow-sm ${alert.type === "success" ? "bg-green-50 text-green-800 border border-green-200" : "bg-red-50 text-red-800 border border-red-200"}`}>
-            {alert.type === "success" ? <CheckCircle2 className="mr-2 h-5 w-5 flex-shrink-0" /> : <AlertCircle className="mr-2 h-5 w-5 flex-shrink-0" />}
-            {alert.message}
-          </div>
-        )}
-
+        
         {activeTab === "dashboard" && <Dashboard tenants={tenants} users={users} />}
-        {activeTab === "tenants" && <TenantManagement tenants={tenants} setTenants={setTenants} showAlert={showAlert} />}
-        {activeTab === "users" && <GlobalUserManagement users={users} setUsers={setUsers} tenants={tenants} showAlert={showAlert} />}
-        {activeTab === "apps" && <AppManagement showAlert={showAlert} />}
-        {activeTab === "messages" && <MessageDelivery tenants={tenants} users={users} showAlert={showAlert} />}
-        {activeTab === "line" && <Line tenants={tenants} users={users} showAlert={showAlert} />}
-        {activeTab === "legal" && <LegalManagement showAlert={showAlert} />}
-        {activeTab === "account" && <SystemAccount showAlert={showAlert} />}
+        
+        {/* 各コンポーネントに古い showAlert の受け渡し（props）を削除しました */}
+        {activeTab === "tenants" && <TenantManagement tenants={tenants} setTenants={setTenants} systemApps={systemApps} />}
+        {activeTab === "users" && <GlobalUserManagement users={users} setUsers={setUsers} tenants={tenants} />}
+        {activeTab === "apps" && <AppManagement />}
+        {activeTab === "messages" && <MessageDelivery tenants={tenants} users={users} />}
+        {activeTab === "line" && <Line tenants={tenants} users={users} />}
+        {activeTab === "legal" && <LegalManagement />}
+        {activeTab === "account" && <SystemAccount />}
       </div>
     </div>
   );

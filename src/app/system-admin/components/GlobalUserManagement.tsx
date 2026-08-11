@@ -5,12 +5,12 @@ import { doc, updateDoc } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 import { Search, Edit2, X, Save, Loader2, MessageCircle, ShieldCheck } from "lucide-react";
 import { GlobalUserData, TenantData } from "../page";
+import { useDialog } from "@/components/DialogContext"; // ★追加
 
 type Props = {
   users: GlobalUserData[];
   setUsers: (users: GlobalUserData[]) => void;
   tenants: TenantData[];
-  showAlert: (type: "success" | "error", message: string) => void;
 };
 
 // 拡張型定義（MFA等の追加フィールド対応）
@@ -25,12 +25,14 @@ type ExtendedGlobalUserData = GlobalUserData & {
   useCustomMfaPolicy?: boolean;
 };
 
-export default function GlobalUserManagement({ users, setUsers, tenants, showAlert }: Props) {
+export default function GlobalUserManagement({ users, setUsers, tenants }: Props) {
   const [searchQuery, setSearchQuery] = useState("");
   
   const [editingUser, setEditingUser] = useState<ExtendedGlobalUserData | null>(null);
   const [editData, setEditData] = useState<Partial<ExtendedGlobalUserData>>({});
   const [isSaving, setIsSaving] = useState(false);
+
+  const { showAlert } = useDialog(); // ★追加
 
   const getTenantName = (schoolId: string) => {
     if (schoolId === "YORIKURU_SYSTEM") return "システム管理 (特権)";
@@ -70,11 +72,11 @@ export default function GlobalUserManagement({ users, setUsers, tenants, showAle
       await updateDoc(doc(db, "users", editingUser.id), safeUpdateData);
       
       setUsers(users.map(u => u.id === editingUser.id ? { ...u, ...safeUpdateData } as GlobalUserData : u));
-      showAlert("success", "ユーザー情報を更新しました。");
+      showAlert("ユーザー情報を更新しました。", "success"); // ★引数の順番を変更
       closeEditModal();
     } catch (error) {
       console.error("Save error:", error);
-      showAlert("error", "更新に失敗しました。");
+      showAlert("更新に失敗しました。", "error"); // ★引数の順番を変更
     } finally {
       setIsSaving(false);
     }
@@ -110,7 +112,7 @@ export default function GlobalUserManagement({ users, setUsers, tenants, showAle
 
       {/* 編集モーダル */}
       {editingUser && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-60 px-4 py-6 overflow-y-auto backdrop-blur-sm animate-fade-in">
+        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black bg-opacity-60 px-4 py-6 overflow-y-auto backdrop-blur-sm animate-fade-in">
           <div className="bg-white rounded-2xl shadow-2xl w-full max-w-4xl my-auto flex flex-col max-h-[90vh]">
             <div className="px-6 py-5 border-b border-gray-200 flex justify-between items-center bg-gray-50 rounded-t-2xl flex-shrink-0">
               <h3 className="text-xl font-extrabold text-gray-900 flex items-center">

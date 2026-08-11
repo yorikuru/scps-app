@@ -69,3 +69,27 @@ body {
     border-color: #1f2937; /* border-gray-800 */
   }
 }
+
+/* ===================================================
+   スマホ表示時のUI一括コンパクト化設定
+   =================================================== */
+@media (max-width: 640px) {
+  html {
+    /* デフォルト(16px)から約12.5%小さく(14px基準)設定 */
+    /* これにより text-sm, text-xs, p-4, gap-3 などのサイズ・余白が一括で縮小されます */
+    font-size: 14px;
+  }
+
+  /* 入力フォーム（input / select / textarea）で拡大ズームが発生するのを防ぐ設定 */
+  /* iOS Safariの仕様上、16px未満だと勝手にズームされてしまうためこれらだけは16pxに固定します */
+  input, select, textarea {
+    font-size: 16px !important;
+  }
+}
+
+/* さらに画面が小さいスマホ（iPhone SEなど）向けに、もう一段コンパクトにする設定 */
+@media (max-width: 380px) {
+  html {
+    font-size: 13px;
+  }
+}

@@ -1,9 +1,9 @@
 "use client";
 
 import React, { useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, usePathname } from "next/navigation";
 import { onAuthStateChanged, signOut } from "firebase/auth";
-import { doc, getDoc, collection, getDocs, updateDoc, arrayUnion, query, orderBy, where } from "firebase/firestore";
+import { doc, getDoc, collection, getDocs, updateDoc, arrayUnion, query, orderBy, where, onSnapshot } from "firebase/firestore";
 import { auth, db } from "@/lib/firebase";
 import { Loader2, AlertTriangle, ShieldBan, Building2 } from "lucide-react";
 
@@ -43,8 +43,8 @@ export type UserData = {
   useCustomMfaPolicy?: boolean;
   mfaPolicies?: { email: MfaPolicy; totp: MfaPolicy; passkey: MfaPolicy; };
   allowedModules?: string[];
-  userStatus?: string; // 在室ステータス
-  // ★以下を追加：Googleカレンダー連携の型定義
+  photoURL?: string; 
+  userStatus?: string; 
   isGoogleCalendarLinked?: boolean;
   googleCalendarAccessToken?: string;
   googleCalendarRefreshToken?: string;
@@ -56,22 +56,32 @@ export type SchoolData = {
   name: string;
   status: "active" | "suspended";
   requireMfa?: boolean | string;
+  // ★ 修正：プロパティ名のミスタイプと欠落を修正しました
   mfaPolicies?: { email: MfaPolicy; totp: MfaPolicy; passkey: MfaPolicy; };
   availableModules?: string[];
   sharedGoogleCalendarId?: string;
+  location?: string;
+  postalCode?: string;
+  latitude?: number;
+  longitude?: number;
 };
 
 export type SystemMessage = {
   id: string;
   title: string;
   content: string;
-  category?: "info" | "warning" | "maintenance" | "event";
-  targetType: "all" | "tenant" | "user";
+  category?: "info" | "warning" | "maintenance" | "event" | "update" | "survey" | "report";
+  targetType: "all" | "tenant" | "department" | "user"; 
   targetId: string;
+  targetIds?: string[]; 
+  targetDepartments?: string[]; 
   startAt: string;
   endAt: string;
   isDismissible: boolean;
   isImportant: boolean;
+  requireResponse?: boolean; 
+  responseType?: "single" | "all"; 
+  responses?: string[]; 
   createdAt: string;
   readBy: string[];
   schoolId?: string;
@@ -88,7 +98,7 @@ export default function PortalTopPage() {
   const [schoolData, setSchoolData] = useState<SchoolData | null>(null);
   const [messages, setMessages] = useState<SystemMessage[]>([]);
   const [systemApps, setSystemApps] = useState<SystemApp[]>([]);
-  const [tenantUsers, setTenantUsers] = useState<UserData[]>([]); // ★自テナントユーザー一覧
+  const [tenantUsers, setTenantUsers] = useState<UserData[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   
   const [setupStatus, setSetupStatus] = useState({
@@ -99,16 +109,16 @@ export default function PortalTopPage() {
   });
 
   useEffect(() => {
+    let unsubUsers: () => void; 
+
     const unsubscribe = onAuthStateChanged(auth, async (user) => {
       if (user) {
         try {
-          // 1. 動的アプリの取得
           const appsQ = query(collection(db, "system_apps"), orderBy("order", "asc"));
           const appsSnap = await getDocs(appsQ);
           const fetchedApps = appsSnap.docs.map(d => ({ id: d.id, ...d.data() } as SystemApp));
           setSystemApps(fetchedApps);
 
-          // 2. ユーザー＆テナントデータの取得
           const userDocRef = doc(db, "users", user.uid);
           const userDocSnap = await getDoc(userDocRef);
           
@@ -117,7 +127,20 @@ export default function PortalTopPage() {
             return;
           }
           
-          const uData = { id: userDocSnap.id, ...userDocSnap.data() } as UserData;
+          const dbData = userDocSnap.data();
+          let currentPhotoURL = dbData.photoURL || null;
+
+          if (user.photoURL && dbData.photoURL !== user.photoURL) {
+            await updateDoc(userDocRef, { photoURL: user.photoURL });
+            currentPhotoURL = user.photoURL;
+          }
+
+          const uData = { 
+            id: userDocSnap.id, 
+            ...dbData,
+            photoURL: currentPhotoURL 
+          } as UserData;
+          
           setUserData(uData);
 
           const schoolDocRef = doc(db, "schools", uData.schoolId);
@@ -129,15 +152,14 @@ export default function PortalTopPage() {
             setSchoolData(sData);
           }
 
-          // ★3. テナント内全ユーザーの取得
           if (uData.schoolId) {
             const usersQ = query(collection(db, "users"), where("schoolId", "==", uData.schoolId));
-            const usersSnap = await getDocs(usersQ);
-            const fetchedUsers = usersSnap.docs.map(d => ({ id: d.id, ...d.data() } as UserData));
-            setTenantUsers(fetchedUsers);
+            unsubUsers = onSnapshot(usersQ, (snapshot) => {
+              const fetchedUsers = snapshot.docs.map(d => ({ id: d.id, ...d.data() } as UserData));
+              setTenantUsers(fetchedUsers);
+            });
           }
 
-          // 4. ブロック判定
           const needsPassword = !!uData.initialPassword;
           const needsLine = !!uData.lineConnectionEnforced && !uData.lineUid;
           const hasTotp = !!uData.totpSecret;
@@ -182,7 +204,6 @@ export default function PortalTopPage() {
             isBlocked: needsPassword || needsLine || needsMfa
           });
 
-          // 5. メッセージの取得
           if (uData.accountStatus === "active") {
             const messagesRef = collection(db, "system_messages");
             const mSnap = await getDocs(messagesRef);
@@ -190,7 +211,7 @@ export default function PortalTopPage() {
             const now = new Date();
             
             mSnap.forEach(doc => {
-              const data = doc.data() as Omit<SystemMessage, 'id'>;
+              const data = doc.data() as any; 
               const start = data.startAt ? new Date(data.startAt) : null;
               const end = data.endAt ? new Date(data.endAt) : null;
               const isStarted = !start || start <= now;
@@ -200,11 +221,15 @@ export default function PortalTopPage() {
 
               const isTargeted = 
                 data.targetType === "all" || 
-                (data.targetType === "tenant" && data.targetId === uData.schoolId) ||
-                (data.targetType === "user" && data.targetId === user.uid);
-              if (!isTargeted) return;
+                (data.targetType === "tenant" && (
+                  data.targetId === uData.schoolId || 
+                  data.schoolId === uData.schoolId || 
+                  (data.targetIds && data.targetIds.includes(uData.schoolId))
+                )) ||
+                ((data.targetType === "user" || data.targetType === "department") && 
+                 (data.targetId === user.uid || (data.targetIds && data.targetIds.includes(user.uid))));
 
-              if (data.isDismissible && data.readBy?.includes(user.uid)) return;
+              if (!isTargeted) return;
 
               fetchedMessages.push({ id: doc.id, ...data } as SystemMessage);
             });
@@ -227,7 +252,10 @@ export default function PortalTopPage() {
       }
     });
 
-    return () => unsubscribe();
+    return () => {
+      unsubscribe();
+      if (unsubUsers) unsubUsers(); 
+    };
   }, [router]);
 
   const handleLogout = async () => {
@@ -302,9 +330,9 @@ export default function PortalTopPage() {
     <NormalTop 
       userData={userData} 
       schoolData={schoolData} 
-      messages={messages} 
+      messages={messages as any} 
       systemApps={systemApps} 
-      tenantUsers={tenantUsers} // ★渡す
+      tenantUsers={tenantUsers}
       markMessageAsRead={markMessageAsRead} 
       handleLogout={handleLogout} 
     />

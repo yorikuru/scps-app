@@ -5,12 +5,13 @@ import { doc, updateDoc } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 import { Loader2, Building, Send, Wrench } from "lucide-react";
 import { sendLineToAdmin } from "@/lib/line";
+import { useDialog } from "@/components/DialogContext"; // ★追加
 
 // 親コンポーネントから渡されるPropsの型定義
 type TenantData = {
   id: string;
   name: string;
-  [key: string]: any; // lineFeatureAllowed など動的なプロパティを許容
+  [key: string]: any; 
 };
 
 type GlobalUserData = {
@@ -21,10 +22,11 @@ type GlobalUserData = {
 type LineProps = {
   tenants: TenantData[];
   users: GlobalUserData[];
-  showAlert: (type: "success" | "error", message: string) => void;
 };
 
-export default function Line({ tenants, users, showAlert }: LineProps) {
+export default function Line({ tenants, users }: LineProps) {
+  const { showAlert } = useDialog(); // ★追加
+
   // 親から渡されたテナント情報をローカルステートで管理し、UIを即時反映させる
   const [localTenants, setLocalTenants] = useState<TenantData[]>([]);
   const [isSaving, setIsSaving] = useState(false);
@@ -39,7 +41,6 @@ export default function Line({ tenants, users, showAlert }: LineProps) {
     try {
       const newStatus = !currentStatus;
       
-      // 親コンポーネントの仕様に合わせ、更新先のコレクションを "schools" に指定
       await updateDoc(doc(db, "schools", tenantId), {
         lineFeatureAllowed: newStatus
       });
@@ -48,10 +49,10 @@ export default function Line({ tenants, users, showAlert }: LineProps) {
         prev.map(t => t.id === tenantId ? { ...t, lineFeatureAllowed: newStatus } : t)
       );
       
-      showAlert("success", `テナントのLINE連携を${newStatus ? '許可' : '停止'}しました。`);
+      showAlert(`テナントのLINE連携を${newStatus ? '許可' : '停止'}しました。`, "success"); // ★修正
     } catch (error) {
       console.error("Update error:", error);
-      showAlert("error", "設定の保存に失敗しました。");
+      showAlert("設定の保存に失敗しました。", "error"); // ★修正
     } finally {
       setIsSaving(false);
     }
@@ -59,7 +60,7 @@ export default function Line({ tenants, users, showAlert }: LineProps) {
 
   const handleSystemTestMessage = async () => {
     if (!testMessage.trim()) {
-      showAlert("error", "テストメッセージを入力してください。");
+      showAlert("テストメッセージを入力してください。", "error"); // ★修正
       return;
     }
     
@@ -68,14 +69,14 @@ export default function Line({ tenants, users, showAlert }: LineProps) {
       const result = await sendLineToAdmin(`【システムメンテナンス】\n${testMessage}`);
       
       if (result.success) {
-        showAlert("success", "管理者宛てにテスト送信を行いました。");
+        showAlert("管理者宛てにテスト送信を行いました。", "success"); // ★修正
         setTestMessage("");
       } else {
-        showAlert("error", 'error' in result && result.error ? String(result.error) : "送信エラーが発生しました。");
+        showAlert('error' in result && result.error ? String(result.error) : "送信エラーが発生しました。", "error"); // ★修正
       }
     } catch (error) {
       console.error(error);
-      showAlert("error", "予期せぬエラーが発生しました。");
+      showAlert("予期せぬエラーが発生しました。", "error"); // ★修正
     } finally {
       setIsSaving(false);
     }

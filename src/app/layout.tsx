@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import "./globals.css";
+import { DialogProvider } from "@/components/DialogContext";
 
 export const metadata: Metadata = {
   title: {
@@ -7,8 +8,7 @@ export const metadata: Metadata = {
     default: "生徒会ポータルシステム | SCPS",
   },
   description: "生徒会ポータルシステム（SCPS）",
-  // ※ ここにあった icons の設定は削除しました。
-  // src/app/icon.png が自動的にファビコンとして読み込まれます。
+  // ※ src/app/icon.png が自動的にファビコンとして読み込まれます。
 };
 
 export default function RootLayout({
@@ -19,7 +19,9 @@ export default function RootLayout({
   return (
     <html lang="ja">
       <body>
-        {children}
+        <DialogProvider>
+          {children}
+        </DialogProvider>
       </body>
     </html>
   );

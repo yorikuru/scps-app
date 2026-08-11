@@ -1,18 +1,38 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
-import { ChevronLeft, ChevronRight, Calendar as CalendarIcon } from "lucide-react";
+import { ChevronLeft, ChevronRight, Calendar as CalendarIcon, RotateCcw } from "lucide-react";
 
-type Props = {
-  selectedDate: Date;
-  onSelectDate: (date: Date) => void;
+type ScheduleEvent = {
+  startAt: string;
+  [key: string]: any;
 };
 
-export default function MiniCalendar({ selectedDate, onSelectDate }: Props) {
-  const [currentDate, setCurrentDate] = useState(new Date());
+type Props = {
+  selectedDate: Date | string; // 万が一文字列が来ても許容
+  onSelectDate: (date: Date) => void;
+  events?: ScheduleEvent[];
+};
+
+export default function MiniCalendar({ selectedDate, onSelectDate, events = [] }: Props) {
+  // 安全にDate型として扱うためのパース
+  const parsedSelected = new Date(selectedDate);
+  
+  // 表示中の月を管理するステート（初期値は選択された日の月）
+  const [currentDate, setCurrentDate] = useState(new Date(parsedSelected.getFullYear(), parsedSelected.getMonth(), 1));
   const [holidays, setHolidays] = useState<Record<string, string>>({});
 
-  // 祝日APIからデータを取得
+  // ★ 修正ポイント：親コンポーネント等で選択日が変更された際、カレンダーの表示月を自動で追従させる
+  useEffect(() => {
+    setCurrentDate((prev) => {
+      // 既に同じ月を表示している場合は何もしない（無駄な再描画を防ぐ）
+      if (prev.getFullYear() === parsedSelected.getFullYear() && prev.getMonth() === parsedSelected.getMonth()) {
+        return prev;
+      }
+      return new Date(parsedSelected.getFullYear(), parsedSelected.getMonth(), 1);
+    });
+  }, [parsedSelected.getTime()]);
+
   useEffect(() => {
     const fetchHolidays = async () => {
       try {
@@ -34,6 +54,13 @@ export default function MiniCalendar({ selectedDate, onSelectDate }: Props) {
   const prevMonth = () => setCurrentDate(new Date(year, month - 1, 1));
   const nextMonth = () => setCurrentDate(new Date(year, month + 1, 1));
 
+  // 「今日に戻る」ボタンの処理
+  const jumpToToday = () => {
+    const today = new Date();
+    setCurrentDate(new Date(today.getFullYear(), today.getMonth(), 1));
+    onSelectDate(today);
+  };
+
   const firstDay = new Date(year, month, 1).getDay();
   const daysInMonth = new Date(year, month + 1, 0).getDate();
 
@@ -52,6 +79,16 @@ export default function MiniCalendar({ selectedDate, onSelectDate }: Props) {
     return `${year}-${mm}-${dd}`;
   };
 
+  const eventDateSet = new Set(
+    events.map((e) => {
+      const d = new Date(e.startAt);
+      const y = d.getFullYear();
+      const m = String(d.getMonth() + 1).padStart(2, '0');
+      const day = String(d.getDate()).padStart(2, '0');
+      return `${y}-${m}-${day}`;
+    })
+  );
+
   const calendarCells = [];
   for (let i = 0; i < firstDay; i++) {
     calendarCells.push(null);
@@ -61,94 +98,91 @@ export default function MiniCalendar({ selectedDate, onSelectDate }: Props) {
   }
 
   return (
-    <div className="bg-white dark:bg-gray-900 rounded-2xl shadow-sm border border-gray-200 dark:border-gray-800 overflow-hidden">
-      <div className="px-5 py-4 border-b border-gray-100 dark:border-gray-800 bg-gray-50/50 dark:bg-gray-800/50 flex justify-between items-center">
-        <h3 className="text-sm font-extrabold text-gray-900 dark:text-white flex items-center">
-          <CalendarIcon className="h-4 w-4 mr-2 text-blue-600" /> {year}年 {month + 1}月
+    <div className="bg-[#2C2C2E] text-gray-200 rounded-xl p-2.5 border border-[#3A3A3C] shadow-sm text-xs">
+      <div className="flex justify-between items-center mb-2 px-1">
+        <h3 className="text-[11px] font-bold text-gray-100 flex items-center">
+          <CalendarIcon className="h-3 w-3 mr-1 text-indigo-400" /> {year}年 {month + 1}月
         </h3>
         <div className="flex items-center gap-1">
-          <button onClick={prevMonth} className="p-1 text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors">
-            <ChevronLeft className="h-4 w-4" />
+          <button 
+            onClick={jumpToToday} 
+            className="px-1.5 py-0.5 text-[9px] font-bold bg-[#3A3A3C] hover:bg-indigo-600 text-gray-300 hover:text-white rounded transition-colors flex items-center gap-0.5"
+            title="今日に戻る"
+          >
+            <RotateCcw className="h-2.5 w-2.5" /> 今日
           </button>
-          <button onClick={nextMonth} className="p-1 text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors">
-            <ChevronRight className="h-4 w-4" />
+          <div className="w-px h-3 bg-[#3A3A3C]"></div>
+          <button onClick={prevMonth} className="p-0.5 text-gray-400 hover:text-white rounded hover:bg-[#3A3A3C]" title="前月">
+            <ChevronLeft className="h-3.5 w-3.5" />
+          </button>
+          <button onClick={nextMonth} className="p-0.5 text-gray-400 hover:text-white rounded hover:bg-[#3A3A3C]" title="翌月">
+            <ChevronRight className="h-3.5 w-3.5" />
           </button>
         </div>
       </div>
 
-      <div className="p-4">
-        {/* 曜日ヘッダー */}
-        <div className="grid grid-cols-7 gap-1 text-center text-[10px] font-bold mb-3">
-          <div className="text-red-500">日</div>
-          <div className="text-gray-400">月</div>
-          <div className="text-gray-400">火</div>
-          <div className="text-gray-400">水</div>
-          <div className="text-gray-400">木</div>
-          <div className="text-gray-400">金</div>
-          <div className="text-blue-500">土</div>
-        </div>
+      <div className="grid grid-cols-7 gap-0.5 text-center text-[9px] font-bold mb-1 text-gray-400">
+        <div className="text-red-400">日</div>
+        <div>月</div>
+        <div>火</div>
+        <div>水</div>
+        <div>木</div>
+        <div>金</div>
+        <div className="text-blue-400">土</div>
+      </div>
 
-        {/* 日付グリッド */}
-        <div className="grid grid-cols-7 gap-y-2 gap-x-1 text-center text-xs">
-          {calendarCells.map((day, idx) => {
-            if (day === null) {
-              return <div key={`empty-${idx}`} className="h-8"></div>;
-            }
+      <div className="grid grid-cols-7 gap-y-1 gap-x-0.5 text-center text-[10px]">
+        {calendarCells.map((day, idx) => {
+          if (day === null) {
+            return <div key={`empty-${idx}`} className="h-6"></div>;
+          }
 
-            const dateStr = getFormattedDate(day);
-            const holidayName = holidays[dateStr];
-            const isHoliday = !!holidayName;
-            const isSun = idx % 7 === 0;
-            const isSat = idx % 7 === 6;
-            const isCurrentToday = isToday(day);
-            
-            // 選択中かどうかの判定
-            const isSelected = 
-              selectedDate.getFullYear() === year && 
-              selectedDate.getMonth() === month && 
-              selectedDate.getDate() === day;
+          const dateStr = getFormattedDate(day);
+          const holidayName = holidays[dateStr];
+          const isHoliday = !!holidayName;
+          const isSun = idx % 7 === 0;
+          const isSat = idx % 7 === 6;
+          const isCurrentToday = isToday(day);
 
-            let textClass = "text-gray-700 dark:text-gray-300";
-            if (isHoliday || isSun) textClass = "text-red-500 dark:text-red-400 font-extrabold";
-            else if (isSat) textClass = "text-blue-500 dark:text-blue-400 font-extrabold";
+          // ★ 修正ポイント：パース済みの確実な日付データを用いて判定する
+          const isSelected =
+            parsedSelected.getFullYear() === year &&
+            parsedSelected.getMonth() === month &&
+            parsedSelected.getDate() === day;
 
-            let bgClass = "hover:bg-gray-100 dark:hover:bg-gray-800";
-            
-            // スタイルの上書きロジック（選択状態と今日）
-            if (isSelected) {
-              if (isCurrentToday) {
-                bgClass = "bg-blue-600 shadow-sm";
-                textClass = "text-white font-extrabold";
-              } else {
-                bgClass = "bg-amber-500 shadow-sm"; // 選択日はオレンジ色
-                textClass = "text-white font-extrabold";
-              }
-            } else if (isCurrentToday) {
-              // 今日だが選択されていない場合は薄い青背景
-              bgClass = "bg-blue-50 dark:bg-blue-900/30 border border-blue-200 dark:border-blue-800";
-              textClass = "text-blue-600 dark:text-blue-400 font-extrabold";
-            }
+          const hasEvent = eventDateSet.has(dateStr);
 
-            return (
-              <div 
-                key={day} 
-                className="h-8 flex flex-col items-center justify-start relative group cursor-pointer" 
-                title={holidayName || undefined}
-                onClick={() => onSelectDate(new Date(year, month, day))}
-              >
-                <span
-                  className={`w-7 h-7 flex items-center justify-center rounded-full transition-all ${bgClass} ${textClass}`}
-                >
-                  {day}
-                </span>
-                
-                {isHoliday && (
-                  <span className={`absolute bottom-0 w-1 h-1 rounded-full ${isSelected || isCurrentToday ? "bg-transparent" : "bg-red-500"}`}></span>
-                )}
-              </div>
-            );
-          })}
-        </div>
+          let textClass = "text-gray-300";
+          if (isHoliday || isSun) textClass = "text-red-400 font-bold";
+          else if (isSat) textClass = "text-blue-400 font-bold";
+
+          let bgClass = "hover:bg-[#3A3A3C]";
+
+          if (isSelected) {
+            bgClass = "bg-indigo-600 text-white font-black shadow-sm";
+            textClass = "text-white";
+          } else if (isCurrentToday) {
+            bgClass = "bg-indigo-950/60 border border-indigo-500/50";
+            textClass = "text-indigo-300 font-bold";
+          }
+
+          return (
+            <div
+              key={day}
+              className="h-6 flex flex-col items-center justify-center relative cursor-pointer"
+              title={holidayName ? `祝日: ${holidayName}` : undefined}
+              onClick={() => onSelectDate(new Date(year, month, day))}
+            >
+              <span className={`w-5 h-5 flex items-center justify-center rounded-full transition-all ${bgClass} ${textClass}`}>
+                {day}
+              </span>
+
+              {hasEvent && (
+                <span className={`absolute bottom-0 w-1 h-1 rounded-full ${isSelected ? "bg-white" : "bg-indigo-400"}`}></span>
+              )}
+            </div>
+          );
+        })}
       </div>
     </div>
   );

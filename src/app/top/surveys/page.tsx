@@ -10,6 +10,7 @@ import {
   ArrowLeft, Edit2, FileText, Globe, Lock, Loader2, Eye, LayoutList, Settings, User, UserX
 } from "lucide-react";
 import Link from "next/link";
+import { useDialog } from "@/components/DialogContext"; // ★追加
 
 // --- 型定義 ---
 type UserData = {
@@ -37,7 +38,7 @@ type Survey = {
   createdBy: string;
   isPublic: boolean;
   isActive: boolean;
-  isAnonymous: boolean; // ★追加: 匿名式かどうか
+  isAnonymous: boolean; // 匿名式かどうか
   questions: Question[];
   createdAt: string;
   updatedAt: string;
@@ -48,6 +49,8 @@ export default function SurveysManagementPage() {
   const [userData, setUserData] = useState<UserData | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   
+  const { showAlert, showConfirm } = useDialog(); // ★追加
+
   // UIアラート用ステート
   const [alertInfo, setAlertInfo] = useState<{ type: "success" | "error", message: string } | null>(null);
 
@@ -64,7 +67,7 @@ export default function SurveysManagementPage() {
   const [formDescription, setFormDescription] = useState("");
   const [isPublic, setIsPublic] = useState(false);
   const [isActive, setIsActive] = useState(true);
-  const [isAnonymous, setIsAnonymous] = useState(false); // ★追加
+  const [isAnonymous, setIsAnonymous] = useState(false);
   const [questions, setQuestions] = useState<Question[]>([]);
   const [isSaving, setIsSaving] = useState(false);
 
@@ -83,7 +86,7 @@ export default function SurveysManagementPage() {
           }
         } catch (error) {
           console.error("User fetch error:", error);
-          showAlert("error", "ユーザー情報の取得に失敗しました。");
+          showAlert("ユーザー情報の取得に失敗しました。", "error");
         } finally {
           setIsLoading(false);
         }
@@ -107,23 +110,17 @@ export default function SurveysManagementPage() {
       setSurveys(sData);
     } catch (error) {
       console.error("Survey fetch error:", error);
-      showAlert("error", "アンケート一覧の取得に失敗しました。");
+      showAlert("アンケート一覧の取得に失敗しました。", "error");
     } finally {
       setIsLoadingSurveys(false);
     }
   };
 
-  // --- UIアラート ---
-  const showAlert = (type: "success" | "error", message: string) => {
-    setAlertInfo({ type, message });
-    setTimeout(() => setAlertInfo(null), 5000);
-  };
-
   const copyToClipboard = (text: string) => {
     navigator.clipboard.writeText(text).then(() => {
-      showAlert("success", "クリップボードにコピーしました");
+      showAlert("クリップボードにコピーしました", "success");
     }).catch(() => {
-      showAlert("error", "コピーに失敗しました");
+      showAlert("コピーに失敗しました", "error");
     });
   };
 
@@ -202,21 +199,21 @@ export default function SurveysManagementPage() {
   const handleSaveSurvey = async () => {
     if (!userData) return;
     if (!formTitle.trim()) {
-      showAlert("error", "フォームのタイトルを入力してください。");
+      showAlert("フォームのタイトルを入力してください。", "error");
       return;
     }
     if (questions.length === 0) {
-      showAlert("error", "最低1つの質問を追加してください。");
+      showAlert("最低1つの質問を追加してください。", "error");
       return;
     }
 
     for (const q of questions) {
       if (!q.title.trim()) {
-        showAlert("error", "タイトルが未入力の質問があります。");
+        showAlert("タイトルが未入力の質問があります。", "error");
         return;
       }
       if (q.type !== "text" && q.options.some(opt => !opt.trim())) {
-        showAlert("error", "空の選択肢が含まれています。");
+        showAlert("空の選択肢が含まれています。", "error");
         return;
       }
     }
@@ -238,36 +235,46 @@ export default function SurveysManagementPage() {
 
       if (editingId) {
         await updateDoc(doc(db, "surveys", editingId), surveyData);
-        showAlert("success", "フォームを更新しました。");
+        showAlert("フォームを更新しました。", "success");
       } else {
         await addDoc(collection(db, "surveys"), {
           ...surveyData,
           createdBy: userData.id,
           createdAt: now,
         });
-        showAlert("success", "新しいフォームを作成しました。");
+        showAlert("新しいフォームを作成しました。", "success");
       }
       
       fetchSurveys(userData.schoolId);
       setView("list");
     } catch (error) {
       console.error("Save error:", error);
-      showAlert("error", "フォームの保存に失敗しました。");
+      showAlert("フォームの保存に失敗しました。", "error");
     } finally {
       setIsSaving(false);
     }
   };
 
-  const handleDeleteSurvey = async (id: string) => {
-    if (!window.confirm("このフォームを削除しますか？\n関連する回答データがある場合はアクセスできなくなります。")) return;
+  // 削除の実行本体
+  const executeDeleteSurvey = async (id: string) => {
     try {
       await deleteDoc(doc(db, "surveys", id));
       setSurveys(surveys.filter(s => s.id !== id));
-      showAlert("success", "フォームを削除しました。");
+      showAlert("フォームを削除しました。", "success");
     } catch (error) {
       console.error("Delete error:", error);
-      showAlert("error", "フォームの削除に失敗しました。");
+      showAlert("フォームの削除に失敗しました。", "error");
     }
+  };
+
+  // ★ showConfirm に置き換え
+  const handleDeleteSurvey = (id: string) => {
+    showConfirm(
+      "このフォームを削除しますか？\n関連する回答データがある場合はアクセスできなくなります。",
+      () => executeDeleteSurvey(id),
+      "danger",
+      "アンケート削除の確認"
+    );
   };
 
   if (isLoading) {

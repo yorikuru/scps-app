@@ -1,19 +1,18 @@
 "use client";
 
-import React, { useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
+import React, { useEffect, useState, Suspense } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import { onAuthStateChanged } from "firebase/auth";
 import { collection, doc, getDoc, getDocs, query, where } from "firebase/firestore";
 import { auth, db } from "@/lib/firebase";
-import { Users, ShieldCheck, Settings, UserPlus, ArrowLeft, Loader2, CheckCircle2, AlertCircle, MessageCircle, Lock, BellRing } from "lucide-react";
+import { Users, ShieldCheck, Settings, ArrowLeft, Loader2, CheckCircle2, AlertCircle, MessageCircle, Lock, UserCog } from "lucide-react";
 
 import UserManagement from "./components/UserManagement";
 import PermissionManagement from "./components/PermissionManagement";
-import GuestManagement from "./components/GuestManagement";
 import TenantSettings from "./components/TenantSettings";
 import SecuritySettings from "./components/SecuritySettings";
-import LineSettings from "./components/LineSettings";
-import MessageDelivery from "./components/MessageDelivery";
+import PositionManagement from "./components/PositionManagement";
+import LineAdminSettings from "./components/LineAdminSettings";
 
 export type UserData = {
   id: string;
@@ -21,6 +20,8 @@ export type UserData = {
   email: string;
   schoolId: string;
   role: string;
+  positionIds?: string[];
+  primaryPositionId?: string;
   positionName?: string;
   isITManager?: boolean;
   accountStatus: "active" | "unaccessed" | "pending" | "rejected";
@@ -29,6 +30,7 @@ export type UserData = {
   systemId?: string;
   lineUserId?: string;
   lineConnectionAllowed?: boolean; 
+  lineNotificationEnabled?: boolean;
   requireMfa?: boolean;
 };
 
@@ -44,6 +46,7 @@ export type SchoolData = {
   schoolCode: string;
   allowedAuthProviders: string[];
   availableModules: string[];
+  customAppNames?: Record<string, string>; // カスタムアプリ名
   lineFeatureAllowed?: boolean;
   lineFeatureEnabled?: boolean;
   lineConnectionEnforced?: boolean;
@@ -62,30 +65,39 @@ export type SchoolData = {
   }[];
 };
 
-export const SYSTEM_MODULES = [
-  { id: "board", name: "お知らせボード" },
-  { id: "tasks", name: "タスク・プロジェクト" },
-  { id: "approvals", name: "電子承認・稟議" },
-  { id: "surveys", name: "アンケート・目安箱" }
-];
-
-export default function TopAdminPage() {
+function TopAdminPageContent() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const [currentUser, setCurrentUser] = useState<UserData | null>(null);
   const [schoolData, setSchoolData] = useState<SchoolData | null>(null);
   const [users, setUsers] = useState<UserData[]>([]);
+  const [availableApps, setAvailableApps] = useState<any[]>([]); // DBからのアプリ一覧
   const [isLoading, setIsLoading] = useState(true);
   
-  const [activeTab, setActiveTab] = useState<"users" | "permissions" | "guests" | "security" | "messages" | "line" | "settings">("users");
+  // ★ "messages" タブを削除
+  const [activeTab, setActiveTab] = useState<"users" | "permissions" | "positions" | "guests" | "security" | "line" | "settings">("users");
   
-  const [alert, setAlert] = useState<{ show: boolean; type: "success" | "error"; message: string }>({ 
+  const [alert, setAlert] = useState<{ show: boolean; type: "success" | "error" | "warning"; message: string }>({ 
     show: false, type: "success", message: "" 
   });
 
-  const showAlert = (type: "success" | "error", message: string) => {
+  const showAlert = (type: "success" | "error" | "warning", message: string) => {
     setAlert({ show: true, type, message });
     setTimeout(() => setAlert((prev) => ({ ...prev, show: false })), 4000);
   };
+
+  const handleTabChange = (tab: string) => {
+    setActiveTab(tab as any);
+    router.push(`?tab=${tab}`);
+  };
+
+  useEffect(() => {
+    const tabParam = searchParams.get("tab");
+    // ★ "messages" タブを削除
+    if (tabParam && ["users", "permissions", "positions", "guests", "security", "line", "settings"].includes(tabParam)) {
+      setActiveTab(tabParam as any);
+    }
+  }, [searchParams]);
 
   const fetchUsers = async (schoolId: string) => {
     const usersRef = collection(db, "users");
@@ -97,7 +109,7 @@ export default function TopAdminPage() {
     });
     const mappedUsers = fetchedUsers.map(u => ({
       ...u,
-      allowedModules: u.allowedModules || SYSTEM_MODULES.map(m => m.id)
+      allowedModules: u.allowedModules || []
     }));
     setUsers(mappedUsers);
   };
@@ -123,6 +135,13 @@ export default function TopAdminPage() {
               if (schoolDoc.exists()) {
                 setSchoolData({ id: schoolDoc.id, ...schoolDoc.data() } as SchoolData);
               }
+
+              // システム上の全アプリ(system_apps)を取得
+              const appsRef = collection(db, "system_apps");
+              const appsSnap = await getDocs(appsRef);
+              const appsData = appsSnap.docs.map(doc => ({ docId: doc.id, ...doc.data() }));
+              setAvailableApps(appsData);
+
               await fetchUsers(myData.schoolId);
             } else {
               router.push("/login");
@@ -144,7 +163,7 @@ export default function TopAdminPage() {
   if (isLoading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gray-50">
-        <Loader2 className="animate-spin h-10 w-10 text-blue-600" />
+        <Loader2 className="animate-spin h-10 w-10 text-indigo-600" />
       </div>
     );
   }
@@ -159,25 +178,29 @@ export default function TopAdminPage() {
           </div>
         </div>
         <nav className="flex-1 overflow-y-auto p-2 md:p-4 flex flex-row md:flex-col gap-1 md:gap-2 overflow-x-auto md:overflow-visible no-scrollbar">
-          <button onClick={() => setActiveTab("users")} className={`flex items-center px-4 py-3 rounded-lg text-sm font-bold whitespace-nowrap transition-colors ${activeTab === "users" ? "bg-blue-50 text-blue-700" : "text-gray-600 hover:bg-gray-50"}`}>
+          <button onClick={() => handleTabChange("users")} className={`flex items-center px-4 py-3 rounded-lg text-sm font-bold whitespace-nowrap transition-colors ${activeTab === "users" ? "bg-indigo-50 text-indigo-700" : "text-gray-600 hover:bg-gray-50"}`}>
             <Users className="h-5 w-5 mr-3 md:inline hidden" /> ユーザー管理
           </button>
-          <button onClick={() => setActiveTab("permissions")} className={`flex items-center px-4 py-3 rounded-lg text-sm font-bold whitespace-nowrap transition-colors ${activeTab === "permissions" ? "bg-purple-50 text-purple-700" : "text-gray-600 hover:bg-gray-50"}`}>
+          
+          <button onClick={() => handleTabChange("permissions")} className={`flex items-center px-4 py-3 rounded-lg text-sm font-bold whitespace-nowrap transition-colors ${activeTab === "permissions" ? "bg-indigo-50 text-indigo-700" : "text-gray-600 hover:bg-gray-50"}`}>
             <ShieldCheck className="h-5 w-5 mr-3 md:inline hidden" /> 機能権限管理
           </button>
-          <button onClick={() => setActiveTab("guests")} className={`flex items-center px-4 py-3 rounded-lg text-sm font-bold whitespace-nowrap transition-colors ${activeTab === "guests" ? "bg-emerald-50 text-emerald-700" : "text-gray-600 hover:bg-gray-50"}`}>
-            <UserPlus className="h-5 w-5 mr-3 md:inline hidden" /> ゲスト発行
+          
+          <button onClick={() => handleTabChange("positions")} className={`flex items-center px-4 py-3 rounded-lg text-sm font-bold whitespace-nowrap transition-colors ${activeTab === "positions" ? "bg-indigo-50 text-indigo-700" : "text-gray-600 hover:bg-gray-50"}`}>
+            <UserCog className="h-5 w-5 mr-3 md:inline hidden" /> 役職マスタ設定
           </button>
-          <button onClick={() => setActiveTab("security")} className={`flex items-center px-4 py-3 rounded-lg text-sm font-bold whitespace-nowrap transition-colors ${activeTab === "security" ? "bg-amber-50 text-amber-700" : "text-gray-600 hover:bg-gray-50"}`}>
+          
+          <button onClick={() => handleTabChange("security")} className={`flex items-center px-4 py-3 rounded-lg text-sm font-bold whitespace-nowrap transition-colors ${activeTab === "security" ? "bg-indigo-50 text-indigo-700" : "text-gray-600 hover:bg-gray-50"}`}>
             <Lock className="h-5 w-5 mr-3 md:inline hidden" /> セキュリティ設定
           </button>
-          <button onClick={() => setActiveTab("messages")} className={`flex items-center px-4 py-3 rounded-lg text-sm font-bold whitespace-nowrap transition-colors ${activeTab === "messages" ? "bg-orange-50 text-orange-700" : "text-gray-600 hover:bg-gray-50"}`}>
-            <BellRing className="h-5 w-5 mr-3 md:inline hidden" /> メッセージ配信
-          </button>
-          <button onClick={() => setActiveTab("line")} className={`flex items-center px-4 py-3 rounded-lg text-sm font-bold whitespace-nowrap transition-colors ${activeTab === "line" ? "bg-[#e6faed] text-[#00993c]" : "text-gray-600 hover:bg-gray-50"}`}>
+          
+          {/* ★ メッセージ配信のタブと関連の処理を削除しました */}
+          
+          <button onClick={() => handleTabChange("line")} className={`flex items-center px-4 py-3 rounded-lg text-sm font-bold whitespace-nowrap transition-colors ${activeTab === "line" ? "bg-indigo-50 text-indigo-700" : "text-gray-600 hover:bg-gray-50"}`}>
             <MessageCircle className="h-5 w-5 mr-3 md:inline hidden" /> LINE運用設定
           </button>
-          <button onClick={() => setActiveTab("settings")} className={`flex items-center px-4 py-3 rounded-lg text-sm font-bold whitespace-nowrap transition-colors ${activeTab === "settings" ? "bg-gray-100 text-gray-900" : "text-gray-600 hover:bg-gray-50"}`}>
+          
+          <button onClick={() => handleTabChange("settings")} className={`flex items-center px-4 py-3 rounded-lg text-sm font-bold whitespace-nowrap transition-colors ${activeTab === "settings" ? "bg-indigo-50 text-indigo-700" : "text-gray-600 hover:bg-gray-50"}`}>
             <Settings className="h-5 w-5 mr-3 md:inline hidden" /> テナント設定
           </button>
         </nav>
@@ -190,35 +213,50 @@ export default function TopAdminPage() {
 
       <div className="flex-1 overflow-y-auto p-4 md:p-8">
         {alert.show && (
-          <div className={`mb-6 p-4 rounded-md text-sm font-bold flex items-center shadow-sm ${alert.type === "success" ? "bg-green-50 text-green-800 border border-green-200" : "bg-red-50 text-red-800 border border-red-200"}`}>
+          <div className={`mb-6 p-4 rounded-md text-sm font-bold flex items-center shadow-sm ${
+            alert.type === "success" ? "bg-green-50 text-green-800 border border-green-200" : 
+            alert.type === "warning" ? "bg-amber-50 text-amber-800 border border-amber-200" :
+            "bg-red-50 text-red-800 border border-red-200"
+          }`}>
             {alert.type === "success" ? <CheckCircle2 className="mr-2 h-5 w-5 flex-shrink-0" /> : <AlertCircle className="mr-2 h-5 w-5 flex-shrink-0" />}
             {alert.message}
           </div>
         )}
 
         {activeTab === "users" && (
-          <UserManagement users={users} setUsers={setUsers} schoolData={schoolData} fetchUsers={fetchUsers} showAlert={showAlert} />
+          <UserManagement users={users} setUsers={setUsers} schoolData={schoolData} fetchUsers={fetchUsers} showAlert={showAlert} onNavigateTab={handleTabChange} />
         )}
+        
         {activeTab === "permissions" && (
-          <PermissionManagement users={users} setUsers={setUsers} schoolData={schoolData} showAlert={showAlert} />
+          <PermissionManagement users={users} setUsers={setUsers} schoolData={schoolData} availableApps={availableApps} showAlert={showAlert} />
         )}
-        {activeTab === "guests" && (
-          <GuestManagement schoolData={schoolData} fetchUsers={fetchUsers} showAlert={showAlert} />
+        
+        {activeTab === "positions" && (
+          <PositionManagement schoolData={schoolData} showAlert={showAlert} />
         )}
+                
         {activeTab === "security" && (
           <SecuritySettings schoolData={schoolData} showAlert={showAlert} />
         )}
-        {/* ★変更：currentUser を渡す */}
-        {activeTab === "messages" && (
-          <MessageDelivery schoolData={schoolData} users={users} currentUser={currentUser} showAlert={showAlert} />
-        )}
+        
+        {/* ★ メッセージ配信のコンポーネント呼び出しを削除しました */}
+        
         {activeTab === "line" && (
-          <LineSettings schoolData={schoolData} users={users} setUsers={setUsers} showAlert={showAlert} />
+          <LineAdminSettings userData={currentUser} schoolData={schoolData} showAlert={showAlert} />
         )}
+        
         {activeTab === "settings" && (
           <TenantSettings schoolData={schoolData} showAlert={showAlert} />
         )}
       </div>
     </div>
+  );
+}
+
+export default function TopAdminPage() {
+  return (
+    <Suspense fallback={<div className="min-h-screen flex items-center justify-center bg-gray-50"><Loader2 className="w-10 h-10 animate-spin text-indigo-600"/></div>}>
+      <TopAdminPageContent />
+    </Suspense>
   );
 }

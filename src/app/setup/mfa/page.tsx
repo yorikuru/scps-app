@@ -7,10 +7,10 @@ import { doc, getDoc, updateDoc } from "firebase/firestore";
 import { auth, db } from "@/lib/firebase";
 import { 
   ShieldCheck, Fingerprint, Smartphone, Mail, AlertTriangle, 
-  CheckCircle2, ChevronRight, Loader2, ArrowLeft, Info, XCircle,ArrowRight
+  CheckCircle2, ChevronRight, Loader2, ArrowLeft, Info, XCircle, ArrowRight
 } from "lucide-react";
 import { startRegistration } from "@simplewebauthn/browser";
-import TotpSetupModal from "@/app/account/components/TotpSetupModal";
+import TotpSetupModal from "@/app/top/account/components/TotpSetupModal";
 
 type MfaPolicy = { allowSetup: boolean; forceSetup: boolean; allowUsage: boolean; };
 
@@ -228,13 +228,12 @@ export default function MfaSetupPage() {
           </div>
         )}
 
-        {/* TOTPセットアップ用モーダル */}
+        {/* TOTPセットアップ用モーダル (showAlert の属性を削除) */}
         {showTotpModal && (
           <TotpSetupModal 
             currentUser={currentUser}
             userData={userData}
             setUserData={setUserData as any}
-            showAlert={showAlert}
             onClose={() => setShowTotpModal(false)}
           />
         )}
@@ -291,7 +290,7 @@ export default function MfaSetupPage() {
               icon={Smartphone}
               policy={activePolicies.totp}
               isConfigured={hasTotp}
-              onSetup={() => setShowTotpModal(true)} // ★モーダルを呼び出す
+              onSetup={() => setShowTotpModal(true)}
             />
 
             <MfaMethodCard 

@@ -98,7 +98,7 @@ export default function LoginForm({
               <input
                 type="text" required value={tenantId} onChange={(e) => setTenantId(e.target.value.toUpperCase())}
                 className="flex-1 block w-full min-w-0 rounded-none rounded-r-xl py-3 px-3 border border-gray-300 dark:border-gray-600 bg-gray-50 dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all text-sm outline-none font-mono"
-                placeholder="XXXXXX"
+                placeholder="XXXXXXXX"
               />
             </div>
           </div>
@@ -111,7 +111,7 @@ export default function LoginForm({
               <input
                 type="text" required value={systemId} onChange={(e) => setSystemId(e.target.value)}
                 className="block w-full pl-10 pr-3 py-3 border border-gray-300 dark:border-gray-600 rounded-xl bg-gray-50 dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-500 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all text-sm outline-none font-mono"
-                placeholder="STU0001"
+                placeholder="000000"
               />
             </div>
           </div>

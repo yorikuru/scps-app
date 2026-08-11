@@ -1,7 +1,7 @@
 "use client";
 
-import React, { useState } from "react";
-import { useRouter } from "next/navigation";
+import React, { useState, useEffect, Suspense } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import { 
   signInWithEmailAndPassword, 
   signInWithPopup, 
@@ -10,19 +10,21 @@ import {
 } from "firebase/auth";
 import { doc, getDoc, updateDoc, collection, query, where, getDocs } from "firebase/firestore";
 import { auth, db, googleProvider, microsoftProvider } from "@/lib/firebase";
-import { ArrowLeft } from "lucide-react";
+import { ArrowLeft, ScanLine, QrCode } from "lucide-react";
 import { startAuthentication } from "@simplewebauthn/browser";
 
 import LoginForm from "./components/LoginForm";
 import MfaSelection from "./components/MfaSelection";
 import MfaVerification from "./components/MfaVerification";
+import ScCodeScannerModal from "./components/ScCodeScannerModal";
 
 type AlertState = { show: boolean; type: "success" | "error"; message: string; };
 type MfaState = { isRequired: boolean; uid: string; userData: any; isSystemAdmin: boolean; availableMethods: string[]; selectedMethod: string; };
 
-export default function LoginPage() {
+function LoginPageContent() {
   const router = useRouter();
-  
+  const searchParams = useSearchParams();
+
   const [loginMode, setLoginMode] = useState<"email" | "system">("email");
   const [isLoading, setIsLoading] = useState(false);
   const [alert, setAlert] = useState<AlertState>({ show: false, type: "success", message: "" });
@@ -35,6 +37,17 @@ export default function LoginPage() {
   const [mfaState, setMfaState] = useState<MfaState | null>(null);
   const [mfaCode, setMfaCode] = useState("");
   const [isVerifyingPasskey, setIsVerifyingPasskey] = useState(false);
+
+  // ★ SCコードスキャンモーダルの開閉管理
+  const [isScScannerOpen, setIsScScannerOpen] = useState(false);
+
+  // URLパラメータで初回スキャン要求（?scps_scan=true や ?scan=true など）があるかをチェック
+  useEffect(() => {
+    const isScanParam = searchParams.get("scps_scan") === "true" || searchParams.get("scan") === "true";
+    if (isScanParam) {
+      setIsScScannerOpen(true);
+    }
+  }, [searchParams]);
 
   const showAlert = (type: "success" | "error", message: string) => {
     setAlert({ show: true, type, message });
@@ -152,8 +165,6 @@ export default function LoginPage() {
       if (isSafeIp) {
         isSafeIpSkipped = true; 
       } else {
-        // ★変更点: MFAが必要なのに利用できるメソッドが無い（初期設定未完了）場合
-        // エラーで弾かず、トップページの設定チュートリアル画面へ誘導するためフラグを立てる
         if (allowedMfaMethods.length === 0) {
           isMfaSetupNeeded = true;
           isMfaRequired = false;
@@ -180,12 +191,11 @@ export default function LoginPage() {
       if (isUnaccessed) {
         showAlert("success", "初回ログインを確認しました。パスワード設定画面へ移動します...");
         setTimeout(() => {
-          router.push(`/password-reset?uid=${userCredential.user.uid}`);
+          router.push(`/setup/password`);
         }, 1200);
         return;
       }
 
-      // ★追加: 2段階認証が未設定（初回）の場合はセットアップチュートリアルへ送る
       if (isMfaSetupNeeded) {
         showAlert("success", "2段階認証の初期設定が完了していません。セットアップ画面へ移動します...");
         handlePostLogin(userCredential.user.uid, finalUserData, isSystemAdmin);
@@ -374,6 +384,25 @@ export default function LoginPage() {
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-50 via-gray-100 to-blue-50/30 flex flex-col justify-center py-12 px-4 sm:px-6 lg:px-8 relative overflow-hidden">
       
+      {/* SCコード用カメラモーダル */}
+      {isScScannerOpen && (
+        <ScCodeScannerModal 
+          onClose={() => setIsScScannerOpen(false)}
+          onLoginSuccess={async (emailAddress) => {
+            setIsScScannerOpen(false);
+            const userQ = query(collection(db, "users"), where("email", "==", emailAddress.toLowerCase()));
+            const userSnap = await getDocs(userQ);
+            if (!userSnap.empty) {
+              const uData = userSnap.docs[0].data();
+              processLoginFlow({ user: { uid: userSnap.docs[0].id } }, "password", uData);
+            } else {
+              router.push("/top");
+            }
+          }}
+          showAlert={showAlert}
+        />
+      )}
+
       <div className="sm:mx-auto sm:w-full sm:max-w-md text-center mb-6">
         <div className="flex items-center justify-center mb-4">
           <img 
@@ -412,9 +441,35 @@ export default function LoginPage() {
             </div>
           </div>
         ) : (
-          <LoginForm loginMode={loginMode} setLoginMode={setLoginMode} email={email} setEmail={setEmail} password={password} setPassword={setPassword} tenantId={tenantId} setTenantId={setTenantId} systemId={systemId} setSystemId={setSystemId} isLoading={isLoading} handleEmailLogin={handleEmailLogin} handleSystemLogin={handleSystemLogin} handleSocialLogin={handleSocialLogin} googleProvider={googleProvider} microsoftProvider={microsoftProvider} />
+          <div className="space-y-4">
+            <LoginForm loginMode={loginMode} setLoginMode={setLoginMode} email={email} setEmail={setEmail} password={password} setPassword={setPassword} tenantId={tenantId} setTenantId={setTenantId} systemId={systemId} setSystemId={setSystemId} isLoading={isLoading} handleEmailLogin={handleEmailLogin} handleSystemLogin={handleSystemLogin} handleSocialLogin={handleSocialLogin} googleProvider={googleProvider} microsoftProvider={microsoftProvider} />
+            
+            {/* ★ 目立ちすぎない小さめの「SCコードで初回ログイン」ボタン */}
+            <div className="text-center pt-2">
+              <button
+                type="button"
+                onClick={() => setIsScScannerOpen(true)}
+                className="inline-flex items-center text-xs font-bold text-indigo-600 hover:text-indigo-800 hover:bg-indigo-50 px-3 py-1.5 rounded-lg border border-indigo-100 shadow-2xs transition-all gap-1.5"
+              >
+                <QrCode className="w-3.5 h-3.5 text-indigo-500" />
+                <span>SCコードで初回ログイン</span>
+              </button>
+            </div>
+          </div>
         )}
       </div>
     </div>
+  );
+}
+
+export default function LoginPage() {
+  return (
+    <Suspense fallback={
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <div className="w-6 h-6 border-2 border-indigo-600 border-t-transparent rounded-full animate-spin"></div>
+      </div>
+    }>
+      <LoginPageContent />
+    </Suspense>
   );
 }

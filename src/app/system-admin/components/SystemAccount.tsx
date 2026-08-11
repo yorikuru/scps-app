@@ -2,15 +2,14 @@
 
 import React, { useEffect, useState } from "react";
 import { onAuthStateChanged, linkWithPopup, unlink, User, AuthProvider } from "firebase/auth";
-import { doc, getDoc, updateDoc } from "firebase/firestore";
+import { doc, updateDoc } from "firebase/firestore";
 import { auth, db, googleProvider, microsoftProvider } from "@/lib/firebase";
 import { UserCog, Link as LinkIcon, Unlink, Loader2 } from "lucide-react";
+import { useDialog } from "@/components/DialogContext"; // ★追加
 
-type Props = {
-  showAlert: (type: "success" | "error", message: string) => void;
-};
+export default function SystemAccount() {
+  const { showAlert } = useDialog(); // ★追加
 
-export default function SystemAccount({ showAlert }: Props) {
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [linkedProviders, setLinkedProviders] = useState<string[]>([]);
   const [isProcessing, setIsProcessing] = useState(false);
@@ -40,12 +39,12 @@ export default function SystemAccount({ showAlert }: Props) {
       await updateDoc(doc(db, "users", currentUser.uid), {
         authProviders: newProviders.map(p => p === "password" ? "email" : p.replace(".com", ""))
       });
-      showAlert("success", `${providerName} アカウントとの連携が完了しました。`);
+      showAlert(`${providerName} アカウントとの連携が完了しました。`, "success"); // ★修正
     } catch (error: any) {
       let errorMsg = `${providerName} との連携に失敗しました。`;
       if (error.code === "auth/credential-already-in-use") errorMsg = `この ${providerName} アカウントは既に別のユーザーに紐付いています。`;
       if (error.code === "auth/popup-closed-by-user") errorMsg = "連携画面が閉じられました。";
-      showAlert("error", errorMsg);
+      showAlert(errorMsg, "error"); // ★修正
     } finally {
       setIsProcessing(false);
     }
@@ -54,7 +53,7 @@ export default function SystemAccount({ showAlert }: Props) {
   const handleUnlinkAccount = async (providerId: string, providerName: string) => {
     if (!currentUser) return;
     if (linkedProviders.length <= 1) {
-      showAlert("error", "少なくとも1つのログイン手段を残す必要があります。");
+      showAlert("少なくとも1つのログイン手段を残す必要があります。", "error"); // ★修正
       return;
     }
     setIsProcessing(true);
@@ -67,9 +66,9 @@ export default function SystemAccount({ showAlert }: Props) {
       await updateDoc(doc(db, "users", currentUser.uid), {
         authProviders: newProviders.map(p => p === "password" ? "email" : p.replace(".com", ""))
       });
-      showAlert("success", `${providerName} アカウントの連携を解除しました。`);
+      showAlert(`${providerName} アカウントの連携を解除しました。`, "success"); // ★修正
     } catch (error) {
-      showAlert("error", `${providerName} の連携解除に失敗しました。`);
+      showAlert(`${providerName} の連携解除に失敗しました。`, "error"); // ★修正
     } finally {
       setIsProcessing(false);
     }

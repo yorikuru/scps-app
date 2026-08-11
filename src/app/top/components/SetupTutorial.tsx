@@ -3,22 +3,40 @@
 import React from "react";
 import Link from "next/link";
 import { ShieldCheck, Lock, Smartphone, CheckCircle2, ArrowRight, LogOut, AlertCircle } from "lucide-react";
+import { auth } from "@/lib/firebase";
 import { UserData } from "../page";
 
 type Props = {
-  setupStatus: {
-    needsPassword: boolean;
-    needsLine: boolean;
-    needsMfa: boolean;
-    isBlocked: boolean;
+  // ★ layout.tsx から渡されなくてもエラーにならないように `?` (オプショナル) を付与
+  setupStatus?: {
+    needsPassword?: boolean;
+    needsLine?: boolean;
+    needsMfa?: boolean;
+    isBlocked?: boolean;
   };
   userData: UserData | null;
-  handleLogout: () => void;
+  onCompleted?: () => void;
+  handleLogout?: () => void; // ★ これもオプショナルに
 };
 
-export default function SetupTutorial({ setupStatus, userData, handleLogout }: Props) {
+export default function SetupTutorial({ setupStatus, userData, onCompleted, handleLogout }: Props) {
+  
+  // 親コンポーネントから setupStatus が渡されなかった場合のフォールバック（自動判定）
+  const status = {
+    needsPassword: setupStatus?.needsPassword ?? false, // ※必要に応じて userData から判定するロジックに変更可
+    needsLine: setupStatus?.needsLine ?? false,
+    needsMfa: setupStatus?.needsMfa ?? false,
+    isBlocked: setupStatus?.isBlocked ?? false,
+  };
+
+  // 親コンポーネントから handleLogout が渡されなかった場合のフォールバック処理
+  const doLogout = handleLogout || (async () => {
+    await auth.signOut();
+    window.location.href = "/login";
+  });
+
   return (
-    <div className="min-h-screen bg-gray-50 dark:bg-gray-950 flex flex-col items-center justify-center p-4 sm:p-6 transition-colors duration-300 animate-fade-in">
+    <div className="min-h-screen bg-gray-50 dark:bg-gray-950 flex flex-col items-center justify-center p-4 sm:p-6 transition-colors duration-300 animate-fade-in z-50 relative">
       <div className="w-full max-w-2xl bg-white dark:bg-gray-900 rounded-2xl shadow-xl overflow-hidden border border-gray-100 dark:border-gray-800">
         
         {/* ヘッダー */}
@@ -36,8 +54,9 @@ export default function SetupTutorial({ setupStatus, userData, handleLogout }: P
         <div className="p-6 sm:p-8 space-y-4">
           
           {/* パスワード変更チェック */}
-          {setupStatus.needsPassword ? (
-            <Link href="/account?tab=password" className="block group">
+          {status.needsPassword ? (
+            // ★ Link先を /setup/password に変更
+            <Link href="/setup/password" className="block group">
               <div className="flex items-center p-5 rounded-xl border-2 border-red-200 bg-red-50/50 hover:bg-red-100 dark:border-red-800 dark:bg-red-950/30 dark:hover:bg-red-900/50 transition-all duration-300">
                 <div className="flex-shrink-0 text-red-500 dark:text-red-400">
                   <Lock className="h-7 w-7" />
@@ -62,8 +81,8 @@ export default function SetupTutorial({ setupStatus, userData, handleLogout }: P
           )}
 
           {/* 多要素認証チェック */}
-          {(userData?.requireMfa || setupStatus.needsMfa) && (
-            setupStatus.needsMfa ? (
+          {(userData?.requireMfa || status.needsMfa) && (
+            status.needsMfa ? (
               <Link href="/setup/mfa" className="block group">
                 <div className="flex items-center p-5 rounded-xl border-2 border-red-200 bg-red-50/50 hover:bg-red-100 dark:border-red-800 dark:bg-red-950/30 dark:hover:bg-red-900/50 transition-all duration-300">
                   <div className="flex-shrink-0 text-red-500 dark:text-red-400">
@@ -90,9 +109,9 @@ export default function SetupTutorial({ setupStatus, userData, handleLogout }: P
           )}
 
           {/* LINE連携チェック */}
-          {(userData?.lineConnectionEnforced || setupStatus.needsLine) && (
-            setupStatus.needsLine ? (
-              <Link href="/account?tab=line" className="block group">
+          {(userData?.lineConnectionEnforced || status.needsLine) && (
+            status.needsLine ? (
+              <Link href="/top/account?tab=line" className="block group">
                 <div className="flex items-center p-5 rounded-xl border-2 border-red-200 bg-red-50/50 hover:bg-red-100 dark:border-red-800 dark:bg-red-950/30 dark:hover:bg-red-900/50 transition-all duration-300">
                   <div className="flex-shrink-0 text-red-500 dark:text-red-400">
                     <Smartphone className="h-7 w-7" />
@@ -119,7 +138,7 @@ export default function SetupTutorial({ setupStatus, userData, handleLogout }: P
 
           <div className="mt-8 text-center pt-6 border-t border-gray-100 dark:border-gray-800">
             <button 
-              onClick={handleLogout} 
+              onClick={doLogout} 
               className="text-sm font-bold text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white transition-colors duration-300 inline-flex items-center"
             >
               <LogOut className="h-4 w-4 mr-1" />
