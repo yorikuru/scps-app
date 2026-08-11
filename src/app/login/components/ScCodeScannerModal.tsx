@@ -2,11 +2,12 @@
 
 import React, { useEffect, useState, useRef } from "react";
 import { signInWithEmailAndPassword } from "firebase/auth";
-import { auth } from "@/lib/firebase";
+import { doc, getDoc, updateDoc } from "firebase/firestore";
+import { auth, db } from "@/lib/firebase";
 import { Html5Qrcode, Html5QrcodeSupportedFormats } from "html5-qrcode";
 import { ScanLine, X, Loader2, AlertCircle, CheckCircle2, Camera, ShieldCheck } from "lucide-react";
 
-const MAGIC_PREFIX = "SCPS:";
+const MAGIC_PREFIX = "SCPS:TICKET:";
 
 const decryptPayload = (encrypted: string): string | null => {
   try {
@@ -72,35 +73,50 @@ export default function ScCodeScannerModal({ onClose, onLoginSuccess, showAlert 
         async (decodedText) => {
           if (decodedText.startsWith(MAGIC_PREFIX)) {
             const encryptedData = decodedText.slice(MAGIC_PREFIX.length);
-            const decrypted = decryptPayload(encryptedData);
+            const decryptedTicketId = decryptPayload(encryptedData);
 
-            if (decrypted) {
+            if (decryptedTicketId) {
               await stopScannerSafely();
               setStep("processing");
               setScanError("");
 
               try {
-                const parts = decrypted.split("::");
-                if (parts.length >= 3) {
-                  const email = parts[1];
-                  const password = parts[2];
+                // ★ FirebaseからチケットIDをもとにログイン情報を安全に取得
+                const ticketRef = doc(db, "scpsTickets", decryptedTicketId);
+                const ticketSnap = await getDoc(ticketRef);
 
-                  if (email && password) {
-                    await signInWithEmailAndPassword(auth, email, password);
-                    setStep("success");
-                    showAlert("success", "SCコードの認識に成功しました。");
-                    onLoginSuccess(email);
-                  } else {
-                    throw new Error("初期パスワードが設定されていないアカウントです。");
-                  }
+                if (!ticketSnap.exists()) {
+                  throw new Error("無効または期限切れのSCコードです。");
+                }
+
+                const ticketData = ticketSnap.data();
+
+                if (ticketData.isUsed) {
+                  throw new Error("このSCコードはすでに使用されています。手動でログインしてください。");
+                }
+
+                const email = ticketData.email;
+                const password = ticketData.initialPassword;
+
+                if (email && password) {
+                  await signInWithEmailAndPassword(auth, email, password);
+
+                  // セキュリティ向上のため、一度使用されたチケットを使用済みにマーク（または削除）
+                  await updateDoc(ticketRef, { isUsed: true }).catch(() => {});
+
+                  setStep("success");
+                  showAlert("success", "SCコードの認識に成功しました。");
+                  onLoginSuccess(email);
                 } else {
-                  throw new Error("コードに必要な情報が不足しています。");
+                  throw new Error("初期パスワードが設定されていないアカウントです。");
                 }
               } catch (error: any) {
                 console.error("Login error:", error);
                 setStep("intro");
-                setScanError(error.message || "ログインに失敗しました。パスワードが変更されている可能性があります。");
+                setScanError(error.message || "ログインに失敗しました。");
               }
+            } else {
+              setScanError("コードの復号に失敗しました。");
             }
           } else {
             setScanError("これはSCPS専用のSCコードではありません。");
@@ -192,7 +208,7 @@ export default function ScCodeScannerModal({ onClose, onLoginSuccess, showAlert 
                   <Loader2 className="w-6 h-6 text-white animate-spin" />
                 </div>
                 
-                {/* ★ SCコードそのもののデザインを再現したガイドライン (中央に白丸 + SCPSテキスト) */}
+                {/* SCコードのデザインを再現したガイドライン */}
                 <div className="absolute inset-0 z-10 pointer-events-none flex items-center justify-center">
                   <svg className="w-full h-full" viewBox="0 0 280 280">
                     <defs>
@@ -202,14 +218,9 @@ export default function ScCodeScannerModal({ onClose, onLoginSuccess, showAlert 
                       </mask>
                     </defs>
                     
-                    {/* 周囲の半透明暗めマスク */}
                     <rect width="280" height="280" fill="rgba(0, 0, 0, 0.5)" mask="url(#sc-code-mask)" />
-
-                    {/* SCコード外周の白いリング */}
                     <circle cx="140" cy="140" r="105" fill="none" stroke="rgba(255, 255, 255, 0.9)" strokeWidth="3" />
                     <circle cx="140" cy="140" r="97" fill="none" stroke="rgba(255, 255, 255, 0.5)" strokeWidth="1.5" strokeDasharray="4, 3" />
-
-                    {/* 中央ロゴガイド (白丸の中にSCPS) */}
                     <circle cx="140" cy="140" r="28" fill="white" stroke="#312e81" strokeWidth="2" />
                     <text x="140" y="140" textAnchor="middle" dominantBaseline="central" fill="#312e81" fontSize="12" fontWeight="900" fontFamily="sans-serif">
                       SCPS
@@ -248,7 +259,7 @@ export default function ScCodeScannerModal({ onClose, onLoginSuccess, showAlert 
                 {step === "success" ? "認証に成功しました！" : "SCコードを認識しました"}
               </h3>
               <div className="flex items-center justify-center text-gray-500 text-xs font-bold bg-gray-50 px-4 py-2 rounded-xl border border-gray-200 shadow-2xs">
-                <Loader2 className="w-3.5 h-3.5 animate-spin mr-2 text-indigo-600" /> ログイン情報を同期中...
+                <Loader2 className="w-3.5 h-3.5 animate-spin mr-2 text-indigo-600" /> Firebaseから認証情報を照会中...
               </div>
             </div>
           )}

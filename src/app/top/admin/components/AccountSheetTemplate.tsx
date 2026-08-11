@@ -1,7 +1,9 @@
 "use client";
 
-import React, { useEffect } from "react";
+import React, { useEffect, useState } from "react";
 import QRCode from "qrcode";
+import { collection, addDoc, serverTimestamp } from "firebase/firestore";
+import { db } from "@/lib/firebase"; // ※環境に合わせてパスを調整してください
 import { SchoolData } from "../page";
 import { ExtendedUserData } from "./UserManagement";
 
@@ -12,7 +14,7 @@ type Props = {
 };
 
 // SCコード暗号化関数
-const MAGIC_PREFIX = "SCPS:";
+const MAGIC_PREFIX = "SCPS:TICKET:";
 const encryptPayload = (text: string): string => {
   const base = btoa(encodeURIComponent(text));
   return base.split('').reverse().join('');
@@ -46,6 +48,7 @@ const drawSCCode = async (canvas: HTMLCanvasElement, text: string) => {
     ctx.stroke();
   }
 
+  // ★チケットIDを暗号化するため、QRコードが非常にシンプルになり高エラー耐性になります
   const encryptedText = encryptPayload(text);
   const payload = `${MAGIC_PREFIX}${encryptedText}`;
   
@@ -115,21 +118,61 @@ const drawSCCode = async (canvas: HTMLCanvasElement, text: string) => {
 };
 
 export default function AccountSheetTemplate({ sheetUser, schoolData, getRoleDisplayName }: Props) {
+  const [ticketId, setTicketId] = useState<string>("");
+  const [isCreatingTicket, setIsCreatingTicket] = useState<boolean>(true);
+
+  // 1. レンダリング時にFirebaseへ一時チケットを作成し、そのドキュメントIDを取得する
   useEffect(() => {
+    let isMounted = true;
+    const generateTicket = async () => {
+      try {
+        setIsCreatingTicket(true);
+        // Firebaseの 'scpsTickets' コレクションに認証情報を保存
+        const docRef = await addDoc(collection(db, "scpsTickets"), {
+          tenantId: schoolData.id,
+          schoolCode: schoolData.schoolCode || schoolData.id,
+          email: sheetUser.email,
+          initialPassword: sheetUser.initialPassword || "",
+          createdAt: serverTimestamp(),
+          isUsed: false,
+        });
+
+        if (isMounted) {
+          setTicketId(docRef.id);
+        }
+      } catch (err) {
+        console.error("チケットの作成に失敗しました:", err);
+      } finally {
+        if (isMounted) {
+          setIsCreatingTicket(false);
+        }
+      }
+    };
+
+    generateTicket();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [sheetUser, schoolData]);
+
+  // 2. チケットIDが取得できたらSCコードおよびURL用QRコードを描画
+  useEffect(() => {
+    if (!ticketId) return;
+
     const scpsCanvas = document.getElementById("scps-qr-canvas") as HTMLCanvasElement;
     if (scpsCanvas) {
-      const rawData = `${schoolData.id}::${sheetUser.email}::${sheetUser.initialPassword || ""}`;
-      drawSCCode(scpsCanvas, rawData);
+      // チケットIDのみをコードに渡すため、データ量が劇的に削減されます
+      drawSCCode(scpsCanvas, ticketId);
     }
 
     const urlCanvas = document.getElementById("url-qr-canvas") as HTMLCanvasElement;
     if (urlCanvas) {
-      // ★ 読み取った瞬間にSCコードスキャン画面(カメラ)が開く特別URLを発行
       QRCode.toCanvas(urlCanvas, "https://scps.yorikuru.com/login?scps_scan=true", { width: 100, margin: 0 }, (error) => {
         if (error) console.error(error);
       });
     }
-  }, [sheetUser, schoolData]);
+  }, [ticketId]);
 
   return (
     <div style={{ position: 'fixed', top: 0, left: '-9999px', pointerEvents: 'none', opacity: 0, zIndex: -9999 }}>
@@ -253,7 +296,11 @@ export default function AccountSheetTemplate({ sheetUser, schoolData, getRoleDis
                   </div>
                 </div>
                 <div style={{ width: '160px', height: '160px', backgroundColor: 'white', borderRadius: '16px', display: 'flex', justifyContent: 'center', alignItems: 'center', boxShadow: '0 4px 12px rgba(0,0,0,0.15)', border: '2px solid #4f46e5', flexShrink: 0 }}>
-                  <canvas id="scps-qr-canvas" width={1000} height={1000} style={{ width: '144px', height: '144px' }}></canvas>
+                  {isCreatingTicket ? (
+                    <div style={{ fontSize: '10px', color: '#6b7280', fontWeight: 'bold', textAlign: 'center' }}>コード生成中...</div>
+                  ) : (
+                    <canvas id="scps-qr-canvas" width={1000} height={1000} style={{ width: '144px', height: '144px' }}></canvas>
+                  )}
                 </div>
               </div>
 
