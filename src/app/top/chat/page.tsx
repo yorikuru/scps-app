@@ -171,7 +171,6 @@ export default function ChatPage() {
     };
   }, [router]);
 
-  // URLに room パラメータがあれば自動選択
   useEffect(() => {
     if (roomQuery && chatRooms.some(r => r.id === roomQuery)) {
       setActiveRoomId(roomQuery);
@@ -289,11 +288,10 @@ export default function ChatPage() {
   const activeRoom = chatRooms.find(r => r.id === activeRoomId);
 
   return (
-    <div className="h-full font-sans flex flex-col text-gray-900 bg-[#F9FAFB]">
-      {/* ★ 全体的にコンパクトにするため p-3 sm:p-4 lg:p-6 を p-2 sm:p-4 lg:p-6 に調整 */}
+    // ★ flex-1 と min-h-0 を付与して、親の枠（TopLayout）にぴったり収まるようにする
+    <div className="flex-1 flex flex-col min-h-0 font-sans text-gray-900 bg-[#F9FAFB] relative">
       <main className="flex-1 w-full max-w-7xl mx-auto p-2 sm:p-4 lg:p-6 flex flex-col min-h-0">
         
-        {/* ★ スマホ画面では見出しのmb-4をmb-2に詰める */}
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 sm:gap-4 mb-2 sm:mb-4 flex-shrink-0">
           <div className="flex items-center gap-2 sm:gap-3">
             <div className={`p-2 sm:p-2.5 ${c.lightBg} ${c.text} rounded-xl shadow-sm`}>
@@ -306,9 +304,10 @@ export default function ChatPage() {
           </div>
         </div>
 
-        <div className="flex-1 overflow-hidden flex bg-white rounded-2xl shadow-sm border border-gray-200 relative">
+        {/* ここがチャットUIの本体。flex-1 min-h-0 を設定して親に追従させる */}
+        <div className="flex-1 overflow-hidden flex bg-white rounded-2xl shadow-sm border border-gray-200 relative min-h-0">
           
-          <div className={`w-full sm:w-72 md:w-80 lg:w-96 flex-shrink-0 ${activeRoomId || extManageMode.show || settingsState.show ? 'hidden sm:block' : 'block'}`}>
+          <div className={`w-full sm:w-72 md:w-80 lg:w-96 flex-shrink-0 h-full ${activeRoomId || extManageMode.show || settingsState.show ? 'hidden sm:block' : 'block'}`}>
             <ChatList 
               userData={userData} 
               tenantUsers={tenantUsers} 
@@ -332,7 +331,7 @@ export default function ChatPage() {
             />
           </div>
 
-          <div className={`flex-1 flex-col bg-[#f4f7f6] ${!activeRoomId && !extManageMode.show && !settingsState.show ? 'hidden sm:flex' : 'flex'} border-l border-gray-200 relative`}>
+          <div className={`flex-1 flex flex-col bg-[#f4f7f6] h-full min-w-0 ${!activeRoomId && !extManageMode.show && !settingsState.show ? 'hidden sm:flex' : 'flex'} border-l border-gray-200 relative`}>
             
             {settingsState.show ? (
               <ChatSettings 
