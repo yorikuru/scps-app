@@ -56,7 +56,6 @@ export type SchoolData = {
   name: string;
   status: "active" | "suspended";
   requireMfa?: boolean | string;
-  // ★ 修正：プロパティ名のミスタイプと欠落を修正しました
   mfaPolicies?: { email: MfaPolicy; totp: MfaPolicy; passkey: MfaPolicy; };
   availableModules?: string[];
   sharedGoogleCalendarId?: string;
@@ -327,14 +326,18 @@ export default function PortalTopPage() {
   }
 
   return (
-    <NormalTop 
-      userData={userData} 
-      schoolData={schoolData} 
-      messages={messages as any} 
-      systemApps={systemApps} 
-      tenantUsers={tenantUsers}
-      markMessageAsRead={markMessageAsRead} 
-      handleLogout={handleLogout} 
-    />
+    // ★ ここにスクロール領域を設定（h-full overflow-y-auto）することで、
+    // 外側の Layout（サイドバー・ヘッダー）は固定したまま、この中身だけがスクロールするようになります。
+    <div className="flex-1 w-full h-full overflow-y-auto overscroll-y-none scroll-smooth pb-20 md:pb-6">
+      <NormalTop 
+        userData={userData} 
+        schoolData={schoolData} 
+        messages={messages as any} 
+        systemApps={systemApps} 
+        tenantUsers={tenantUsers}
+        markMessageAsRead={markMessageAsRead} 
+        handleLogout={handleLogout} 
+      />
+    </div>
   );
 }

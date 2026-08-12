@@ -64,19 +64,15 @@ export default function Sidebar({
   const [currentPage, setCurrentPage] = useState(0);
   const [imageError, setImageError] = useState(false);
 
-  // 未読バッジ（赤）用のステート
   const [unreadCounts, setUnreadCounts] = useState<Record<string, number>>({});
   const [totalUnread, setTotalUnread] = useState(0);
   const [chatUnreadCount, setChatUnreadCount] = useState(0);
 
-  // タスクバッジ（赤・青）用のステート
   const [taskRedCount, setTaskRedCount] = useState(0);
   const [taskBlueCount, setTaskBlueCount] = useState(0);
 
-  // レンタルバッジ（青）用のステート
   const [activeRentalsCount, setActiveRentalsCount] = useState(0);
 
-  // 未対応バッジ（青）用のステート
   const [systemMessages, setSystemMessages] = useState<any[]>([]);
   const [tenantUserCount, setTenantUserCount] = useState(0);
 
@@ -97,7 +93,6 @@ export default function Sidebar({
     ((userData as any)?.positionName && ((userData as any).positionName.includes("会長") || (userData as any).positionName.includes("顧問")))
   );
 
-  // インボックス（各種アプリ）の未読通知のリアルタイム取得
   useEffect(() => {
     if (!userData?.id || !userData?.schoolId) return;
 
@@ -130,7 +125,6 @@ export default function Sidebar({
     return () => unsubscribe();
   }, [userData]);
 
-  // チャット（トーク）の未読数をリアルタイム取得
   useEffect(() => {
     if (!userData?.id || !userData?.schoolId) return;
 
@@ -153,7 +147,6 @@ export default function Sidebar({
     return () => unsubscribe();
   }, [userData]);
 
-  // タスクの未着手・未完了数をリアルタイム取得
   useEffect(() => {
     if (!userData?.id || !userData?.schoolId) return;
 
@@ -181,7 +174,6 @@ export default function Sidebar({
     return () => unsubscribe();
   }, [userData]);
 
-  // レンタルの現在貸出中（active/partial）数をリアルタイム取得
   useEffect(() => {
     if (!userData?.id || !userData?.schoolId) return;
 
@@ -204,7 +196,6 @@ export default function Sidebar({
     return () => unsubscribe();
   }, [userData]);
 
-  // テナント内の全ユーザー数を取得
   useEffect(() => {
     if (!userData?.schoolId) return;
     const q = query(collection(db, "users"), where("schoolId", "==", userData.schoolId));
@@ -212,7 +203,6 @@ export default function Sidebar({
     return () => unsubscribe();
   }, [userData?.schoolId]);
 
-  // 対応要求のあるシステムメッセージを取得
   useEffect(() => {
     if (!userData?.schoolId || !canManageMessages) return;
     const q = query(
@@ -282,7 +272,6 @@ export default function Sidebar({
     return pathname.startsWith(path);
   };
 
-  // メニュークリック時、スマホ環境（画面幅768px未満）ならメニューを自動で閉じる
   const handleMenuClick = () => {
     if (window.innerWidth < 768) {
       setIsSidebarOpen(false);
@@ -322,7 +311,7 @@ export default function Sidebar({
         />
       )}
 
-      {/* ★ ワッフルメニューのポップアップ（画面全体を基準とした固定配置に変更） */}
+      {/* ワッフルメニュー */}
       {isAppMenuOpen && (
         <div 
           ref={appMenuRef}
@@ -413,9 +402,10 @@ export default function Sidebar({
         </div>
       )}
 
+      {/* ★ h-screen を h-[100dvh] に変更 */}
       <aside 
         className={`
-          fixed md:relative top-0 left-0 h-screen bg-[#1C1C1E] text-gray-300 transition-all duration-300 ease-in-out z-50 flex flex-col border-r border-[#2C2C2E] overflow-hidden whitespace-nowrap
+          fixed md:relative top-0 left-0 h-[100dvh] bg-[#1C1C1E] text-gray-300 transition-all duration-300 ease-in-out z-50 flex flex-col border-r border-[#2C2C2E] overflow-hidden whitespace-nowrap
           ${isSidebarOpen ? "translate-x-0 w-[260px]" : "-translate-x-full md:translate-x-0 md:w-0"}
         `}
       >
@@ -437,7 +427,6 @@ export default function Sidebar({
             <span className="text-sm font-black text-gray-100 truncate">{schoolData?.name || "ワークスペース"}</span>
           </div>
 
-          {/* モバイル用の閉じるボタン */}
           <button 
             className="md:hidden text-gray-400 hover:text-white p-1"
             onClick={() => setIsSidebarOpen(false)}
@@ -627,8 +616,8 @@ export default function Sidebar({
           </div>
         </div>
 
-        {/* フッター（法的表記） */}
-        <div className="flex-shrink-0 p-3 mt-1 border-t border-[#2C2C2E] bg-[#1C1C1E]">
+        {/* ★ <br/>タグを削除し、親の padding (pb-8 md:pb-3) で余白を制御するように変更 */}
+        <div className="flex-shrink-0 p-3 pb-8 md:pb-3 mt-1 border-t border-[#2C2C2E] bg-[#1C1C1E]">
           <div className="flex flex-col gap-1.5 text-[9px] font-bold text-gray-500 text-center">
             <div className="flex flex-wrap items-center justify-center gap-x-3 gap-y-1.5">
               <Link href="/legal/terms" className="hover:text-gray-300 transition-colors">利用規約</Link>
@@ -637,7 +626,7 @@ export default function Sidebar({
             </div>
             <div className="text-[8px] text-gray-600 mt-0.5">
               &copy; {new Date().getFullYear()} YORIKURU / 生徒会ポータルシステム
-            </div><br/><br/>
+            </div>
           </div>
         </div>
 

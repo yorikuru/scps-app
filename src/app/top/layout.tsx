@@ -250,6 +250,7 @@ export default function TopLayout({ children }: { children: React.ReactNode }) {
     </>
   );
 
+  // Setupや印刷などの単独ページは、内部でスクロールできるように min-h-[100dvh] を付与します。
   if (isBlocked || isPrintPage || hideLayoutPaths.includes(pathname)) {
     return (
       <>
@@ -289,6 +290,7 @@ export default function TopLayout({ children }: { children: React.ReactNode }) {
   return (
     <>
       {renderModals()}
+      {/* ★ 大枠を h-[100dvh] と overflow-hidden で完全固定フレーム化します */}
       <div className="flex h-[100dvh] w-full bg-white text-gray-900 font-sans overflow-hidden">
         
         <Sidebar 
@@ -302,7 +304,8 @@ export default function TopLayout({ children }: { children: React.ReactNode }) {
           allEvents={allEvents} 
         />
         
-        <div className="flex-1 flex flex-col min-w-0 bg-[#F9FAFB] h-[100dvh] overflow-hidden">
+        {/* ★ 右側のメインコンテナも h-[100dvh] で高さを固定 */}
+        <div className="flex-1 flex flex-col min-w-0 bg-[#F9FAFB] h-[100dvh]">
           <Header 
             isSidebarOpen={isSidebarOpen} 
             setIsSidebarOpen={setIsSidebarOpen}
@@ -315,14 +318,15 @@ export default function TopLayout({ children }: { children: React.ReactNode }) {
             setIsProfileMenuOpen={setIsProfileMenuOpen}
           />
           
-          {/* ★ スクロール制御は個別ページで行うため、ここでは overflow-y-auto を外し、min-h-0 を設定して枠のサイズだけ固定します */}
-          <main className="flex-1 min-h-0 w-full min-w-0 relative flex flex-col">
-            <div className={isBlurNeeded ? "pointer-events-none select-none blur-[4px] transition-all h-full flex flex-col" : "h-full flex flex-col"}>
+          {/* ★ flex-1 min-h-0 が必須！これでヘッダーを除いた残りの高さを厳密に確保します */}
+          <main className="flex-1 min-h-0 w-full relative flex flex-col">
+            <div className={isBlurNeeded ? "pointer-events-none select-none blur-[4px] transition-all flex flex-col flex-1 h-full min-h-0" : "flex flex-col flex-1 h-full min-h-0"}>
               
               <div className="w-full max-w-7xl mx-auto px-3 sm:px-4 lg:px-6 pt-3 sm:pt-4 lg:pt-6 empty:hidden flex-shrink-0 z-40">
                 <DisasterAlertWidget schoolData={schoolData} />
               </div>
 
+              {/* ★ ここに入る page.tsx 側で overflow-y-auto が効くようになります */}
               {children}
             </div>
           </main>

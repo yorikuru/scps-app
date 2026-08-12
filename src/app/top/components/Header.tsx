@@ -5,7 +5,7 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { 
   PanelLeftClose, PanelLeft, Settings, ShieldCheck, LogOut, Clock, User as UserIcon,
-  BellRing, Mail, MailOpen, Star, Trash2, CheckCircle2, ChevronRight, Home // ★ Home を追加
+  BellRing, Mail, MailOpen, Star, Trash2, CheckCircle2, ChevronRight, Home 
 } from "lucide-react";
 import * as LucideIcons from "lucide-react";
 import { doc, getDoc, getDocs, collection, query, where, onSnapshot, updateDoc, deleteDoc, writeBatch } from "firebase/firestore";
@@ -234,8 +234,8 @@ export default function Header({
   }).format(new Date(currentTime));
 
   return (
-    // ★ 全体的にコンパクトにするため h-12 -> h-11、px-3 -> px-2 に調整
-    <header className="h-11 sm:h-12 bg-white border-b border-gray-200 flex items-center justify-between px-2 sm:px-4 flex-shrink-0 z-30 relative">
+    // ★ h-11 sm:h-12 で高さを固定し、flex-shrink-0 を付与して潰れないようにします。
+    <header className="h-11 sm:h-12 bg-white border-b border-gray-200 flex items-center justify-between px-2 sm:px-4 flex-shrink-0 z-30 relative w-full">
       
       {/* 左側：サイドバー切り替え＆ホームボタン＆パンくずリスト */}
       <div className="flex items-center gap-1 sm:gap-2">
@@ -243,7 +243,7 @@ export default function Header({
           {isSidebarOpen ? <PanelLeftClose className="w-4 h-4" /> : <PanelLeft className="w-4 h-4" />}
         </button>
         
-        {/* ★ 新規追加：ホームボタン */}
+        {/* ホームボタン */}
         <button onClick={() => router.push('/top')} className="p-1.5 text-indigo-600 hover:bg-indigo-50 rounded-md transition-colors" title="ホーム画面へ">
           <Home className="w-4 h-4" />
         </button>
@@ -280,8 +280,7 @@ export default function Header({
           </button>
 
           {isNotifOpen && (
-            // ★ はみ出し防止：right-[-60px] や max-w-[90vw] でスマホ画面内に収める
-            <div className="absolute right-[-50px] sm:right-0 top-full mt-2 w-[290px] sm:w-[320px] max-w-[92vw] bg-white border border-gray-200 rounded-xl shadow-xl z-40 flex flex-col overflow-hidden animate-fade-in origin-top-right">
+            <div className="absolute right-[-45px] sm:right-0 top-full mt-2 w-[290px] sm:w-[320px] max-w-[90vw] bg-white border border-gray-200 rounded-xl shadow-xl z-40 flex flex-col overflow-hidden animate-fade-in origin-top-right">
               <div className="px-3 py-2 border-b border-gray-100 flex justify-between items-center bg-gray-50/80">
                 <h3 className="text-[11px] font-black text-gray-900 flex items-center gap-1.5"><BellRing className="w-3.5 h-3.5 text-blue-600" /> インボックス通知</h3>
                 {unreadCount > 0 && (
@@ -291,7 +290,8 @@ export default function Header({
                 )}
               </div>
               
-              <div className="max-h-[350px] overflow-y-auto custom-scrollbar bg-white divide-y divide-gray-50">
+              {/* ドロップダウン内部のスクロール指定 */}
+              <div className="max-h-[350px] overflow-y-auto custom-scrollbar bg-white divide-y divide-gray-50 overscroll-contain">
                 {topNotifications.length === 0 ? (
                   <div className="p-6 flex flex-col items-center justify-center text-gray-400">
                     <BellRing className="w-6 h-6 mb-1.5 opacity-20" />
@@ -376,7 +376,6 @@ export default function Header({
           </button>
           
           {isProfileMenuOpen && (
-            // ★ はみ出し防止：right-0 から少しマイナスにして調整
             <div className="absolute right-[-10px] sm:right-0 top-full mt-2 w-48 sm:w-52 bg-white border border-gray-200 rounded-xl shadow-xl p-1.5 z-40 animate-fade-in origin-top-right">
               <div className="px-2.5 py-1.5 border-b border-gray-100 mb-1">
                 <p className="text-xs font-bold text-gray-900 truncate">{userData?.name}</p>
