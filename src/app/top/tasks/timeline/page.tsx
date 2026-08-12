@@ -42,7 +42,6 @@ export default function TimelineTasksPage() {
   const [searchQuery, setSearchQuery] = useState("");
   const [holidays, setHolidays] = useState<Record<string, string>>({});
   
-  // スマホ: 7日, PC: 14日
   const [daysCount, setDaysCount] = useState(14);
   const [startDateOffset, setStartDateOffset] = useState(0);
 
@@ -133,19 +132,21 @@ export default function TimelineTasksPage() {
 
   const filteredTasks = tasks.filter(t => t.title.toLowerCase().includes(searchQuery.toLowerCase()));
 
-  if (isLoading) return <div className="min-h-screen bg-[#F9FAFB] flex justify-center items-center"><Loader2 className="w-8 h-8 animate-spin text-indigo-600" /></div>;
-  if (!hasPermission) return <div className="min-h-screen flex flex-col items-center justify-center p-4"><AlertTriangle className="w-12 h-12 text-red-500 mb-4" /><h1 className="text-xl font-black">アクセス権限がありません</h1></div>;
+  if (isLoading) return <div className="h-full bg-[#F9FAFB] flex justify-center items-center"><Loader2 className="w-8 h-8 animate-spin text-indigo-600" /></div>;
+  if (!hasPermission) return <div className="h-full flex flex-col items-center justify-center p-4"><AlertTriangle className="w-12 h-12 text-red-500 mb-4" /><h1 className="text-xl font-black">アクセス権限がありません</h1></div>;
 
   return (
-    <div className="min-h-screen bg-[#F9FAFB] font-sans flex flex-col text-gray-900 overflow-hidden">
+    // ★ h-full flex-1 w-full min-h-0 を指定して外側にスクロールを漏らさない
+    <div className="h-full flex-1 w-full bg-[#F9FAFB] font-sans flex flex-col text-gray-900 overflow-hidden relative min-h-0">
 
+      {/* ナビゲーション */}
       <div className="px-3 sm:px-6 py-2 sm:py-3 border-b border-gray-200 bg-white flex flex-col sm:flex-row sm:items-center justify-between gap-2 flex-shrink-0">
         <div className="flex items-center gap-2 sm:gap-3">
           <div className="p-1.5 sm:p-2 bg-indigo-100 text-indigo-600 rounded-lg sm:rounded-xl shadow-2xs"><Clock className="w-4 h-4 sm:w-5 sm:h-5" /></div>
           <div><h1 className="text-sm sm:text-base font-black text-gray-900 tracking-tight">タイムラインガント</h1></div>
         </div>
 
-        <div className="flex items-center gap-1 bg-gray-100 p-1 rounded-xl overflow-x-auto [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none] whitespace-nowrap">
+        <div className="flex items-center gap-1 bg-gray-100 p-1 rounded-xl overflow-x-auto custom-scrollbar whitespace-nowrap">
           <button onClick={() => router.push("/top/tasks")} className="px-3 py-1.5 text-xs font-bold text-gray-600 hover:text-gray-900 rounded-lg transition-colors flex items-center gap-1">
             <KanbanSquare className="w-3.5 h-3.5" /> カンバン
           </button>
@@ -158,10 +159,10 @@ export default function TimelineTasksPage() {
         </div>
       </div>
 
-      <main className="flex-1 flex flex-col overflow-hidden p-2 sm:p-4">
+      <main className="flex-1 flex flex-col overflow-hidden p-2 sm:p-4 pb-20 md:pb-6 min-h-0">
         
-        {/* 操作バー（スマホで縦並び対応） */}
-        <div className="flex flex-col sm:flex-row justify-between items-center mb-3 gap-3">
+        {/* 操作バー */}
+        <div className="flex flex-col sm:flex-row justify-between items-center mb-3 gap-3 shrink-0">
           <div className="flex items-center gap-1 bg-white border border-gray-200 p-1 rounded-xl shadow-sm w-full sm:w-auto justify-between sm:justify-start">
             <button onClick={() => setStartDateOffset(p => p - 7)} className="p-2 sm:p-1.5 hover:bg-gray-100 rounded text-gray-600 transition-colors"><ChevronsLeft className="w-4 h-4" /></button>
             <button onClick={() => setStartDateOffset(p => p - 1)} className="p-2 sm:p-1.5 hover:bg-gray-100 rounded text-gray-600 transition-colors"><ChevronLeft className="w-4 h-4" /></button>
@@ -172,13 +173,14 @@ export default function TimelineTasksPage() {
           
           <div className="relative w-full sm:w-64">
             <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-400" />
-            <input type="text" placeholder="タスク検索..." value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} className="w-full pl-8 pr-3 py-2 sm:py-1.5 bg-white border border-gray-200 rounded-xl text-xs font-bold focus:outline-none focus:ring-1 focus:ring-indigo-500 transition-all shadow-sm" />
+            {/* ★ ズーム対策: text-[16px] sm:text-xs */}
+            <input type="text" placeholder="タスク検索..." value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} className="w-full pl-8 pr-3 py-2 sm:py-1.5 bg-white border border-gray-200 rounded-xl text-[16px] sm:text-xs font-bold focus:outline-none focus:ring-1 focus:ring-indigo-500 transition-all shadow-sm" />
           </div>
         </div>
 
-        {/* タイムライン本体 */}
-        <div className="flex-1 bg-white rounded-2xl border border-gray-200 shadow-sm overflow-auto custom-scrollbar relative">
-          {/* ヘッダー（上部固定、左列固定） */}
+        {/* タイムライン本体（縦横スクロール） */}
+        <div className="flex-1 bg-white rounded-2xl border border-gray-200 shadow-sm overflow-auto custom-scrollbar relative min-h-0">
+          
           <div className="flex border-b border-gray-200 bg-gray-50/90 backdrop-blur sticky top-0 z-30 min-w-max">
             <div className="w-24 sm:w-48 p-2 sm:p-3 border-r border-gray-200 flex-shrink-0 text-[10px] sm:text-xs font-black text-gray-700 bg-gray-50/90 sticky left-0 z-40 shadow-[2px_0_5px_rgba(0,0,0,0.05)] flex items-center">
               タスク / 担当
@@ -195,7 +197,6 @@ export default function TimelineTasksPage() {
             </div>
           </div>
 
-          {/* 行データ */}
           <div className="divide-y divide-gray-100 min-w-max">
             {filteredTasks.length === 0 ? (
               <div className="p-12 text-center text-gray-400 font-bold text-xs sticky left-0 w-full">表示するタスクがありません</div>
@@ -210,7 +211,6 @@ export default function TimelineTasksPage() {
 
                 return (
                   <div key={t.id} onClick={() => router.push(`/top/tasks/detail/${t.id}`)} className="flex hover:bg-gray-50 transition-colors cursor-pointer group relative">
-                    {/* 左固定: タスク基本情報 */}
                     <div className="w-24 sm:w-48 p-2 sm:p-3 border-r border-gray-200 flex-shrink-0 flex flex-col justify-center bg-white group-hover:bg-gray-50 sticky left-0 z-20 shadow-[2px_0_5px_rgba(0,0,0,0.02)] transition-colors">
                       <div className="flex flex-col sm:flex-row sm:items-center gap-1 mb-1">
                         <span className={`px-1 rounded text-[8px] sm:text-[9px] font-bold ${STATUS_CONFIG[t.status].barColor} text-white w-max`}>{STATUS_CONFIG[t.status].label}</span>
@@ -221,11 +221,9 @@ export default function TimelineTasksPage() {
                       <h4 className="text-[10px] sm:text-xs font-black text-gray-900 line-clamp-2 sm:truncate group-hover:text-indigo-600">{t.title}</h4>
                     </div>
 
-                    {/* 右: カレンダーセル ＆ 期間バー */}
                     <div className="flex-1 flex relative items-center py-2 min-w-[500px]">
                       {dateRange.map(d => (
                         <div key={d.dateStr} className={`flex-1 h-full border-r border-gray-100/60 min-w-[40px] sm:min-w-[45px] ${d.isToday ? 'bg-indigo-50/20' : ''}`}>
-                          {/* ★ 日付セルをクリックして新規作成 */}
                           <div 
                             onClick={(e) => { e.stopPropagation(); router.push(`/top/tasks/new?startDate=${d.dateStr}`); }}
                             className="w-full h-full opacity-0 hover:opacity-100 bg-indigo-50/50 flex items-center justify-center transition-opacity"
@@ -235,7 +233,6 @@ export default function TimelineTasksPage() {
                         </div>
                       ))}
 
-                      {/* ガントチャートバー */}
                       <div 
                         className={`absolute h-6 sm:h-7 rounded-lg shadow-sm border border-white/40 flex items-center px-1.5 sm:px-2 text-[9px] sm:text-[10px] font-black text-white truncate transition-transform hover:scale-[1.02] ${STATUS_CONFIG[t.status].barColor} pointer-events-none`}
                         style={{ left: `${(startIndex / daysCount) * 100}%`, width: `${(spanLength / daysCount) * 100}%` }}

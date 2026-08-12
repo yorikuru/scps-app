@@ -43,7 +43,7 @@ type Props = {
   appConfig: AppConfig;
   onAdd: (name: string, color: string) => Promise<void> | void;
   onEdit: (id: string, name: string, color: string) => Promise<void> | void;
-  onDelete: (id: string) => Promise<void> | void; // ★ void または Promise<void> を許容するように修正
+  onDelete: (id: string) => Promise<void> | void; 
 };
 
 export default function CategoryManager({ categories, appConfig, onAdd, onEdit, onDelete }: Props) {
@@ -77,59 +77,64 @@ export default function CategoryManager({ categories, appConfig, onAdd, onEdit, 
   };
 
   return (
-    <div className="max-w-3xl mx-auto w-full p-4 sm:p-6 flex-1 flex flex-col">
-      <div className="bg-white rounded-2xl shadow-sm border border-gray-200 overflow-hidden">
-        <div className="px-5 py-4 border-b border-gray-100 bg-gray-50 flex items-center gap-2">
+    // ★ h-full と min-h-0 を指定して外にはみ出さないように設定
+    <div className="max-w-3xl mx-auto w-full p-2 sm:p-6 flex-1 flex flex-col h-full min-h-0">
+      <div className="bg-white rounded-2xl shadow-sm border border-gray-200 overflow-hidden flex flex-col h-full min-h-0">
+        <div className="px-4 sm:px-5 py-3 sm:py-4 border-b border-gray-100 bg-gray-50 flex items-center gap-2 shrink-0">
           <Settings className="w-4 h-4 text-gray-500" />
           <h2 className="text-sm font-black text-gray-900">カテゴリの管理</h2>
         </div>
         
-        <div className="p-5 sm:p-6 space-y-6">
-          <div className={`bg-gray-50/50 p-4 rounded-xl border ${editingId ? 'border-amber-300 bg-amber-50/30' : 'border-gray-200'}`}>
+        <div className="p-3 sm:p-6 flex flex-col gap-4 sm:gap-6 flex-1 overflow-y-auto custom-scrollbar">
+          
+          {/* カテゴリ追加・編集フォーム */}
+          <div className={`bg-gray-50/50 p-3 sm:p-4 rounded-xl border shrink-0 ${editingId ? 'border-amber-300 bg-amber-50/30' : 'border-gray-200'}`}>
             <div className="flex justify-between items-center mb-3">
               <h4 className={`text-xs font-bold flex items-center ${editingId ? 'text-amber-800' : 'text-gray-700'}`}>
                 {editingId ? <Edit2 className="w-3.5 h-3.5 mr-1" /> : <Plus className="w-3.5 h-3.5 mr-1" />} 
                 {editingId ? "カテゴリを編集" : "新しくカテゴリを追加"}
               </h4>
               {editingId && (
-                <button onClick={cancelEdit} className="text-[10px] font-bold text-gray-500 hover:text-gray-700 flex items-center">
+                <button onClick={cancelEdit} className="text-[10px] font-bold text-gray-500 hover:text-gray-700 flex items-center bg-white px-2 py-1 rounded border border-gray-200">
                   <X className="w-3 h-3 mr-0.5" /> キャンセル
                 </button>
               )}
             </div>
             
             <div className="flex flex-col gap-3">
-              <input type="text" value={categoryName} onChange={e => setCategoryName(e.target.value)} placeholder="例: 文化祭関連" className={`w-full max-w-sm text-sm font-bold px-3 py-2 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 ${c.ring}`} />
-              <div className="flex flex-wrap items-center gap-2 bg-white px-3 py-2.5 rounded-xl border border-gray-200 max-h-40 overflow-y-auto custom-scrollbar">
+              {/* ★ ズーム防止：スマホ時は text-[16px] (text-base相当) を指定 */}
+              <input type="text" value={categoryName} onChange={e => setCategoryName(e.target.value)} placeholder="例: 文化祭関連" className={`w-full sm:max-w-sm text-[16px] sm:text-sm font-bold px-3 py-2 sm:py-2.5 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 ${c.ring}`} />
+              <div className="flex flex-wrap items-center gap-1.5 sm:gap-2 bg-white px-2.5 sm:px-3 py-2 sm:py-2.5 rounded-xl border border-gray-200 max-h-40 overflow-y-auto custom-scrollbar">
                 {CATEGORY_COLORS.map(cc => (
-                  <button key={cc.value} onClick={() => setCategoryColor(cc.value)} className={`w-6 h-6 rounded-full border-2 transition-transform flex items-center justify-center ${categoryColor === cc.value ? 'scale-110 border-gray-900 shadow-sm' : 'border-transparent hover:scale-110'} ${cc.value.split(' ')[0]}`} title={cc.label}>
-                    {categoryColor === cc.value && <Check className={`w-3.5 h-3.5 ${cc.value.includes('text-white') ? 'text-white' : 'text-gray-900'}`} />}
+                  <button key={cc.value} onClick={() => setCategoryColor(cc.value)} className={`w-6 h-6 sm:w-7 sm:h-7 rounded-full border-2 transition-transform flex items-center justify-center ${categoryColor === cc.value ? 'scale-110 border-gray-900 shadow-sm' : 'border-transparent hover:scale-110'} ${cc.value.split(' ')[0]}`} title={cc.label}>
+                    {categoryColor === cc.value && <Check className={`w-3.5 h-3.5 sm:w-4 sm:h-4 ${cc.value.includes('text-white') ? 'text-white' : 'text-gray-900'}`} />}
                   </button>
                 ))}
               </div>
-              <button onClick={handleSave} disabled={!categoryName.trim()} className={`px-5 py-2.5 mt-2 w-fit disabled:opacity-50 text-white text-xs font-bold rounded-xl shadow-sm transition-all flex items-center justify-center ${editingId ? 'bg-amber-600 hover:bg-amber-700' : `${c.bg} ${c.hover}`}`}>
+              <button onClick={handleSave} disabled={!categoryName.trim()} className={`px-5 py-2.5 mt-1 w-full sm:w-fit disabled:opacity-50 text-white text-xs sm:text-sm font-bold rounded-xl shadow-sm transition-all flex items-center justify-center ${editingId ? 'bg-amber-600 hover:bg-amber-700' : `${c.bg} ${c.hover}`}`}>
                 {editingId ? "更新する" : "追加する"}
               </button>
             </div>
           </div>
 
-          <div>
-            <h4 className="text-xs font-bold text-gray-700 mb-3 flex items-center"><Tag className="w-3.5 h-3.5 mr-1" /> 登録済みのカテゴリ</h4>
-            <div className="space-y-2 max-h-96 overflow-y-auto custom-scrollbar pr-2">
+          {/* 登録済みカテゴリ一覧 */}
+          <div className="flex-1 flex flex-col min-h-0">
+            <h4 className="text-[10px] sm:text-xs font-bold text-gray-700 mb-2 sm:mb-3 flex items-center shrink-0"><Tag className="w-3.5 h-3.5 mr-1" /> 登録済みのカテゴリ</h4>
+            <div className="flex-1 space-y-2 overflow-y-auto custom-scrollbar pr-1 pb-4">
               {categories.length === 0 ? (
-                <div className="text-center py-10 bg-gray-50 rounded-xl border border-dashed border-gray-200">
-                  <Tag className="w-6 h-6 text-gray-300 mx-auto mb-2" />
-                  <p className="text-xs font-bold text-gray-400">カテゴリはまだありません</p>
+                <div className="text-center py-8 sm:py-10 bg-gray-50 rounded-xl border border-dashed border-gray-200">
+                  <Tag className="w-5 h-5 sm:w-6 sm:h-6 text-gray-300 mx-auto mb-2" />
+                  <p className="text-[10px] sm:text-xs font-bold text-gray-400">カテゴリはまだありません</p>
                 </div>
               ) : (
                 categories.map(cat => (
-                  <div key={cat.id} className={`flex justify-between items-center bg-white border p-2.5 rounded-xl transition-shadow ${editingId === cat.id ? 'border-amber-400 shadow-sm' : 'border-gray-200 hover:shadow-sm'}`}>
-                    <span className={`px-2.5 py-1 rounded-md text-xs font-bold border ${cat.color}`}>{cat.name}</span>
+                  <div key={cat.id} className={`flex justify-between items-center bg-white border p-2 sm:p-2.5 rounded-xl transition-shadow ${editingId === cat.id ? 'border-amber-400 shadow-sm bg-amber-50/10' : 'border-gray-200 hover:shadow-sm'}`}>
+                    <span className={`px-2 sm:px-2.5 py-1 rounded-md text-[10px] sm:text-xs font-bold border truncate max-w-[200px] sm:max-w-none ${cat.color}`}>{cat.name}</span>
                     <div className="flex items-center gap-1">
-                      <button onClick={() => startEdit(cat)} className="p-2 text-gray-400 hover:text-amber-600 hover:bg-amber-50 rounded-lg transition-colors flex items-center text-[10px] font-bold">
+                      <button onClick={() => startEdit(cat)} className="p-1.5 sm:p-2 text-gray-400 hover:text-amber-600 hover:bg-amber-50 rounded-lg transition-colors flex items-center">
                         <Edit2 className="w-3.5 h-3.5" />
                       </button>
-                      <button onClick={() => onDelete(cat.id)} className="p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors flex items-center text-[10px] font-bold">
+                      <button onClick={() => onDelete(cat.id)} className="p-1.5 sm:p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors flex items-center">
                         <Trash2 className="w-3.5 h-3.5" />
                       </button>
                     </div>
@@ -138,6 +143,7 @@ export default function CategoryManager({ categories, appConfig, onAdd, onEdit, 
               )}
             </div>
           </div>
+
         </div>
       </div>
     </div>

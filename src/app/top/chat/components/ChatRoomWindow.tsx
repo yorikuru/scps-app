@@ -13,7 +13,6 @@ import { useDialog } from "@/components/DialogContext";
 const EMOJIS = ["👍", "❤️", "😂", "😮", "😢", "👏", "🎉", "🔥", "👀"];
 const COLORS = ["#000000", "#ef4444", "#f97316", "#eab308", "#22c55e", "#06b6d4", "#3b82f6", "#6366f1", "#a855f7", "#ec4899"];
 
-// ★ アバターのサイズを縮小
 const UserAvatar = ({ name, url, isExternal = false, className = "w-7 h-7 text-[10px]" }: { name: string, url?: string | null, isExternal?: boolean, className?: string }) => {
   return url ? (
     <img src={url} alt={name} className={`${className} rounded-full object-cover shadow-sm flex-shrink-0 border border-gray-200 bg-white`} />
@@ -52,7 +51,7 @@ export default function ChatRoomWindow({ userData, tenantUsers, externalUsers, p
   const [showSettings, setShowSettings] = useState(false);
 
   const [showReactionMenuFor, setShowReactionMenuFor] = useState<string | null>(null);
-  const [longPressedMsgId, setLongPressedMsgId] = useState<string | null>(null); // スマホ長押し用
+  const [longPressedMsgId, setLongPressedMsgId] = useState<string | null>(null);
 
   const [editingMessageId, setEditingMessageId] = useState<string | null>(null);
   const [reactionDetailMsg, setReactionDetailMsg] = useState<ChatMessage | null>(null);
@@ -72,13 +71,12 @@ export default function ChatRoomWindow({ userData, tenantUsers, externalUsers, p
   const editorRef = useRef<HTMLDivElement>(null);
   const editEditorRef = useRef<HTMLDivElement>(null);
 
-  // 長押しタイマー管理用
   const longPressTimerRef = useRef<NodeJS.Timeout | null>(null);
 
   const handleTouchStart = (msgId: string) => {
     longPressTimerRef.current = setTimeout(() => {
       setLongPressedMsgId(msgId);
-    }, 500); // 0.5秒長押しでメニュー表示
+    }, 500); 
   };
 
   const handleTouchEnd = () => {
@@ -594,7 +592,8 @@ export default function ChatRoomWindow({ userData, tenantUsers, externalUsers, p
                           editingMessageId === msg.id ? (
                             <div className="flex flex-col w-full min-w-[240px] bg-white rounded-xl border border-indigo-500 shadow-lg overflow-visible z-20">
                               <RichTextToolbar targetRef={editEditorRef} />
-                              <div ref={editEditorRef} contentEditable onKeyDown={(e) => handleKeyDown(e, true)} className="text-[13px] p-2 focus:outline-none min-h-[50px] chat-html-content bg-white rounded-b-xl" />
+                              {/* ★ ズーム防止：スマホ時は text-[16px] (text-base相当) を指定 */}
+                              <div ref={editEditorRef} contentEditable onKeyDown={(e) => handleKeyDown(e, true)} className="text-[16px] sm:text-[13px] p-2 focus:outline-none min-h-[50px] chat-html-content bg-white rounded-b-xl" />
                               <div className="flex justify-end gap-1.5 p-1.5 bg-gray-50 border-t border-gray-100 rounded-b-xl"><button onClick={() => setEditingMessageId(null)} className="text-[10px] font-bold px-2.5 py-1 text-gray-600 hover:bg-gray-200 rounded transition-colors">キャンセル</button><button onClick={() => handleEditSave(msg.id)} className="text-[10px] font-bold px-3 py-1 bg-indigo-600 hover:bg-indigo-700 text-white rounded shadow-sm transition-colors">保存</button></div>
                             </div>
                           ) : (
@@ -680,7 +679,8 @@ export default function ChatRoomWindow({ userData, tenantUsers, externalUsers, p
           </div>
         )}
 
-        <div ref={editorRef} contentEditable onInput={handleEditorInput} onKeyDown={(e) => handleKeyDown(e, false)} data-placeholder="メッセージを入力... (@でメンション)" className={`flex-1 max-h-32 min-h-[36px] px-3 py-2 text-[13px] sm:text-[14px] focus:outline-none overflow-y-auto custom-scrollbar placeholder-empty chat-html-content bg-white ${showToolbar && !replyingTo ? '' : 'rounded-t-xl'}`} />
+        {/* ★ ズーム防止：スマホ時は text-[16px] (text-base相当) を指定 */}
+        <div ref={editorRef} contentEditable onInput={handleEditorInput} onKeyDown={(e) => handleKeyDown(e, false)} data-placeholder="メッセージを入力... (@でメンション)" className={`flex-1 max-h-32 min-h-[36px] px-3 py-2 text-[16px] sm:text-[14px] focus:outline-none overflow-y-auto custom-scrollbar placeholder-empty chat-html-content bg-white ${showToolbar && !replyingTo ? '' : 'rounded-t-xl'}`} />
 
         <div className="flex items-center justify-between px-1.5 py-1 bg-white border-t border-gray-100 rounded-b-xl">
           <div className="flex items-center gap-0.5">
@@ -714,7 +714,8 @@ export default function ChatRoomWindow({ userData, tenantUsers, externalUsers, p
             <div className="p-3 border-b border-gray-100 bg-gray-50 flex justify-between items-center"><h3 className="text-xs font-black text-gray-900 flex items-center gap-1.5"><LinkIcon className="w-3.5 h-3.5 text-indigo-600" /> リンクを挿入</h3><button onClick={() => setShowLinkModal(false)} className="p-1.5 hover:bg-gray-200 rounded-md text-gray-500"><X className="w-3.5 h-3.5"/></button></div>
             <div className="p-4">
               <label className="block text-[10px] font-bold text-gray-600 mb-1">URL</label>
-              <input type="url" placeholder="https://..." value={linkUrl} onChange={e => setLinkUrl(e.target.value)} autoFocus className="w-full border border-gray-300 rounded-lg px-2.5 py-1.5 text-xs focus:ring-2 focus:ring-indigo-500 outline-none" />
+              {/* ★ ズーム防止：スマホ時は text-[16px] (text-base相当) を指定 */}
+              <input type="url" placeholder="https://..." value={linkUrl} onChange={e => setLinkUrl(e.target.value)} autoFocus className="w-full border border-gray-300 rounded-lg px-2.5 py-1.5 text-[16px] sm:text-xs focus:ring-2 focus:ring-indigo-500 outline-none" />
               <button onClick={handleLinkSave} disabled={!linkUrl} className="w-full mt-4 py-2 bg-indigo-600 text-white text-[11px] font-bold rounded-lg shadow-sm hover:bg-indigo-700 disabled:bg-gray-300 transition-colors">挿入する</button>
             </div>
           </div>

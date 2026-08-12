@@ -36,7 +36,6 @@ function ExternalChatContent() {
   const [selectedProfileUser, setSelectedProfileUser] = useState<UserData | ExternalUser | null>(null);
 
   const appConfig: AppConfig = { name: "ゲストチャット", icon: "MessageCircle", color: "indigo" };
-  const c = COLOR_MAPPINGS[appConfig.color] || COLOR_MAPPINGS.default;
 
   const privateRoomsRef = useRef<ChatRoom[]>([]);
 
@@ -203,17 +202,16 @@ function ExternalChatContent() {
     );
   };
 
-  // UIエラーの際のログアウト用
   const handleErrorLogout = async () => {
     await signOut(auth);
     router.push("/chat-login");
   };
 
-  if (isLoading) return <div className="h-screen flex justify-center items-center bg-gray-50"><Loader2 className="w-8 h-8 animate-spin text-indigo-500" /></div>;
+  if (isLoading) return <div className="h-[100dvh] flex justify-center items-center bg-gray-50"><Loader2 className="w-8 h-8 animate-spin text-indigo-500" /></div>;
 
   if (error || !extUser) {
     return (
-      <div className="h-screen flex flex-col items-center justify-center bg-gray-50 p-4 text-center">
+      <div className="h-[100dvh] flex flex-col items-center justify-center bg-gray-50 p-4 text-center">
         <AlertTriangle className="w-12 h-12 text-red-500 mb-4" />
         <h1 className="text-xl font-black text-gray-900 mb-2">アクセスできません</h1>
         <p className="text-sm font-bold text-gray-500 mb-6">{error}</p>
@@ -227,38 +225,39 @@ function ExternalChatContent() {
   const activeRoom = chatRooms.find(r => r.id === activeRoomId);
 
   return (
-    <div className="h-screen font-sans flex flex-col text-gray-900 bg-gray-50 relative">
+    // ★ h-[100dvh] を指定し、スマホのURLバー等に影響されず常に全画面に収める
+    <div className="h-[100dvh] font-sans flex flex-col text-gray-900 bg-gray-50 relative overflow-hidden">
       
-      <header className="bg-indigo-600 text-white px-4 py-3 flex items-center justify-between shadow-md shrink-0">
-        <div className="flex items-center gap-2.5">
+      <header className="bg-indigo-600 text-white px-3 sm:px-4 py-2 sm:py-3 flex items-center justify-between shadow-md shrink-0">
+        <div className="flex items-center gap-2 sm:gap-2.5 min-w-0">
           {schoolData?.logoURL ? (
-            <img src={schoolData.logoURL} alt={schoolData.name} className="w-9 h-9 rounded-full object-cover bg-white border border-indigo-400" />
+            <img src={schoolData.logoURL} alt={schoolData.name} className="w-8 h-8 sm:w-9 sm:h-9 rounded-full object-cover bg-white border border-indigo-400 shrink-0" />
           ) : (
-            <div className="p-2 bg-white/20 rounded-full">
-              <Building2 className="w-5 h-5 text-white" />
+            <div className="p-1.5 sm:p-2 bg-white/20 rounded-full shrink-0">
+              <Building2 className="w-4 h-4 sm:w-5 sm:h-5 text-white" />
             </div>
           )}
-          <div>
-            <h1 className="text-sm font-black tracking-tight">{schoolData?.name || "SCPS 利用校"}</h1>
-            <p className="text-[9px] font-medium text-indigo-200">生徒会ポータルシステム ゲストチャットルーム</p>
+          <div className="min-w-0 pr-2">
+            <h1 className="text-[11px] sm:text-sm font-black tracking-tight truncate">{schoolData?.name || "SCPS 利用校"}</h1>
+            <p className="text-[8px] sm:text-[9px] font-medium text-indigo-200 truncate">生徒会ポータルシステム ゲストチャットルーム</p>
           </div>
         </div>
-        <div className="flex items-center gap-4">
+        <div className="flex items-center gap-3 sm:gap-4 shrink-0">
           <div className="hidden sm:flex flex-col items-end">
-            <span className="text-xs font-bold">{extUser.name}</span>
-            <span className="text-[9px] text-indigo-200">{extUser.affiliation || "ゲスト"}</span>
+            <span className="text-[11px] sm:text-xs font-bold truncate max-w-[120px]">{extUser.name}</span>
+            <span className="text-[8px] sm:text-[9px] text-indigo-200 truncate max-w-[120px]">{extUser.affiliation || "ゲスト"}</span>
           </div>
-          <button onClick={handleLogout} className="p-2 bg-indigo-700 hover:bg-indigo-800 rounded-lg transition-colors" title="ログアウト">
+          <button onClick={handleLogout} className="p-1.5 sm:p-2 bg-indigo-700 hover:bg-indigo-800 rounded-lg transition-colors" title="ログアウト">
             <LogOut className="w-4 h-4" />
           </button>
         </div>
       </header>
-      
 
-      <main className="flex-1 w-full max-w-7xl mx-auto p-2 sm:p-4 flex flex-col min-h-0">
-        <div className="flex-1 overflow-hidden flex bg-white rounded-xl sm:rounded-2xl shadow-sm border border-gray-200 relative">
+      {/* メインのチャットUI (スクロール崩れを防ぐために min-h-0 を指定) */}
+      <main className="flex-1 w-full max-w-7xl mx-auto sm:p-4 flex flex-col min-h-0">
+        <div className="flex-1 overflow-hidden flex bg-white sm:rounded-2xl sm:shadow-sm sm:border border-gray-200 relative min-h-0">
           
-          <div className={`w-full sm:w-80 md:w-96 flex-shrink-0 ${activeRoomId ? 'hidden sm:block' : 'block'}`}>
+          <div className={`w-full sm:w-80 md:w-96 flex-shrink-0 flex flex-col min-h-0 ${activeRoomId ? 'hidden sm:flex' : 'flex'}`}>
             <ChatList 
               userData={extUser as unknown as UserData} 
               tenantUsers={tenantUsers} 
@@ -276,9 +275,21 @@ function ExternalChatContent() {
               schoolName={schoolData?.name}
               schoolLogoURL={schoolData?.logoURL}
             />
+
+            {/* フッターリンク (スマホのリスト画面およびPCのリスト下部に表示) */}
+            <div className="p-3 bg-gray-50/50 border-t border-gray-100 flex flex-col gap-1.5 text-[9px] font-bold text-gray-500 text-center shrink-0">
+              <div className="flex flex-wrap items-center justify-center gap-x-3 gap-y-1.5">
+                <Link href="/legal/terms" className="hover:text-gray-900 transition-colors">利用規約</Link>
+                <Link href="/legal/privacy" className="hover:text-gray-900 transition-colors">プライバシー</Link>
+                <Link href="/legal/commercial" className="hover:text-gray-900 transition-colors">特定商取引法</Link>
+              </div>
+              <div className="text-[8px] text-gray-400 mt-0.5">
+                &copy; {new Date().getFullYear()} YORIKURU
+              </div>
+            </div>
           </div>
 
-          <div className={`flex-1 flex-col bg-[#f4f7f6] ${!activeRoomId ? 'hidden sm:flex' : 'flex'} border-l border-gray-200 relative`}>
+          <div className={`flex-1 flex-col bg-[#f4f7f6] ${!activeRoomId ? 'hidden sm:flex' : 'flex'} sm:border-l border-gray-200 relative min-h-0`}>
             {!activeRoomId || !activeRoom ? (
               <div className="flex-1 flex flex-col items-center justify-center text-gray-400 p-6 text-center">
                 <div className={`p-4 bg-indigo-100 text-indigo-600 rounded-2xl mb-4 shadow-sm opacity-50`}>
@@ -307,19 +318,6 @@ function ExternalChatContent() {
         </div>
       </main>
 
-      <div className="flex flex-col gap-1.5 text-[9px] font-bold text-gray-500 text-center">
-            <div className="flex flex-wrap items-center justify-center gap-x-3 gap-y-1.5">
-              <Link href="/legal/terms" className="hover:text-gray-300 transition-colors">利用規約</Link>
-              <Link href="/legal/privacy" className="hover:text-gray-300 transition-colors">プライバシー</Link>
-              <Link href="/legal/commercial" className="hover:text-gray-300 transition-colors">特定商取引法</Link>
-            </div>
-            <div className="text-[8px] text-gray-600 mt-0.5">
-              &copy; {new Date().getFullYear()} YORIKURU / 生徒会ポータルシステム
-            </div>
-            <br/><br/>
-          </div>
-
-
       {selectedProfileUser && (
         <UserProfileModal 
           user={selectedProfileUser} 
@@ -340,7 +338,7 @@ function ExternalChatContent() {
 export default function ExternalChatMainPage() {
   return (
     <Suspense fallback={
-      <div className="h-screen flex justify-center items-center bg-gray-50">
+      <div className="h-[100dvh] flex justify-center items-center bg-gray-50">
         <Loader2 className="w-8 h-8 animate-spin text-indigo-500" />
       </div>
     }>

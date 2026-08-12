@@ -23,7 +23,16 @@ export default function TopLayout({ children }: { children: React.ReactNode }) {
   const router = useRouter();
   const pathname = usePathname();
   
+  // ★ 初期値は true (PC用に開いておく) に設定
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
+  
+  // ★ 追加：初回読み込み時に画面幅を判定し、スマホサイズならサイドバーを閉じる
+  useEffect(() => {
+    if (typeof window !== "undefined" && window.innerWidth < 768) {
+      setIsSidebarOpen(false);
+    }
+  }, []);
+
   const [isProfileMenuOpen, setIsProfileMenuOpen] = useState(false);
   const [selectedDate, setSelectedDate] = useState(new Date());
   
@@ -178,7 +187,7 @@ export default function TopLayout({ children }: { children: React.ReactNode }) {
   };
 
   if (isLoading) {
-    return <div className="flex h-[100dvh] items-center justify-center bg-[#F9FAFB]"><Loader2 className="w-8 h-8 animate-spin text-indigo-600" /></div>;
+    return <div className="fixed inset-0 flex items-center justify-center bg-[#F9FAFB]"><Loader2 className="w-8 h-8 animate-spin text-indigo-600" /></div>;
   }
 
   const isPrintPage = pathname.includes("/equipment/print");
@@ -250,7 +259,6 @@ export default function TopLayout({ children }: { children: React.ReactNode }) {
     </>
   );
 
-  // Setupや印刷などの単独ページは、内部でスクロールできるように min-h-[100dvh] を付与します。
   if (isBlocked || isPrintPage || hideLayoutPaths.includes(pathname)) {
     return (
       <>
@@ -290,8 +298,7 @@ export default function TopLayout({ children }: { children: React.ReactNode }) {
   return (
     <>
       {renderModals()}
-      {/* ★ 大枠を h-[100dvh] と overflow-hidden で完全固定フレーム化します */}
-      <div className="flex h-[100dvh] w-full bg-white text-gray-900 font-sans overflow-hidden">
+      <div className="fixed inset-0 flex w-full bg-white text-gray-900 font-sans overflow-hidden">
         
         <Sidebar 
           isSidebarOpen={isSidebarOpen} 
@@ -304,8 +311,7 @@ export default function TopLayout({ children }: { children: React.ReactNode }) {
           allEvents={allEvents} 
         />
         
-        {/* ★ 右側のメインコンテナも h-[100dvh] で高さを固定 */}
-        <div className="flex-1 flex flex-col min-w-0 bg-[#F9FAFB] h-[100dvh]">
+        <div className="flex-1 flex flex-col min-w-0 bg-[#F9FAFB] h-full overflow-hidden">
           <Header 
             isSidebarOpen={isSidebarOpen} 
             setIsSidebarOpen={setIsSidebarOpen}
@@ -318,15 +324,13 @@ export default function TopLayout({ children }: { children: React.ReactNode }) {
             setIsProfileMenuOpen={setIsProfileMenuOpen}
           />
           
-          {/* ★ flex-1 min-h-0 が必須！これでヘッダーを除いた残りの高さを厳密に確保します */}
-          <main className="flex-1 min-h-0 w-full relative flex flex-col">
-            <div className={isBlurNeeded ? "pointer-events-none select-none blur-[4px] transition-all flex flex-col flex-1 h-full min-h-0" : "flex flex-col flex-1 h-full min-h-0"}>
+          <main className="flex-1 min-h-0 w-full relative flex flex-col overflow-y-auto overscroll-contain">
+            <div className={isBlurNeeded ? "pointer-events-none select-none blur-[4px] transition-all flex flex-col flex-1 min-h-full pb-20 md:pb-6" : "flex flex-col flex-1 min-h-full pb-20 md:pb-6"}>
               
               <div className="w-full max-w-7xl mx-auto px-3 sm:px-4 lg:px-6 pt-3 sm:pt-4 lg:pt-6 empty:hidden flex-shrink-0 z-40">
                 <DisasterAlertWidget schoolData={schoolData} />
               </div>
 
-              {/* ★ ここに入る page.tsx 側で overflow-y-auto が効くようになります */}
               {children}
             </div>
           </main>

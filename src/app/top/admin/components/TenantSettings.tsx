@@ -7,7 +7,6 @@ import { db, storage } from "@/lib/firebase";
 import { Settings, Loader2, Building, Mail, User, Key, Camera, Upload, Trash2, CheckCircle2, Calendar, Tag, MapPin, Search } from "lucide-react";
 import { SchoolData } from "../page";
 
-// ★ 修正：latitude と longitude を追加
 type ExtendedSchoolData = SchoolData & {
   adminName?: string;
   adminEmail?: string;
@@ -226,7 +225,7 @@ export default function TenantSettings({ schoolData, showAlert }: Props) {
       await updateDoc(doc(db, "schools", exSchoolData.id), updatePayload);
 
       setPhotoBlob(null);
-      showAlert("success", "テナント基本情報を更新・保存しました。");
+      showAlert("success", "テナント情報を更新・保存しました。");
     } catch (error) {
       console.error("Save error:", error);
       showAlert("error", "設定の保存に失敗しました。");
@@ -245,68 +244,71 @@ export default function TenantSettings({ schoolData, showAlert }: Props) {
   };
 
   return (
-    <div className="space-y-6 max-w-4xl pb-12 animate-fade-in">
-      <div>
-        <h3 className="text-xl font-extrabold text-gray-900 flex items-center gap-2">
-          <Settings className="h-6 w-6 text-indigo-600" />
+    <div className="space-y-4 sm:space-y-6 max-w-4xl pb-6 animate-fade-in">
+      <div className="px-2 sm:px-0">
+        <h3 className="text-lg sm:text-xl font-extrabold text-gray-900 flex items-center gap-2">
+          <Settings className="h-5 w-5 sm:h-6 sm:w-6 text-indigo-600" />
           テナント（学校）基本設定
         </h3>
-        <p className="text-xs font-bold text-gray-500 mt-1">
+        <p className="text-[10px] sm:text-xs font-bold text-gray-500 mt-1">
           組織の基本情報、識別コード、ログイン連携、テナント画像の管理を行います。
         </p>
       </div>
 
-      <form onSubmit={handleSaveSettings} className="space-y-6">
+      <form onSubmit={handleSaveSettings} className="space-y-4 sm:space-y-6">
         
+        {/* === テナント固有識別情報 === */}
         <div className="bg-white shadow-xs rounded-2xl overflow-hidden border border-gray-200">
-          <div className="px-6 py-4 border-b border-gray-200 bg-gray-50/80 flex items-center gap-2">
+          <div className="px-4 sm:px-6 py-3 sm:py-4 border-b border-gray-200 bg-gray-50/80 flex items-center gap-2">
             <Tag className="w-4 h-4 text-indigo-600" />
-            <h4 className="text-sm font-black text-gray-900">テナント固有識別情報 (システム情報)</h4>
+            <h4 className="text-xs sm:text-sm font-black text-gray-900">テナント固有識別情報 (システム情報)</h4>
           </div>
-          <div className="p-6 grid grid-cols-1 sm:grid-cols-3 gap-4 bg-gray-50/30">
-            <div>
-              <span className="block text-[10px] font-bold text-gray-400">学校識別コード (School Code)</span>
-              <span className="text-xs font-mono font-bold text-indigo-700 bg-indigo-50 px-2 py-0.5 rounded border border-indigo-100 inline-block mt-0.5">
+          <div className="p-4 sm:p-6 grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4 bg-gray-50/30">
+            <div className="bg-white p-3 rounded-xl border border-gray-100 shadow-2xs">
+              <span className="block text-[10px] font-bold text-gray-400 mb-1">学校識別コード (School Code)</span>
+              <span className="text-[11px] sm:text-xs font-mono font-bold text-indigo-700 bg-indigo-50 px-2 py-0.5 rounded border border-indigo-100 inline-block">
                 {exSchoolData.schoolCode || "未発行"}
               </span>
             </div>
-            <div>
-              <span className="block text-[10px] font-bold text-gray-400">ステータス</span>
-              <span className="text-xs font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-100 inline-flex items-center gap-1 mt-0.5">
+            <div className="bg-white p-3 rounded-xl border border-gray-100 shadow-2xs">
+              <span className="block text-[10px] font-bold text-gray-400 mb-1">ステータス</span>
+              <span className="text-[11px] sm:text-xs font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-100 inline-flex items-center gap-1">
                 <CheckCircle2 className="w-3 h-3 text-emerald-500" /> {exSchoolData.status || "active"}
               </span>
             </div>
-            <div>
-              <span className="block text-[10px] font-bold text-gray-400">テナント開設日時</span>
-              <span className="text-xs font-bold text-gray-600 flex items-center gap-1 mt-0.5">
+            <div className="bg-white p-3 rounded-xl border border-gray-100 shadow-2xs">
+              <span className="block text-[10px] font-bold text-gray-400 mb-1">テナント開設日時</span>
+              <span className="text-[11px] sm:text-xs font-bold text-gray-600 flex items-center gap-1">
                 <Calendar className="w-3 h-3 text-gray-400" /> {formatDateDisplay(exSchoolData.createdAt)}
               </span>
             </div>
           </div>
         </div>
 
+        {/* === テナント基本プロフィール === */}
         <div className="bg-white shadow-xs rounded-2xl overflow-hidden border border-gray-200">
-          <div className="px-6 py-4 border-b border-gray-200 bg-gray-50/80 flex items-center gap-2">
+          <div className="px-4 sm:px-6 py-3 sm:py-4 border-b border-gray-200 bg-gray-50/80 flex items-center gap-2">
             <Building className="w-4 h-4 text-indigo-600" />
-            <h4 className="text-sm font-black text-gray-900">テナント基本プロフィール</h4>
+            <h4 className="text-xs sm:text-sm font-black text-gray-900">テナント基本プロフィール</h4>
           </div>
           
-          <div className="p-6 space-y-6">
+          <div className="p-4 sm:p-6 space-y-4 sm:space-y-6">
             
+            {/* テナント画像 */}
             <div>
-              <label className="block text-xs font-bold text-gray-700 mb-2">テナント写真・シンボルマーク</label>
-              <div className="flex items-center gap-6">
-                <div className="w-24 h-24 rounded-2xl bg-gray-100 border-2 border-gray-200 flex items-center justify-center overflow-hidden flex-shrink-0 relative group shadow-sm">
+              <label className="block text-[11px] sm:text-xs font-bold text-gray-700 mb-2">テナント写真・シンボルマーク</label>
+              <div className="flex flex-col sm:flex-row sm:items-center gap-4 sm:gap-6">
+                <div className="w-20 h-20 sm:w-24 sm:h-24 rounded-2xl bg-gray-100 border-2 border-gray-200 flex items-center justify-center overflow-hidden flex-shrink-0 relative group shadow-sm mx-auto sm:mx-0">
                   {photoUrl ? (
                     <img src={photoUrl} alt="Tenant Photo" className="w-full h-full object-cover" />
                   ) : (
-                    <Building className="w-10 h-10 text-gray-300" />
+                    <Building className="w-8 h-8 sm:w-10 sm:h-10 text-gray-300" />
                   )}
                   <div 
                     onClick={() => fileInputRef.current?.click()} 
                     className="absolute inset-0 bg-black/40 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer"
                   >
-                    <Upload className="w-6 h-6 text-white" />
+                    <Upload className="w-5 h-5 sm:w-6 sm:h-6 text-white" />
                   </div>
                 </div>
 
@@ -318,12 +320,12 @@ export default function TenantSettings({ schoolData, showAlert }: Props) {
                   className="hidden" 
                 />
 
-                <div className="space-y-2">
-                  <div className="flex gap-2">
+                <div className="space-y-2 text-center sm:text-left">
+                  <div className="flex justify-center sm:justify-start gap-2">
                     <button 
                       type="button" 
                       onClick={() => fileInputRef.current?.click()} 
-                      className="px-4 py-2 bg-white border border-gray-300 text-gray-700 text-xs font-bold rounded-xl hover:bg-gray-50 transition-colors shadow-2xs flex items-center gap-1.5"
+                      className="px-3 sm:px-4 py-2 bg-white border border-gray-300 text-gray-700 text-[11px] sm:text-xs font-bold rounded-xl hover:bg-gray-50 transition-colors shadow-2xs flex items-center gap-1.5"
                     >
                       <Camera className="w-4 h-4 text-indigo-600" /> 画像を選択
                     </button>
@@ -331,13 +333,13 @@ export default function TenantSettings({ schoolData, showAlert }: Props) {
                       <button 
                         type="button" 
                         onClick={handleRemovePhoto} 
-                        className="px-3 py-2 bg-red-50 text-red-600 border border-red-100 text-xs font-bold rounded-xl hover:bg-red-100 transition-colors flex items-center gap-1"
+                        className="px-3 py-2 bg-red-50 text-red-600 border border-red-100 text-[11px] sm:text-xs font-bold rounded-xl hover:bg-red-100 transition-colors flex items-center gap-1"
                       >
-                        <Trash2 className="w-4 h-4" /> 削除
+                        <Trash2 className="w-3.5 h-3.5 sm:w-4 sm:h-4" /> <span className="hidden sm:inline">削除</span>
                       </button>
                     )}
                   </div>
-                  <p className="text-[10px] font-bold text-gray-400 leading-relaxed">
+                  <p className="text-[9px] sm:text-[10px] font-bold text-gray-400 leading-relaxed max-w-xs mx-auto sm:mx-0">
                     ※ ヘッダーやサイドバー、発行書類のシンボルマークとして使用されます。
                   </p>
                 </div>
@@ -346,9 +348,10 @@ export default function TenantSettings({ schoolData, showAlert }: Props) {
 
             <hr className="border-gray-100" />
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            {/* 各種入力フォーム */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
               <div>
-                <label className="block text-xs font-bold text-gray-700 mb-1">
+                <label className="block text-[10px] sm:text-xs font-bold text-gray-700 mb-1">
                   学校名・組織名 <span className="text-red-500">*</span>
                 </label>
                 <div className="relative">
@@ -359,17 +362,17 @@ export default function TenantSettings({ schoolData, showAlert }: Props) {
                     value={name} 
                     onChange={e => setName(e.target.value)} 
                     placeholder="例: 熊本県立熊本高等学校" 
-                    className="w-full pl-9 pr-3 py-2 border border-gray-300 rounded-xl text-xs font-bold focus:ring-2 focus:ring-indigo-500 outline-none" 
+                    className="w-full pl-9 pr-3 py-2 border border-gray-300 rounded-xl text-[16px] sm:text-xs font-bold focus:ring-2 focus:ring-indigo-500 outline-none" 
                   />
                 </div>
               </div>
 
               <div>
-                <label className="block text-xs font-bold text-gray-700 mb-1">学校区分・種別</label>
+                <label className="block text-[10px] sm:text-xs font-bold text-gray-700 mb-1">学校区分・種別</label>
                 <select 
                   value={schoolType} 
                   onChange={e => setSchoolType(e.target.value)} 
-                  className="w-full border border-gray-300 rounded-xl px-3 py-2 text-xs font-bold bg-white focus:ring-2 focus:ring-indigo-500 outline-none"
+                  className="w-full border border-gray-300 rounded-xl px-3 py-2 text-[16px] sm:text-xs font-bold bg-white focus:ring-2 focus:ring-indigo-500 outline-none"
                 >
                   <option value="high_school">高等学校 (High School)</option>
                   <option value="junior_high_school">中学校 (Junior High School)</option>
@@ -379,26 +382,27 @@ export default function TenantSettings({ schoolData, showAlert }: Props) {
                 </select>
               </div>
 
-              <div className="sm:col-span-2 mt-1">
-                <label className="block text-xs font-bold text-gray-700 mb-1.5">
-                  所在地情報 <span className="text-[10px] font-bold text-gray-400 font-normal">（ダッシュボードの天気予報などに使用されます）</span>
+              <div className="sm:col-span-2 mt-1 bg-gray-50/50 p-3 sm:p-4 rounded-xl border border-gray-100">
+                <label className="block text-[10px] sm:text-xs font-bold text-gray-700 mb-1.5 flex items-center justify-between">
+                  所在地情報 
+                  <span className="text-[9px] text-gray-400 font-normal">（ダッシュボードの天気予報などに使用されます）</span>
                 </label>
-                <div className="flex flex-col sm:flex-row gap-3">
+                <div className="flex flex-col sm:flex-row gap-2 sm:gap-3">
                   <div className="flex w-full sm:w-48 gap-1.5">
                     <input 
-                      type="text" 
-                      placeholder="郵便番号 (例: 8620901)" 
+                      type="number" 
+                      placeholder="郵便番号 (ハイフンなし)" 
                       value={postalCode} 
                       onChange={e => setPostalCode(e.target.value)} 
-                      className="w-full px-3 py-2 border border-gray-300 rounded-xl text-xs font-bold focus:ring-2 focus:ring-indigo-500 outline-none" 
+                      className="w-full px-3 py-2 border border-gray-300 rounded-xl text-[16px] sm:text-xs font-bold focus:ring-2 focus:ring-indigo-500 outline-none" 
                     />
                     <button 
                       type="button" 
                       onClick={handleZipcodeSearch}
                       disabled={isSearchingZip || !postalCode}
-                      className="px-3 bg-gray-100 border border-gray-300 rounded-xl hover:bg-gray-200 transition-colors text-xs font-bold text-gray-600 flex items-center justify-center whitespace-nowrap disabled:opacity-50"
+                      className="px-3 bg-white border border-gray-300 rounded-xl hover:bg-gray-100 transition-colors text-xs font-bold text-gray-600 flex items-center justify-center whitespace-nowrap disabled:opacity-50 shadow-sm"
                     >
-                      {isSearchingZip ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Search className="w-3.5 h-3.5" />}
+                      {isSearchingZip ? <Loader2 className="w-4 h-4 animate-spin" /> : <Search className="w-4 h-4" />}
                     </button>
                   </div>
                   <div className="relative flex-1">
@@ -408,14 +412,14 @@ export default function TenantSettings({ schoolData, showAlert }: Props) {
                       value={location} 
                       onChange={e => setLocation(e.target.value)} 
                       placeholder="例: 熊本県熊本市東区" 
-                      className="w-full pl-9 pr-3 py-2 border border-gray-300 rounded-xl text-xs font-bold focus:ring-2 focus:ring-indigo-500 outline-none" 
+                      className="w-full pl-9 pr-3 py-2 border border-gray-300 rounded-xl text-[16px] sm:text-xs font-bold focus:ring-2 focus:ring-indigo-500 outline-none" 
                     />
                   </div>
                 </div>
               </div>
 
               <div>
-                <label className="block text-xs font-bold text-gray-700 mb-1">責任管理者 氏名</label>
+                <label className="block text-[10px] sm:text-xs font-bold text-gray-700 mb-1">責任管理者 氏名</label>
                 <div className="relative">
                   <User className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
                   <input 
@@ -423,13 +427,13 @@ export default function TenantSettings({ schoolData, showAlert }: Props) {
                     value={adminName} 
                     onChange={e => setAdminName(e.target.value)} 
                     placeholder="例: 山田 太郎" 
-                    className="w-full pl-9 pr-3 py-2 border border-gray-300 rounded-xl text-xs font-bold focus:ring-2 focus:ring-indigo-500 outline-none" 
+                    className="w-full pl-9 pr-3 py-2 border border-gray-300 rounded-xl text-[16px] sm:text-xs font-bold focus:ring-2 focus:ring-indigo-500 outline-none" 
                   />
                 </div>
               </div>
 
               <div>
-                <label className="block text-xs font-bold text-gray-700 mb-1">責任管理者 メールアドレス</label>
+                <label className="block text-[10px] sm:text-xs font-bold text-gray-700 mb-1">責任管理者 メールアドレス</label>
                 <div className="relative">
                   <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
                   <input 
@@ -437,7 +441,7 @@ export default function TenantSettings({ schoolData, showAlert }: Props) {
                     value={adminEmail} 
                     onChange={e => setAdminEmail(e.target.value)} 
                     placeholder="例: it@yorikuru.com" 
-                    className="w-full pl-9 pr-3 py-2 border border-gray-300 rounded-xl text-xs font-bold focus:ring-2 focus:ring-indigo-500 outline-none" 
+                    className="w-full pl-9 pr-3 py-2 border border-gray-300 rounded-xl text-[16px] sm:text-xs font-bold focus:ring-2 focus:ring-indigo-500 outline-none" 
                   />
                 </div>
               </div>
@@ -446,43 +450,44 @@ export default function TenantSettings({ schoolData, showAlert }: Props) {
           </div>
         </div>
 
+        {/* === 外部連携ログイン設定 === */}
         <div className="bg-white shadow-xs rounded-2xl overflow-hidden border border-gray-200">
-          <div className="px-6 py-4 border-b border-gray-200 bg-gray-50/80 flex items-center gap-2">
+          <div className="px-4 sm:px-6 py-3 sm:py-4 border-b border-gray-200 bg-gray-50/80 flex items-center gap-2">
             <Key className="w-4 h-4 text-indigo-600" />
-            <h4 className="text-sm font-black text-gray-900">外部連携ログイン設定 (ソーシャル認証)</h4>
+            <h4 className="text-xs sm:text-sm font-black text-gray-900">外部連携ログイン設定 (ソーシャル認証)</h4>
           </div>
 
-          <div className="p-6 space-y-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <h5 className="text-xs font-bold text-gray-900">Google アカウントログイン</h5>
-                <p className="text-[10px] text-gray-500 mt-0.5">@gmail.com または 学校の Google Workspace アカウント連携を許可</p>
+          <div className="p-4 sm:p-6 space-y-4 sm:space-y-6">
+            <div className="flex items-center justify-between gap-4">
+              <div className="flex-1 min-w-0">
+                <h5 className="text-[11px] sm:text-xs font-bold text-gray-900 truncate">Google アカウントログイン</h5>
+                <p className="text-[9px] sm:text-[10px] text-gray-500 mt-0.5 leading-tight">学校の Google Workspace アカウント連携を許可</p>
               </div>
-              <label className="inline-flex relative items-center cursor-pointer">
+              <label className="inline-flex relative items-center cursor-pointer shrink-0">
                 <input type="checkbox" className="sr-only peer" checked={allowGoogle} onChange={() => setAllowGoogle(!allowGoogle)} />
-                <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-indigo-600"></div>
+                <div className="w-10 h-5 sm:w-11 sm:h-6 bg-gray-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 sm:after:h-5 sm:after:w-5 after:transition-all peer-checked:bg-indigo-600"></div>
               </label>
             </div>
 
             <hr className="border-gray-100" />
 
-            <div className="flex items-center justify-between">
-              <div>
-                <h5 className="text-xs font-bold text-gray-900">Microsoft アカウントログイン</h5>
-                <p className="text-[10px] text-gray-500 mt-0.5">学校配布の Microsoft 365 (Entra ID) アカウント連携を許可</p>
+            <div className="flex items-center justify-between gap-4">
+              <div className="flex-1 min-w-0">
+                <h5 className="text-[11px] sm:text-xs font-bold text-gray-900 truncate">Microsoft アカウントログイン</h5>
+                <p className="text-[9px] sm:text-[10px] text-gray-500 mt-0.5 leading-tight">学校配布の Microsoft 365 アカウント連携を許可</p>
               </div>
-              <label className="inline-flex relative items-center cursor-pointer">
+              <label className="inline-flex relative items-center cursor-pointer shrink-0">
                 <input type="checkbox" className="sr-only peer" checked={allowMicrosoft} onChange={() => setAllowMicrosoft(!allowMicrosoft)} />
-                <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-indigo-600"></div>
+                <div className="w-10 h-5 sm:w-11 sm:h-6 bg-gray-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 sm:after:h-5 sm:after:w-5 after:transition-all peer-checked:bg-indigo-600"></div>
               </label>
             </div>
           </div>
 
-          <div className="px-6 py-4 bg-gray-50/80 border-t border-gray-200 flex justify-end">
+          <div className="px-4 sm:px-6 py-3 sm:py-4 bg-gray-50/80 border-t border-gray-200 flex justify-end">
             <button 
               type="submit" 
               disabled={isSaving} 
-              className={`inline-flex justify-center items-center py-2.5 px-8 border border-transparent shadow-sm text-xs font-bold rounded-xl text-white transition-colors ${
+              className={`w-full sm:w-auto inline-flex justify-center items-center py-3 sm:py-2.5 px-8 border border-transparent shadow-sm text-[13px] sm:text-xs font-bold rounded-xl text-white transition-colors ${
                 isSaving ? "bg-gray-400 cursor-not-allowed" : "bg-indigo-600 hover:bg-indigo-700 active:scale-[0.98]"
               }`}
             >

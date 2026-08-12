@@ -288,10 +288,11 @@ export default function ChatPage() {
   const activeRoom = chatRooms.find(r => r.id === activeRoomId);
 
   return (
-    // ★ flex-1 と min-h-0 を付与して、親の枠（TopLayout）にぴったり収まるようにする
-    <div className="flex-1 flex flex-col min-h-0 font-sans text-gray-900 bg-[#F9FAFB] relative">
+    // ★ h-full w-full を指定し、親の枠（TopLayout）にぴったり 100% 収まるようにします。これで外側は絶対にスクロールしません。
+    <div className="h-full w-full flex flex-col min-h-0 font-sans text-gray-900 bg-[#F9FAFB] relative">
       <main className="flex-1 w-full max-w-7xl mx-auto p-2 sm:p-4 lg:p-6 flex flex-col min-h-0">
         
+        {/* ヘッダー部分は高さ固定（flex-shrink-0） */}
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 sm:gap-4 mb-2 sm:mb-4 flex-shrink-0">
           <div className="flex items-center gap-2 sm:gap-3">
             <div className={`p-2 sm:p-2.5 ${c.lightBg} ${c.text} rounded-xl shadow-sm`}>
@@ -304,10 +305,11 @@ export default function ChatPage() {
           </div>
         </div>
 
-        {/* ここがチャットUIの本体。flex-1 min-h-0 を設定して親に追従させる */}
-        <div className="flex-1 overflow-hidden flex bg-white rounded-2xl shadow-sm border border-gray-200 relative min-h-0">
+        {/* ★ ここが重要！ flex-1 min-h-0 overflow-hidden を指定し、この箱の中でだけスクロールが発生するように封じ込めます */}
+        <div className="flex-1 flex min-h-0 bg-white rounded-2xl shadow-sm border border-gray-200 relative overflow-hidden">
           
-          <div className={`w-full sm:w-72 md:w-80 lg:w-96 flex-shrink-0 h-full ${activeRoomId || extManageMode.show || settingsState.show ? 'hidden sm:block' : 'block'}`}>
+          {/* 左側のリストも h-full flex flex-col min-h-0 で固定 */}
+          <div className={`w-full sm:w-72 md:w-80 lg:w-96 flex-shrink-0 h-full flex flex-col min-h-0 ${activeRoomId || extManageMode.show || settingsState.show ? 'hidden sm:flex' : 'flex'}`}>
             <ChatList 
               userData={userData} 
               tenantUsers={tenantUsers} 
@@ -331,7 +333,8 @@ export default function ChatPage() {
             />
           </div>
 
-          <div className={`flex-1 flex flex-col bg-[#f4f7f6] h-full min-w-0 ${!activeRoomId && !extManageMode.show && !settingsState.show ? 'hidden sm:flex' : 'flex'} border-l border-gray-200 relative`}>
+          {/* 右側のトーク画面も h-full min-h-0 で固定 */}
+          <div className={`flex-1 flex flex-col h-full min-w-0 min-h-0 bg-[#f4f7f6] border-l border-gray-200 relative ${!activeRoomId && !extManageMode.show && !settingsState.show ? 'hidden sm:flex' : 'flex'}`}>
             
             {settingsState.show ? (
               <ChatSettings 

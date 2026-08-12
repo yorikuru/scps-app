@@ -250,8 +250,8 @@ export default function TasksPage() {
   const assigneeOptions = [{label:"すべての担当者", value:"all"}, {label:"自分のタスク", value:"my"}, {label:"未割り当て", value:"unassigned"}];
   const statusOptions = Object.entries(STATUS_CONFIG).map(([key, conf]) => ({ label: conf.label, value: key, badgeClass: conf.badge.split(" ")[0] + " " + conf.badge.split(" ")[1] + " px-1.5 py-0.5 rounded-md border" }));
 
-  if (isLoading) return <div className="min-h-screen bg-[#F9FAFB] flex justify-center items-center"><Loader2 className="w-8 h-8 animate-spin text-indigo-600" /></div>;
-  if (!hasPermission) return <div className="min-h-screen flex flex-col items-center justify-center p-4"><AlertTriangle className="w-12 h-12 text-red-500 mb-4" /><h1 className="text-xl font-black">アクセス権限がありません</h1></div>;
+  if (isLoading) return <div className="h-full bg-[#F9FAFB] flex justify-center items-center"><Loader2 className="w-8 h-8 animate-spin text-indigo-600" /></div>;
+  if (!hasPermission) return <div className="h-full flex flex-col items-center justify-center p-4"><AlertTriangle className="w-12 h-12 text-red-500 mb-4" /><h1 className="text-xl font-black">アクセス権限がありません</h1></div>;
 
   const renderTaskCard = (t: Task) => {
     const overdue = isOverdue(t.dueDate, t.dueTime, t.status);
@@ -300,8 +300,10 @@ export default function TasksPage() {
   };
 
   return (
-    <div className="min-h-screen bg-[#F9FAFB] font-sans flex flex-col text-gray-900 overflow-hidden">
-      {/* ナビゲーションタブ */}
+    // ★ h-full flex-1 w-full で親フレームにぴったり固定
+    <div className="h-full flex-1 w-full bg-[#F9FAFB] font-sans flex flex-col text-gray-900 overflow-hidden relative min-h-0">
+      
+      {/* ナビゲーションタブ (固定) */}
       <div className="px-3 sm:px-6 py-2 sm:py-3 border-b border-gray-200 bg-white flex flex-col sm:flex-row sm:items-center justify-between gap-2 flex-shrink-0">
         <div className="flex items-center gap-2 sm:gap-3">
           <div className={`p-1.5 sm:p-2 ${c.lightBg} ${c.text} rounded-lg sm:rounded-xl shadow-2xs`}><DynamicIcon name={appConfig.icon} className="w-4 h-4 sm:w-5 sm:h-5" /></div>
@@ -312,7 +314,7 @@ export default function TasksPage() {
         </div>
         
         {/* スマホ横スクロール対応タブ */}
-        <div className="flex items-center gap-1 bg-gray-100 p-1 rounded-xl overflow-x-auto [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none] whitespace-nowrap">
+        <div className="flex items-center gap-1 bg-gray-100 p-1 rounded-xl overflow-x-auto custom-scrollbar whitespace-nowrap">
           <button className="px-3 py-1.5 text-xs font-bold bg-white text-indigo-600 rounded-lg shadow-2xs flex items-center gap-1">
             <KanbanSquare className="w-3.5 h-3.5" /> カンバン
           </button>
@@ -325,24 +327,25 @@ export default function TasksPage() {
         </div>
       </div>
 
-      <main className="flex-1 flex flex-col h-[calc(100vh-100px)]">
+      <main className="flex-1 flex flex-col h-full min-h-0">
         
-        {/* コントロールバー（スマホで縦並び対応） */}
+        {/* コントロールバー（固定） */}
         <div className="px-3 sm:px-8 py-2 sm:py-3 bg-white border-b border-gray-100 flex-shrink-0 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
           <div className="flex w-full sm:w-auto items-center gap-2">
             <div className="relative flex-1 sm:w-48">
               <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-400" />
-              <input type="text" placeholder="タスク検索..." value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} className={`w-full pl-8 pr-3 py-1.5 bg-gray-50 border border-gray-200 rounded-lg text-xs font-bold focus:outline-none focus:ring-1 focus:bg-white transition-all ${c.ring}`} />
+              {/* ★ スマホズーム対策 text-[16px] */}
+              <input type="text" placeholder="タスク検索..." value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} className={`w-full pl-8 pr-3 py-1.5 bg-gray-50 border border-gray-200 rounded-lg text-[16px] sm:text-xs font-bold focus:outline-none focus:ring-1 focus:bg-white transition-all ${c.ring}`} />
             </div>
             <div className="w-32 sm:w-36">
               <CustomSelect value={filterAssignee} options={assigneeOptions} onChange={(v: any) => setFilterAssignee(v)} ringClass={c.ring} />
             </div>
           </div>
-          <button onClick={() => router.push("/top/tasks/new")} className={`w-full sm:w-auto px-4 py-2 sm:py-1.5 ${c.bg} ${c.hover} text-white text-xs font-bold rounded-lg shadow-sm flex items-center justify-center`}><Plus className="w-4 h-4 mr-1" /> タスク作成</button>
+          <button onClick={() => router.push("/top/tasks/new")} className={`w-full sm:w-auto px-4 py-2 sm:py-1.5 ${c.bg} ${c.hover} text-white text-xs font-bold rounded-lg shadow-sm flex items-center justify-center shrink-0`}><Plus className="w-4 h-4 mr-1" /> タスク作成</button>
         </div>
 
-        {/* スマホ専用ステータスタブ */}
-        <div className="md:hidden flex overflow-x-auto gap-2 p-3 bg-white border-b border-gray-200 [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
+        {/* スマホ専用ステータスタブ（固定） */}
+        <div className="md:hidden flex overflow-x-auto gap-2 p-3 bg-white border-b border-gray-200 custom-scrollbar shrink-0">
           {columns.map(status => {
             const conf = STATUS_CONFIG[status];
             const colTasks = filteredTasks.filter(t => t.status === status);
@@ -370,9 +373,9 @@ export default function TasksPage() {
           </div>
         )}
 
-        {/* カンバンボード本体 */}
-        <div className="flex-1 overflow-x-auto custom-scrollbar p-3 md:p-6 bg-gray-100/50">
-          <div className="flex gap-4 md:gap-6 md:min-w-max h-full pb-2">
+        {/* カンバンボード本体（ここで縦横スクロールさせる） */}
+        <div className="flex-1 overflow-x-auto overflow-y-auto custom-scrollbar p-3 md:p-6 bg-gray-100/50 pb-24 md:pb-6">
+          <div className="flex gap-4 md:gap-6 md:min-w-max h-full min-h-0">
             {columns.map(status => {
               const conf = STATUS_CONFIG[status];
               const colTasks = filteredTasks.filter(t => t.status === status);
@@ -383,22 +386,24 @@ export default function TasksPage() {
                   key={status} 
                   onDragOver={handleDragOver} 
                   onDrop={(e) => handleDrop(e, status)} 
-                  className={`${isMobileActive ? 'flex' : 'hidden'} md:flex w-full md:w-[300px] flex-col h-full ${conf.color} rounded-2xl border border-gray-200/60 overflow-hidden transition-colors hover:bg-gray-50/80`}
+                  // ★ h-full と min-h-0 で無駄な押し出しを防ぎ、内部スクロールに任せる
+                  className={`${isMobileActive ? 'flex' : 'hidden'} md:flex w-full md:w-[300px] flex-col h-full min-h-0 ${conf.color} rounded-2xl border border-gray-200/60 overflow-hidden transition-colors hover:bg-gray-50/80`}
                 >
-                  <div className="p-3 border-b border-gray-200/60 flex items-center justify-between bg-white shadow-2xs pointer-events-none">
+                  <div className="p-3 border-b border-gray-200/60 flex items-center justify-between bg-white shadow-2xs pointer-events-none shrink-0">
                     <h3 className="text-xs font-black text-gray-700 flex items-center gap-1.5"><span className={`w-2 h-2 rounded-full ${conf.dot}`}></span> {conf.label}</h3>
                     <span className={`px-2 py-0.5 rounded-md text-[10px] font-bold ${conf.badge.split(' ').slice(0, 2).join(' ')}`}>{colTasks.length}</span>
                   </div>
-                  <div className="flex-1 p-2 md:p-2.5 overflow-y-auto custom-scrollbar space-y-2.5">
+                  
+                  {/* ★ カラムのカードリスト（縦スクロール領域） */}
+                  <div className="flex-1 p-2 md:p-2.5 overflow-y-auto custom-scrollbar space-y-2.5 min-h-0">
                     {colTasks.map(renderTaskCard)}
                     
-                    {/* ★ 各カラムの一番下にタスク追加ボタン */}
+                    {/* 各カラムの一番下にタスク追加ボタン */}
                     <div className="p-1 pt-0">
                         <button onClick={() => router.push(`/top/tasks/new?status=${status}`)} className="w-full py-2 mt-2 border border-dashed border-gray-300 text-gray-500 rounded-xl text-xs font-bold hover:border-indigo-300 hover:text-indigo-600 hover:bg-white transition-colors flex items-center justify-center gap-1 shadow-sm">
                           <Plus className="w-3.5 h-3.5" /> タスクを追加
                         </button>
                     </div>
-
                   </div>
                 </div>
               );

@@ -1,12 +1,13 @@
 "use client";
 
 import React, { useEffect, useState, useMemo } from "react";
+import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { collection, query, where, onSnapshot } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 import * as LucideIcons from "lucide-react";
 import { 
-  ChevronRight, AlertTriangle, Calendar as CalendarIcon, Flag, CheckCircle2, BarChart3, ArrowRightLeft
+  ChevronRight, AlertTriangle, Calendar as CalendarIcon, Flag, CheckCircle2, BarChart3, ArrowRightLeft, Grid
 } from "lucide-react";
 import { UserData, SchoolData, SystemApp } from "../page";
 
@@ -74,11 +75,13 @@ export default function NormalTop({ userData, schoolData, messages, systemApps, 
 
   const [allTasks, setAllTasks] = useState<any[]>([]);
   const [rentals, setRentals] = useState<any[]>([]); 
+  
+  const [unreadCounts, setUnreadCounts] = useState<Record<string, number>>({});
+  const [chatUnreadCount, setChatUnreadCount] = useState(0);
 
   useEffect(() => {
     if (!schoolData) return;
 
-    // Taskデータの取得
     const qTasks = query(collection(db, "tasks"), where("schoolId", "==", schoolData.id));
     const unsubTasks = onSnapshot(qTasks, (snapshot) => {
       const fetched: any[] = [];
@@ -94,7 +97,6 @@ export default function NormalTop({ userData, schoolData, messages, systemApps, 
       setAllTasks(fetched);
     });
 
-    // 貸出データの取得
     const qRentals = query(collection(db, "rentals"), where("schoolId", "==", schoolData.id));
     const unsubRentals = onSnapshot(qRentals, (snapshot) => {
       const fetched: any[] = [];
@@ -105,22 +107,48 @@ export default function NormalTop({ userData, schoolData, messages, systemApps, 
     return () => { unsubTasks(); unsubRentals(); };
   }, [schoolData]);
 
+  useEffect(() => {
+    if (!userData?.id || !schoolData?.id) return;
+
+    const qNotif = query(collection(db, "notifications"), where("userId", "==", userData.id), where("schoolId", "==", schoolData.id), where("isRead", "==", false));
+    const unsubNotif = onSnapshot(qNotif, (snapshot) => {
+      const counts: Record<string, number> = {};
+      const now = Date.now();
+      snapshot.forEach((doc) => {
+        const data = doc.data();
+        const createdAt = data.createdAt?.toDate ? data.createdAt.toDate().getTime() : new Date(data.createdAt).getTime();
+        if (createdAt <= now) {
+          const sourceApp = data.sourceApp || "system";
+          counts[sourceApp] = (counts[sourceApp] || 0) + 1;
+        }
+      });
+      setUnreadCounts(counts);
+    });
+
+    const qChat = query(collection(db, "chat_rooms"), where("schoolId", "==", schoolData.id), where("members", "array-contains", userData.id));
+    const unsubChat = onSnapshot(qChat, (snapshot) => {
+      let totalChatUnread = 0;
+      snapshot.forEach((doc) => {
+        totalChatUnread += (doc.data().unreadCount?.[userData.id] || 0);
+      });
+      setChatUnreadCount(totalChatUnread);
+    });
+
+    return () => { unsubNotif(); unsubChat(); };
+  }, [userData, schoolData]);
+
   const userAllowedApps = useMemo(() => {
     if (!schoolData || !userData || !systemApps) return [];
-    
     const exSchoolData = schoolData as ExtendedSchoolData;
-
     return systemApps.filter(app => {
       if (!app.isActive) return false;
       const appId = (app as any).appId || app.id;
       const isTenantAllowed = exSchoolData.availableModules?.includes(appId);
       const isUserAllowed = userData.allowedModules?.includes(appId);
-
       const roleKey = (userData?.role || "guest") as string;
       const defaultRoles = (app as any).defaultRoles || { admin: true, it_manager: true, teacher: true, officer: true, guest: false };
       const perms = (exSchoolData as any)?.appPermissions?.[appId] || defaultRoles;
       if (perms[roleKey] === false) return false;
-
       return isTenantAllowed && isUserAllowed;
     }).map(app => {
       const appId = (app as any).appId || app.id;
@@ -171,6 +199,9 @@ export default function NormalTop({ userData, schoolData, messages, systemApps, 
   };
   const totalTasks = allTasks.length;
 
+  const taskRedCount = myTasks.filter(t => t.status === "not_started").length;
+  const taskBlueCount = myTasks.filter(t => t.status === "in_progress" || t.status === "waiting" || t.status === "pending").length;
+
   const activeRentals = rentals.filter(r => r.status === "active" || r.status === "partial");
   const overdueRentals = activeRentals.filter(r => {
     if (!r.endDate) return false;
@@ -178,25 +209,92 @@ export default function NormalTop({ userData, schoolData, messages, systemApps, 
     end.setHours(23, 59, 59);
     return end < new Date();
   });
+  
+  const activeRentalsCount = activeRentals.length;
 
   return (
-    // ★ p-3 sm:p-4 -> p-2 sm:p-4 に変更し、スマホでの外側の無駄な余白を削減
     <div className="p-2 sm:p-4 lg:p-6 w-full min-w-0">
-      {/* ★ space-y-4 -> space-y-2.5 sm:space-y-4 に変更し、縦のパーツ間隔を縮める */}
       <div className="max-w-7xl mx-auto space-y-2.5 sm:space-y-4 w-full min-w-0">
 
-        {/* スケジュールと天気 */}
-        {/* ★ gap-4 -> gap-2.5 sm:gap-4 に変更 */}
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-2.5 sm:gap-4 lg:gap-5 w-full min-w-0">
-          <div className="lg:col-span-8 xl:col-span-9 min-w-0">
+        {/* ＝＝＝＝ 1段目：左右の2段組（スマホでも50%ずつに分割） ＝＝＝＝ */}
+        <div className="grid grid-cols-2 lg:grid-cols-12 gap-2.5 sm:gap-4 lg:gap-5 w-full min-w-0 lg:h-[220px]">
+          
+          {/* 左側：スケジュール */}
+          {/* h-full を指定し、スマホでもPCでも枠の高さを安定させる */}
+          <div className="col-span-1 lg:col-span-8 xl:col-span-9 min-w-0 flex flex-col h-full">
             <ScheduleWidget userData={userData} schoolData={schoolData} selectedDate={selectedDate} />
           </div>
-          <div className="lg:col-span-4 xl:col-span-3 min-w-0">
-            <WeatherWidget schoolData={schoolData} />
+          
+          {/* 右側：スマホでは「アプリ＋天気」の上下分割。PCでは「天気」のみ。 */}
+          <div className="col-span-1 lg:col-span-4 xl:col-span-3 min-w-0 flex flex-col gap-2.5 sm:gap-4 h-full">
+            
+            {/* ★ スマホ専用：コンパクトアプリメニュー (高さを半分＝flex-1 で確保) */}
+            <div className="lg:hidden flex-1 flex flex-col min-h-0 bg-white border border-gray-200 rounded-2xl shadow-2xs overflow-hidden">
+              <div className="px-2.5 py-1.5 border-b border-gray-100 flex justify-between items-center bg-gray-50/50 shrink-0">
+                <h2 className="text-[10px] sm:text-xs font-black text-gray-900 flex items-center gap-1.5 truncate">
+                  <Grid className="w-3 h-3 text-gray-500" /> クイック起動
+                </h2>
+              </div>
+              {/* 高さが50%分あるので、縦横スクロール可能なグリッドに */}
+              <div className="p-1.5 sm:p-2 bg-white flex-1 overflow-y-auto overflow-x-hidden custom-scrollbar">
+                <div className="grid grid-cols-3 gap-y-2.5 gap-x-1.5 place-items-start w-full">
+                  {userAllowedApps.map(app => {
+                    const c = APP_COLOR_MAPPINGS[app.color] || APP_COLOR_MAPPINGS.default;
+                    const isTasksApp = app.id === "tasks" || app.id === "task";
+                    const isChatApp = app.id === "chat";
+                    const isEquipmentApp = app.id === "equipment" || app.id === "rentals";
+
+                    let unread = 0;
+                    if (isChatApp) unread = chatUnreadCount;
+                    else unread = unreadCounts[app.id] || 0;
+
+                    return (
+                      <Link 
+                        key={app.id} 
+                        href={app.path} 
+                        className="flex flex-col items-center gap-1 w-full shrink-0 group relative overflow-visible"
+                      >
+                        <div className={`relative w-8 h-8 sm:w-10 sm:h-10 rounded-[10px] sm:rounded-xl flex items-center justify-center transition-transform group-hover:scale-105 shadow-sm border border-gray-100/50 shrink-0 ${c.lightBg} ${c.text}`}>
+                          <DynamicIcon name={app.icon} className="w-4 h-4 sm:w-5 sm:h-5" />
+                          
+                          {/* 通知バッジ */}
+                          {isTasksApp ? (
+                            <div className="absolute -top-1 -right-1 flex gap-[1px] z-10 scale-[0.75] sm:scale-90 origin-top-right">
+                              {taskRedCount > 0 && <span className="w-4 h-4 bg-red-500 border-2 border-white rounded-full flex items-center justify-center text-[8px] font-black text-white shadow-sm">{taskRedCount > 99 ? '99+' : taskRedCount}</span>}
+                              {taskBlueCount > 0 && <span className="w-4 h-4 bg-blue-500 border-2 border-white rounded-full flex items-center justify-center text-[8px] font-black text-white shadow-sm">{taskBlueCount > 99 ? '99+' : taskBlueCount}</span>}
+                            </div>
+                          ) : isEquipmentApp ? (
+                            <div className="absolute -top-1 -right-1 flex gap-[1px] z-10 scale-[0.75] sm:scale-90 origin-top-right">
+                              {unread > 0 && <span className="w-4 h-4 bg-red-500 border-2 border-white rounded-full flex items-center justify-center text-[8px] font-black text-white shadow-sm">{unread > 99 ? '99+' : unread}</span>}
+                              {activeRentalsCount > 0 && <span className="w-4 h-4 bg-blue-500 border-2 border-white rounded-full flex items-center justify-center text-[8px] font-black text-white shadow-sm">{activeRentalsCount > 99 ? '99+' : activeRentalsCount}</span>}
+                            </div>
+                          ) : (
+                            unread > 0 && (
+                              <span className="absolute -top-1 -right-1 w-4 h-4 bg-red-500 border-2 border-white rounded-full flex items-center justify-center text-[8px] font-black text-white shadow-sm z-10 scale-[0.75] sm:scale-90 origin-top-right">
+                                {unread > 99 ? '99+' : unread}
+                              </span>
+                            )
+                          )}
+                        </div>
+                        <span className="text-[8px] sm:text-[9px] font-bold text-gray-700 truncate w-full text-center leading-tight px-0.5">
+                          {app.displayName}
+                        </span>
+                      </Link>
+                    )
+                  })}
+                </div>
+              </div>
+            </div>
+
+            {/* 天気ウィジェット (PCでは全高、スマホでは flex-1 で残り50%を占める) */}
+            <div className="flex-1 flex flex-col min-h-0">
+              <WeatherWidget schoolData={schoolData} />
+            </div>
+            
           </div>
         </div>
 
-        {/* ★ gap-4 -> gap-2.5 sm:gap-4 に変更 */}
+        {/* ＝＝＝＝ 2段目以降 ＝＝＝＝ */}
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-2.5 sm:gap-4 lg:gap-5 w-full min-w-0">
           
           <div className="lg:col-span-6 space-y-2.5 sm:space-y-4 min-w-0">
@@ -221,7 +319,6 @@ export default function NormalTop({ userData, schoolData, messages, systemApps, 
                   </button>
                 </div>
                 
-                {/* ★ p-3 -> p-2.5 に変更し、内部の余白を詰める */}
                 <div className="p-2.5 sm:p-4 flex flex-col gap-2.5 min-w-0">
                   <div className="grid grid-cols-2 gap-2.5">
                     <div className="bg-blue-50 rounded-xl p-2 sm:p-3 border border-blue-100 flex flex-col items-center justify-center shadow-sm">
@@ -267,7 +364,6 @@ export default function NormalTop({ userData, schoolData, messages, systemApps, 
                   </button>
                 </div>
 
-                {/* ★ p-3 -> p-2.5 に変更し、内部の余白を詰める */}
                 <div className="p-2.5 sm:p-4 flex flex-col gap-2.5 min-w-0">
                   
                   <div className="bg-gray-50 rounded-xl p-2 sm:p-2.5 border border-gray-100/80">

@@ -144,29 +144,24 @@ export default function TaskDetailPage() {
       await updateDoc(doc(db, "tasks", taskId), payload);
       setTask(prev => prev ? { ...prev, ...payload } : null);
 
-      // ＝＝＝ 通知の更新処理 ＝＝＝
       const batch = writeBatch(db);
       let batchCount = 0;
       const now = new Date();
 
-      // 1. まず、このタスクに関連する「未来の予約通知」をすべて削除する
       const qNotifs = query(collection(db, "notifications"), where("linkUrl", "==", `/top/tasks/detail/${taskId}`));
       const notifsSnap = await getDocs(qNotifs);
       notifsSnap.forEach(d => {
         const data = d.data();
         const cTime = data.createdAt?.toDate ? data.createdAt.toDate().getTime() : new Date(data.createdAt).getTime();
-        // まだ配信時間を迎えていないもの（予約中の通知）を削除
         if (cTime > now.getTime() && batchCount < 490) {
           batch.delete(d.ref);
           batchCount++;
         }
       });
 
-      // 2. ターゲットの決定（担当者 ＋ 重要度が高い場合は全員）
       const isImportant = formPriority === "high" || formPriority === "urgent";
       const targets = tenantUsers.filter(u => formAssignees.includes(u.id) || isImportant);
 
-      // 3. 編集の即時通知
       targets.forEach(u => {
         if (batchCount >= 490) return;
         const notifRef = doc(collection(db, "notifications"));
@@ -184,7 +179,6 @@ export default function TaskDetailPage() {
         batchCount++;
       });
 
-      // 4. ステータスが「完了」でなければ、新しい未来の予約通知を再設定する
       if (formStatus !== "done" && formDueDate) {
         const timeStr = formDueTime || "23:59";
         const dueDateTime = new Date(`${formDueDate}T${timeStr}:00`);
@@ -243,10 +237,10 @@ export default function TaskDetailPage() {
     catch (error) { showToast("error", "削除に失敗しました。"); }
   };
 
-  if (isLoading) return <div className="min-h-screen bg-[#F9FAFB] flex justify-center items-center"><Loader2 className="w-8 h-8 animate-spin text-indigo-600" /></div>;
+  if (isLoading) return <div className="h-full bg-[#F9FAFB] flex justify-center items-center"><Loader2 className="w-8 h-8 animate-spin text-indigo-600" /></div>;
 
   if (!task) return (
-    <div className="min-h-screen bg-[#F9FAFB] flex flex-col items-center justify-center p-4">
+    <div className="h-full bg-[#F9FAFB] flex flex-col items-center justify-center p-4">
       <AlertCircle className="w-12 h-12 text-gray-400 mb-3" />
       <h1 className="text-base font-black text-gray-800 mb-2">タスクが見つかりませんでした</h1>
       <button onClick={() => router.push("/top/tasks")} className="px-4 py-2 bg-indigo-600 text-white rounded-xl text-xs font-bold shadow-sm">一覧に戻る</button>
@@ -254,20 +248,28 @@ export default function TaskDetailPage() {
   );
 
   return (
-    <div className="min-h-screen bg-[#F9FAFB] font-sans flex flex-col text-gray-900">
+    // ★ h-full flex-1 w-full min-h-0 を指定して外側にスクロールを漏らさない
+    <div className="h-full flex-1 w-full bg-[#F9FAFB] font-sans flex flex-col text-gray-900 overflow-hidden relative min-h-0">
 
       {toast.show && (
-        <div className="fixed top-16 left-1/2 -translate-x-1/2 z-50 animate-fade-in w-[90vw] sm:w-auto max-w-sm">
+        <div className="absolute top-4 right-4 z-50 animate-fade-in w-fit max-w-sm">
           <div className={`px-4 py-2 rounded-xl text-xs font-bold flex items-center shadow-lg ${toast.type === 'success' ? 'bg-gray-900 text-white' : 'bg-red-50 text-red-700 border border-red-200'}`}>
             {toast.type === 'success' ? <CheckCircle2 className="w-4 h-4 mr-1.5 text-green-400" /> : <AlertCircle className="w-4 h-4 mr-1.5" />} {toast.message}
           </div>
         </div>
       )}
 
-      <main className="flex-1 max-w-4xl mx-auto w-full p-3 sm:p-6 lg:p-8 flex flex-col gap-6">
-        <div className="bg-white rounded-2xl shadow-sm border border-gray-200 overflow-hidden">
+      {/* スマホ用戻るボタン（固定領域） */}
+      <div className="sm:hidden px-3 pt-3 pb-1 shrink-0">
+        <button onClick={() => router.back()} className="flex items-center text-sm font-bold text-gray-500 bg-white px-3 py-2 rounded-xl shadow-sm border border-gray-200 w-fit">
+          <ArrowLeft className="w-4 h-4 mr-1" /> 戻る
+        </button>
+      </div>
+
+      <main className="flex-1 overflow-y-auto custom-scrollbar w-full p-2 sm:p-6 lg:p-8 pb-20 md:pb-6 relative min-h-0">
+        <div className="max-w-4xl mx-auto bg-white rounded-2xl shadow-sm border border-gray-200 overflow-hidden flex flex-col min-h-0">
           
-          <div className="px-4 sm:px-6 py-4 bg-gray-50/80 border-b border-gray-200 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+          <div className="px-4 sm:px-6 py-4 bg-gray-50/80 border-b border-gray-200 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shrink-0">
             <div className="flex items-center gap-2 flex-wrap">
               <span className={`px-2.5 py-1 rounded-lg text-[10px] sm:text-xs font-bold border ${STATUS_CONFIG[task.status].color}`}>
                 {STATUS_CONFIG[task.status].label}
@@ -290,11 +292,14 @@ export default function TaskDetailPage() {
               <button onClick={() => setDeleteConfirm(true)} className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-xl transition-colors" title="削除">
                 <Trash2 className="w-4 h-4 sm:w-5 sm:h-5" />
               </button>
+              <button onClick={() => router.back()} className="hidden sm:flex p-1.5 text-gray-400 hover:bg-gray-100 rounded-xl transition-colors ml-1" title="戻る">
+                <X className="w-5 h-5" />
+              </button>
             </div>
           </div>
 
           {!isEditing ? (
-            <div className="p-4 sm:p-6 lg:p-8 space-y-6">
+            <div className="p-4 sm:p-6 lg:p-8 space-y-6 flex-1 overflow-y-auto">
               <h1 className="text-lg sm:text-xl lg:text-2xl font-black text-gray-900 leading-snug">{task.title}</h1>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 p-4 bg-gray-50/80 rounded-2xl border border-gray-100">
@@ -331,22 +336,22 @@ export default function TaskDetailPage() {
               </div>
             </div>
           ) : (
-            <form onSubmit={handleUpdate} className="p-4 sm:p-6 lg:p-8 space-y-5">
+            <form onSubmit={handleUpdate} className="p-4 sm:p-6 lg:p-8 space-y-5 flex-1 overflow-y-auto">
               <div>
                 <label className="block text-[10px] sm:text-xs font-bold text-gray-500 mb-1">タスク名 <span className="text-red-500">*</span></label>
-                <input type="text" required value={formTitle} onChange={e => setFormTitle(e.target.value)} className="w-full bg-white border border-gray-300 rounded-xl px-3 py-2.5 sm:px-4 sm:py-3 text-sm font-bold text-gray-900 focus:ring-2 focus:ring-indigo-500 outline-none shadow-2xs" />
+                <input type="text" required value={formTitle} onChange={e => setFormTitle(e.target.value)} className="w-full bg-white border border-gray-300 rounded-xl px-3 py-2.5 sm:px-4 sm:py-3 text-[16px] sm:text-sm font-bold text-gray-900 focus:ring-2 focus:ring-indigo-500 outline-none shadow-2xs" />
               </div>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-5">
                 <div>
                   <label className="block text-[10px] sm:text-xs font-bold text-gray-500 mb-1">ステータス</label>
-                  <select value={formStatus} onChange={(e: any) => setFormStatus(e.target.value)} className="w-full bg-gray-50 border border-gray-200 rounded-xl px-3 py-2.5 text-xs sm:text-sm font-bold text-gray-900 focus:bg-white outline-none focus:ring-2 focus:ring-indigo-500">
+                  <select value={formStatus} onChange={(e: any) => setFormStatus(e.target.value)} className="w-full bg-gray-50 border border-gray-200 rounded-xl px-3 py-2.5 text-[16px] sm:text-sm font-bold text-gray-900 focus:bg-white outline-none focus:ring-2 focus:ring-indigo-500">
                     {Object.entries(STATUS_CONFIG).map(([k, v]) => <option key={k} value={k}>{v.label}</option>)}
                   </select>
                 </div>
                 <div>
                   <label className="block text-[10px] sm:text-xs font-bold text-gray-500 mb-1">優先度</label>
-                  <select value={formPriority} onChange={(e: any) => setFormPriority(e.target.value)} className="w-full bg-gray-50 border border-gray-200 rounded-xl px-3 py-2.5 text-xs sm:text-sm font-bold text-gray-900 focus:bg-white outline-none focus:ring-2 focus:ring-indigo-500">
+                  <select value={formPriority} onChange={(e: any) => setFormPriority(e.target.value)} className="w-full bg-gray-50 border border-gray-200 rounded-xl px-3 py-2.5 text-[16px] sm:text-sm font-bold text-gray-900 focus:bg-white outline-none focus:ring-2 focus:ring-indigo-500">
                     {Object.entries(PRIORITY_CONFIG).map(([k, v]) => <option key={k} value={k}>{v.label}</option>)}
                   </select>
                 </div>
@@ -360,7 +365,7 @@ export default function TaskDetailPage() {
                     type="text" placeholder="メンバーを検索して追加..." value={searchUserQuery} 
                     onChange={e => { setSearchUserQuery(e.target.value); setIsSearchUserFocused(true); }}
                     onFocus={() => setIsSearchUserFocused(true)}
-                    className="w-full pl-9 pr-3 py-2.5 bg-white border border-gray-300 rounded-xl text-xs sm:text-sm font-bold focus:outline-none focus:ring-2 focus:ring-indigo-500 shadow-2xs" 
+                    className="w-full pl-9 pr-3 py-2.5 bg-white border border-gray-300 rounded-xl text-[16px] sm:text-sm font-bold focus:outline-none focus:ring-2 focus:ring-indigo-500 shadow-2xs" 
                   />
                   {isSearchUserFocused && searchUserQuery.trim() !== "" && (
                     <div className="absolute top-full left-0 right-0 mt-1 bg-white border border-gray-200 shadow-xl rounded-xl max-h-48 overflow-y-auto z-10 custom-scrollbar">
@@ -399,7 +404,7 @@ export default function TaskDetailPage() {
                 {formAssignees.length > 1 && (
                   <div className="pt-4 border-t border-gray-200">
                     <label className="block text-[10px] sm:text-xs font-bold text-gray-500 mb-1">完了報告の種類</label>
-                    <select value={formCompletionReq} onChange={(e: any) => setFormCompletionReq(e.target.value)} className="w-full bg-white border border-gray-200 rounded-xl px-3 py-2.5 text-xs sm:text-sm font-bold text-gray-900 focus:outline-none focus:ring-2 focus:ring-indigo-500">
+                    <select value={formCompletionReq} onChange={(e: any) => setFormCompletionReq(e.target.value)} className="w-full bg-white border border-gray-200 rounded-xl px-3 py-2.5 text-[16px] sm:text-sm font-bold text-gray-900 focus:outline-none focus:ring-2 focus:ring-indigo-500">
                       <option value="anyone">誰か一人の完了報告が必要</option>
                       <option value="all">全員の完了報告が必要</option>
                       {formLeaderId && <option value="leader">タスク主任の完了報告が必要</option>}
@@ -411,25 +416,25 @@ export default function TaskDetailPage() {
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-5">
                 <div>
                   <label className="block text-[10px] sm:text-xs font-bold text-gray-500 mb-1">開始日</label>
-                  <input type="date" value={formStartDate} onChange={e => setFormStartDate(e.target.value)} className="w-full bg-gray-50 border border-gray-200 rounded-xl px-3 py-2.5 text-xs sm:text-sm font-bold text-gray-900 focus:bg-white outline-none focus:ring-2 focus:ring-indigo-500" />
+                  <input type="date" value={formStartDate} onChange={e => setFormStartDate(e.target.value)} className="w-full bg-gray-50 border border-gray-200 rounded-xl px-3 py-2.5 text-[16px] sm:text-sm font-bold text-gray-900 focus:bg-white outline-none focus:ring-2 focus:ring-indigo-500" />
                 </div>
                 <div>
                   <label className="block text-[10px] sm:text-xs font-bold text-gray-500 mb-1">期限 (日付・時間)</label>
                   <div className="flex gap-2">
-                    <input type="date" value={formDueDate} onChange={e => setFormDueDate(e.target.value)} className="w-full bg-gray-50 border border-gray-200 rounded-xl px-3 py-2.5 text-xs sm:text-sm font-bold text-gray-900 focus:bg-white outline-none focus:ring-2 focus:ring-indigo-500" />
-                    <input type="time" value={formDueTime} onChange={e => setFormDueTime(e.target.value)} className="w-28 bg-gray-50 border border-gray-200 rounded-xl px-2 py-2.5 text-xs sm:text-sm font-bold text-gray-900 focus:bg-white outline-none focus:ring-2 focus:ring-indigo-500" />
+                    <input type="date" value={formDueDate} onChange={e => setFormDueDate(e.target.value)} className="w-full bg-gray-50 border border-gray-200 rounded-xl px-3 py-2.5 text-[16px] sm:text-sm font-bold text-gray-900 focus:bg-white outline-none focus:ring-2 focus:ring-indigo-500" />
+                    <input type="time" value={formDueTime} onChange={e => setFormDueTime(e.target.value)} className="w-32 sm:w-28 bg-gray-50 border border-gray-200 rounded-xl px-2 py-2.5 text-[16px] sm:text-sm font-bold text-gray-900 focus:bg-white outline-none focus:ring-2 focus:ring-indigo-500" />
                   </div>
                 </div>
               </div>
 
               <div>
                 <label className="block text-[10px] sm:text-xs font-bold text-gray-500 mb-1">詳細メモ (任意)</label>
-                <textarea rows={5} value={formDesc} onChange={e => setFormDesc(e.target.value)} className="w-full bg-gray-50 border border-gray-200 rounded-xl px-3 py-3 text-xs sm:text-sm font-medium text-gray-900 focus:bg-white outline-none focus:ring-2 focus:ring-indigo-500 resize-none custom-scrollbar" />
+                <textarea rows={5} value={formDesc} onChange={e => setFormDesc(e.target.value)} className="w-full bg-gray-50 border border-gray-200 rounded-xl px-3 py-3 text-[16px] sm:text-sm font-medium text-gray-900 focus:bg-white outline-none focus:ring-2 focus:ring-indigo-500 resize-none custom-scrollbar" />
               </div>
 
-              <div className="pt-4 border-t border-gray-100 flex justify-end gap-3">
-                <button type="button" onClick={() => { setIsEditing(false); setFormValues(task); }} className="px-5 py-2.5 text-xs sm:text-sm font-bold text-gray-600 bg-white border border-gray-200 hover:bg-gray-100 rounded-xl transition-colors">キャンセル</button>
-                <button type="submit" disabled={isSubmitting} className="px-6 sm:px-8 py-2.5 disabled:opacity-50 text-white text-xs sm:text-sm font-bold rounded-xl shadow-md bg-amber-600 hover:bg-amber-700 transition-colors flex items-center">
+              <div className="pt-4 border-t border-gray-100 flex justify-end gap-3 pb-8">
+                <button type="button" onClick={() => { setIsEditing(false); setFormValues(task); }} className="w-full sm:w-auto px-5 py-3 sm:py-2.5 text-sm font-bold text-gray-600 bg-white border border-gray-200 hover:bg-gray-100 rounded-xl transition-colors">キャンセル</button>
+                <button type="submit" disabled={isSubmitting} className="w-full sm:w-auto justify-center px-6 sm:px-8 py-3 sm:py-2.5 disabled:opacity-50 text-white text-sm font-bold rounded-xl shadow-md bg-amber-600 hover:bg-amber-700 transition-colors flex items-center">
                   {isSubmitting ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <CheckCircle2 className="w-4 h-4 mr-2" />} 保存して完了
                 </button>
               </div>

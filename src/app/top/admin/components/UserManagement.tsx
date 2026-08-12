@@ -5,7 +5,7 @@ import { doc, updateDoc, collection, query, where, onSnapshot } from "firebase/f
 import { EmailAuthProvider, reauthenticateWithCredential, reauthenticateWithPopup, GoogleAuthProvider } from "firebase/auth";
 import { auth, db } from "@/lib/firebase";
 import { 
-  Search, Loader2, FileSpreadsheet, Download, Lock, Unlock, ArrowUpDown, CheckCircle2, XCircle, Star, Printer, AlertCircle, X, RefreshCw, Mail, Edit3, UserCheck, UserX, Camera, User as UserIcon
+  Search, Loader2, FileSpreadsheet, Download, Lock, Unlock, ArrowUpDown, CheckCircle2, XCircle, Star, Printer, AlertCircle, X, RefreshCw, Mail, Edit3, UserCheck, UserX, Camera, User as UserIcon, MonitorSmartphone
 } from "lucide-react";
 import { UserData, SchoolData } from "../page";
 import CsvUploadModal from "./CsvUploadModal";
@@ -371,7 +371,6 @@ export default function UserManagement({ users, setUsers, schoolData, fetchUsers
         for (let i = 0; i < printUsers.length; i++) {
           const user = printUsers[i];
           setSheetUser(user);
-          // Wait for DOM to update with new user data
           await new Promise(resolve => setTimeout(resolve, 100));
           const canvas = await html2canvas(element, { scale: 2, useCORS: true, logging: false });
           const imgData = canvas.toDataURL("image/jpeg", 0.9);
@@ -454,14 +453,13 @@ export default function UserManagement({ users, setUsers, schoolData, fetchUsers
     }
   };
 
-  // ★ カウント用変数の追加
   const activeUsersCount = users.filter(u => u.accountStatus !== "pending").length;
   const pendingUsersCount = users.filter(u => u.accountStatus === "pending").length;
 
   const photoModalTargetUser = users.find(u => u.id === photoModalUserId) as ExtendedUserData | undefined;
 
   return (
-    <div className="space-y-4 animate-fade-in relative">
+    <div className="space-y-4 animate-fade-in relative min-w-0">
       
       {/* 印刷用テンプレート (画面外に隠蔽) */}
       {sheetUser && schoolData && (
@@ -503,7 +501,6 @@ export default function UserManagement({ users, setUsers, schoolData, fetchUsers
         />
       )}
 
-      {/* TypeScriptエラー修正済みの UserDetailsModal */}
       {selectedUserForDetails && (
         <UserDetailsModal
           user={selectedUserForDetails}
@@ -518,7 +515,6 @@ export default function UserManagement({ users, setUsers, schoolData, fetchUsers
         />
       )}
 
-      {/* プロフィール写真設定モーダル */}
       {photoModalUserId && photoModalTargetUser && (
         <ProfilePhotoModal
           user={photoModalTargetUser}
@@ -553,7 +549,8 @@ export default function UserManagement({ users, setUsers, schoolData, fetchUsers
                 {authError && <div className="p-3 bg-red-50 border border-red-200 rounded-xl text-[10px] font-bold text-red-700">{authError}</div>}
                 <div>
                   <label className="block text-[10px] font-bold text-gray-500 mb-1">現在のパスワード</label>
-                  <input type="password" required value={authPassword} onChange={(e) => setAuthPassword(e.target.value)} className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm font-bold focus:ring-2 focus:ring-indigo-500 outline-none" placeholder="パスワードを入力..." />
+                  {/* ★ スマホズーム対策 text-[16px] */}
+                  <input type="password" required value={authPassword} onChange={(e) => setAuthPassword(e.target.value)} className="w-full border border-gray-200 rounded-xl px-4 py-3 text-[16px] sm:text-sm font-bold focus:ring-2 focus:ring-indigo-500 outline-none" placeholder="パスワードを入力..." />
                 </div>
                 <button type="submit" disabled={isAuthenticating || !authPassword} className="w-full py-3.5 bg-gray-900 hover:bg-black text-white text-sm font-black rounded-xl shadow-md transition-colors flex items-center justify-center disabled:opacity-50">
                   {isAuthenticating ? <Loader2 className="w-5 h-5 animate-spin"/> : "認証して処理を続行"}
@@ -574,7 +571,8 @@ export default function UserManagement({ users, setUsers, schoolData, fetchUsers
             </div>
             <div className="p-4 space-y-3">
               <p className="text-[11px] font-bold text-gray-600 leading-relaxed">全ユーザー情報を書き出すため、パスワードを入力してください。</p>
-              <input type="password" placeholder="パスワードを入力" value={reauthModal.password} onChange={e => setReauthModal(p => ({...p, password: e.target.value}))} className="w-full border border-gray-300 rounded-xl px-3 py-2 text-xs font-bold outline-none focus:ring-2 focus:ring-indigo-500" />
+              {/* ★ スマホズーム対策 text-[16px] */}
+              <input type="password" placeholder="パスワードを入力" value={reauthModal.password} onChange={e => setReauthModal(p => ({...p, password: e.target.value}))} className="w-full border border-gray-300 rounded-xl px-3 py-2 text-[16px] sm:text-xs font-bold outline-none focus:ring-2 focus:ring-indigo-500" />
               <button onClick={handleReauthWithPassword} disabled={reauthModal.isProcessing || !reauthModal.password} className="w-full py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold transition-colors flex items-center justify-center shadow-xs disabled:opacity-50">
                 {reauthModal.isProcessing ? <Loader2 className="w-3.5 h-3.5 animate-spin mr-1"/> : <Unlock className="w-3.5 h-3.5 mr-1"/>} 認証してCSVダウンロード
               </button>
@@ -584,28 +582,36 @@ export default function UserManagement({ users, setUsers, schoolData, fetchUsers
       )}
       
       {/* メインUIヘッダー */}
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 border-b border-gray-200 pb-3">
+      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-3 border-b border-gray-200 pb-3">
         <div>
           <h3 className="text-base font-black text-gray-900">ユーザーアカウント管理</h3>
           <p className="text-[10px] font-bold text-gray-500 mt-0.5">システムを利用する全メンバーのアカウントを管理します。</p>
         </div>
+        
+        {/* ★ PCの場合のみ CSV関連のボタンを表示、スマホの場合はメッセージを表示 */}
         {canManageUsers && (
-          <div className="flex gap-2 w-full sm:w-auto">
-            <button onClick={() => setReauthModal({ show: true, password: "", isProcessing: false })} className="inline-flex items-center justify-center px-3 py-1.5 border border-gray-300 rounded-xl text-[11px] font-bold text-gray-700 bg-white hover:bg-gray-50 transition-colors">
-              <Download className="h-3.5 w-3.5 mr-1.5 text-gray-500" /> エクスポート
-            </button>
-            <button onClick={() => setIsCsvModalOpen(true)} className="inline-flex items-center justify-center px-3 py-1.5 border border-transparent rounded-xl text-[11px] font-bold text-white bg-indigo-600 hover:bg-indigo-700 transition-colors shadow-xs">
-              <FileSpreadsheet className="h-3.5 w-3.5 mr-1.5" /> CSV一括登録
-            </button>
-          </div>
+          <>
+            <div className="hidden md:flex gap-2 w-full md:w-auto">
+              <button onClick={() => setReauthModal({ show: true, password: "", isProcessing: false })} className="inline-flex items-center justify-center px-3 py-1.5 border border-gray-300 rounded-xl text-[11px] font-bold text-gray-700 bg-white hover:bg-gray-50 transition-colors">
+                <Download className="h-3.5 w-3.5 mr-1.5 text-gray-500" /> エクスポート
+              </button>
+              <button onClick={() => setIsCsvModalOpen(true)} className="inline-flex items-center justify-center px-3 py-1.5 border border-transparent rounded-xl text-[11px] font-bold text-white bg-indigo-600 hover:bg-indigo-700 transition-colors shadow-xs">
+                <FileSpreadsheet className="h-3.5 w-3.5 mr-1.5" /> CSV一括登録
+              </button>
+            </div>
+            {/* スマホ用メッセージ */}
+            <div className="md:hidden w-full flex items-center justify-center py-2 bg-indigo-50 border border-indigo-100 rounded-xl text-[10px] font-bold text-indigo-700">
+              <MonitorSmartphone className="w-3.5 h-3.5 mr-1.5" /> ※ CSVの一括登録・出力はPCから操作してください
+            </div>
+          </>
         )}
       </div>
 
-      <div className="bg-white shadow-xs border border-gray-200 rounded-2xl overflow-hidden">
+      <div className="bg-white shadow-xs border border-gray-200 rounded-2xl overflow-hidden min-w-0">
         
         {/* サブタブ */}
-        <div className="border-b border-gray-200 bg-gray-50/50">
-          <nav className="flex -mb-px px-4" aria-label="Tabs">
+        <div className="border-b border-gray-200 bg-gray-50/50 overflow-x-auto custom-scrollbar">
+          <nav className="flex -mb-px px-2 sm:px-4" aria-label="Tabs">
             <button onClick={() => setActiveTab("active")} className={`whitespace-nowrap py-3 px-3 border-b-2 font-bold text-xs transition-colors ${activeTab === "active" ? "border-indigo-600 text-indigo-600" : "border-transparent text-gray-500 hover:text-gray-700"}`}>
               登録済みユーザー <span className="ml-1.5 bg-gray-200 text-gray-800 py-0.5 px-2 rounded-full text-[10px]">{activeUsersCount}</span>
             </button>
@@ -615,24 +621,26 @@ export default function UserManagement({ users, setUsers, schoolData, fetchUsers
           </nav>
         </div>
 
-        <div className="p-3 space-y-3">
+        <div className="p-3 space-y-3 min-w-0">
           
           {/* 検索・フィルターエリア (高密度コンパクト) */}
           <div className="flex flex-col sm:flex-row gap-2">
             <div className="relative flex-1">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-gray-400" />
-              <input type="text" placeholder="名前・メアドで検索..." value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} className="block w-full pl-8 pr-3 py-1.5 border border-gray-200 rounded-xl text-xs font-bold bg-gray-50 focus:bg-white focus:ring-2 focus:ring-indigo-500 outline-none transition-colors" />
+              {/* ★ スマホズーム対策 text-[16px] sm:text-xs */}
+              <input type="text" placeholder="名前・メアドで検索..." value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} className="block w-full pl-8 pr-3 py-1.5 sm:py-2 border border-gray-200 rounded-xl text-[16px] sm:text-xs font-bold bg-gray-50 focus:bg-white focus:ring-2 focus:ring-indigo-500 outline-none transition-colors" />
             </div>
             {activeTab === "active" && (
               <div className="flex gap-1.5">
-                <select value={filterRole} onChange={(e) => setFilterRole(e.target.value)} className="border border-gray-200 bg-gray-50 rounded-xl px-2.5 py-1.5 text-xs font-bold outline-none focus:ring-2 focus:ring-indigo-500">
+                {/* ★ スマホズーム対策 text-[16px] sm:text-xs */}
+                <select value={filterRole} onChange={(e) => setFilterRole(e.target.value)} className="border border-gray-200 bg-gray-50 rounded-xl px-2 py-1.5 sm:py-2 text-[16px] sm:text-xs font-bold outline-none focus:ring-2 focus:ring-indigo-500 flex-1 sm:flex-none">
                   <option value="all">全権限</option>
                   <option value="admin">管理者</option>
                   <option value="officer">役員</option>
                   <option value="teacher">教職員</option>
                   <option value="student">生徒</option>
                 </select>
-                <select value={filterAccountStatus} onChange={(e) => setFilterAccountStatus(e.target.value)} className="border border-gray-200 bg-gray-50 rounded-xl px-2.5 py-1.5 text-xs font-bold outline-none focus:ring-2 focus:ring-indigo-500">
+                <select value={filterAccountStatus} onChange={(e) => setFilterAccountStatus(e.target.value)} className="border border-gray-200 bg-gray-50 rounded-xl px-2 py-1.5 sm:py-2 text-[16px] sm:text-xs font-bold outline-none focus:ring-2 focus:ring-indigo-500 flex-1 sm:flex-none">
                   <option value="all">全ステータス</option>
                   <option value="active">アクティブ</option>
                   <option value="unaccessed">未アクセス</option>
@@ -647,7 +655,7 @@ export default function UserManagement({ users, setUsers, schoolData, fetchUsers
               <button 
                 onClick={handlePrintSelected}
                 disabled={isPrinting}
-                className="w-full sm:w-auto px-4 py-1.5 bg-gray-900 hover:bg-black text-white text-xs font-bold rounded-xl shadow-sm transition-colors flex items-center justify-center gap-2 disabled:opacity-50"
+                className="w-full sm:w-auto px-4 py-2 sm:py-1.5 bg-gray-900 hover:bg-black text-white text-xs font-bold rounded-xl shadow-sm transition-colors flex items-center justify-center gap-2 disabled:opacity-50"
               >
                 {isPrinting ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Printer className="w-3.5 h-3.5" />}
                 選択した {selectedForPrint.length} 名のシートを発行
@@ -655,7 +663,7 @@ export default function UserManagement({ users, setUsers, schoolData, fetchUsers
             </div>
           )}
 
-          {/* コンパクト高密度テーブル */}
+          {/* コンパクト高密度テーブル (横スクロール対応) */}
           <div className="overflow-x-auto border border-gray-200 rounded-xl relative custom-scrollbar">
             
             {isPrinting && (
@@ -674,7 +682,7 @@ export default function UserManagement({ users, setUsers, schoolData, fetchUsers
                         type="checkbox" 
                         checked={selectedForPrint.length === processedUsers.length && processedUsers.length > 0}
                         onChange={toggleAllPrintSelection}
-                        className="w-3.5 h-3.5 text-indigo-600 rounded cursor-pointer focus:ring-indigo-500"
+                        className="w-4 h-4 sm:w-3.5 sm:h-3.5 text-indigo-600 rounded cursor-pointer focus:ring-indigo-500"
                       />
                     </th>
                   )}
@@ -706,7 +714,7 @@ export default function UserManagement({ users, setUsers, schoolData, fetchUsers
                             type="checkbox" 
                             checked={selectedForPrint.includes(user.id)}
                             onChange={() => togglePrintSelection(user.id)}
-                            className="w-3.5 h-3.5 text-indigo-600 rounded cursor-pointer focus:ring-indigo-500"
+                            className="w-4 h-4 sm:w-3.5 sm:h-3.5 text-indigo-600 rounded cursor-pointer focus:ring-indigo-500"
                           />
                         </td>
                       )}
@@ -717,11 +725,11 @@ export default function UserManagement({ users, setUsers, schoolData, fetchUsers
 
                       <td className="px-3 py-2 border-r border-gray-100">
                         <div className="flex items-center gap-2.5">
-                          <div className="w-8 h-8 rounded-full bg-gray-100 flex items-center justify-center overflow-hidden flex-shrink-0 border border-gray-200">
+                          <div className="w-7 h-7 sm:w-8 sm:h-8 rounded-full bg-gray-100 flex items-center justify-center overflow-hidden flex-shrink-0 border border-gray-200">
                             {extU.photoURL ? (
                               <img src={extU.photoURL} alt="avatar" className="w-full h-full object-cover" />
                             ) : (
-                              <UserIcon className="w-4 h-4 text-gray-400" />
+                              <UserIcon className="w-3 h-3 sm:w-4 sm:h-4 text-gray-400" />
                             )}
                           </div>
                           <div className="flex flex-col">
@@ -730,7 +738,7 @@ export default function UserManagement({ users, setUsers, schoolData, fetchUsers
                               {user.id === currentUser?.id && <span className="text-[8px] font-bold text-blue-600 bg-blue-50 px-1 py-0.2 rounded border border-blue-200">自</span>}
                               {(user as any).isITManager && <span className="text-[8px] font-bold text-purple-600 bg-purple-50 px-1 py-0.2 rounded border border-purple-200">IT</span>}
                             </div>
-                            <div className="text-[10px] text-gray-400 font-normal">{user.email}</div>
+                            <div className="text-[9px] sm:text-[10px] text-gray-400 font-normal">{user.email}</div>
                           </div>
                         </div>
                       </td>
@@ -738,14 +746,14 @@ export default function UserManagement({ users, setUsers, schoolData, fetchUsers
                       <td className="px-3 py-2">
                         <div className="flex items-center flex-wrap gap-1">
                           {user.positionName ? (
-                            <span className="text-[10px] font-black text-indigo-700 bg-indigo-50 border border-indigo-100 px-1.5 py-0.5 rounded flex items-center gap-0.5">
+                            <span className="text-[9px] sm:text-[10px] font-black text-indigo-700 bg-indigo-50 border border-indigo-100 px-1.5 py-0.5 rounded flex items-center gap-0.5">
                               {user.positionName}
                               {leaderPos.some(lp => lp.id === user.primaryPositionId) && <Star className="w-2.5 h-2.5 fill-amber-500 text-amber-500 ml-0.5"/>}
                             </span>
-                          ) : <span className="text-[10px] text-gray-400 font-normal">なし</span>}
+                          ) : <span className="text-[9px] sm:text-[10px] text-gray-400 font-normal">なし</span>}
 
                           {extU.positionIds && extU.positionIds.length > 1 && (
-                            <span className="text-[9px] text-gray-500 bg-gray-100 px-1.5 py-0.5 rounded border border-gray-200">
+                            <span className="text-[8px] sm:text-[9px] text-gray-500 bg-gray-100 px-1.5 py-0.5 rounded border border-gray-200">
                               他 {extU.positionIds.length - 1}件
                             </span>
                           )}
@@ -774,35 +782,35 @@ export default function UserManagement({ users, setUsers, schoolData, fetchUsers
                         {canManageUsers ? (
                           <div className="flex items-center justify-end gap-1">
                             
-                            <button onClick={() => generateAccountSheet(extU)} className="p-1 text-gray-500 hover:text-indigo-600 hover:bg-indigo-50 rounded-md transition-colors" title="アカウント発行シート(PDF)を出力">
-                              <Printer className="w-3.5 h-3.5"/>
+                            <button onClick={() => generateAccountSheet(extU)} className="p-1 sm:p-1.5 text-gray-500 hover:text-indigo-600 hover:bg-indigo-50 rounded-md transition-colors" title="アカウント発行シート(PDF)を出力">
+                              <Printer className="w-3.5 h-3.5 sm:w-4 sm:h-4"/>
                             </button>
 
-                            <button onClick={() => requestReissuePassword(extU)} className="p-1 text-gray-500 hover:text-amber-600 hover:bg-amber-50 rounded-md transition-colors" title="初期パスワードを再発行(リセット)">
-                              <RefreshCw className="w-3.5 h-3.5"/>
+                            <button onClick={() => requestReissuePassword(extU)} className="p-1 sm:p-1.5 text-gray-500 hover:text-amber-600 hover:bg-amber-50 rounded-md transition-colors" title="初期パスワードを再発行(リセット)">
+                              <RefreshCw className="w-3.5 h-3.5 sm:w-4 sm:h-4"/>
                             </button>
 
-                            <button onClick={() => requestPasswordResetMail(user.email)} disabled={resettingEmails.includes(user.email)} className="p-1 text-gray-500 hover:text-blue-600 hover:bg-blue-50 rounded-md transition-colors disabled:opacity-30" title="パスワード再設定メールを通知配信">
-                              {resettingEmails.includes(user.email) ? <Loader2 className="w-3.5 h-3.5 animate-spin"/> : <Mail className="w-3.5 h-3.5"/>}
+                            <button onClick={() => requestPasswordResetMail(user.email)} disabled={resettingEmails.includes(user.email)} className="p-1 sm:p-1.5 text-gray-500 hover:text-blue-600 hover:bg-blue-50 rounded-md transition-colors disabled:opacity-30" title="パスワード再設定メールを通知配信">
+                              {resettingEmails.includes(user.email) ? <Loader2 className="w-3.5 h-3.5 sm:w-4 sm:h-4 animate-spin"/> : <Mail className="w-3.5 h-3.5 sm:w-4 sm:h-4"/>}
                             </button>
 
-                            <button onClick={() => setSelectedUserForDetails(extU)} className="p-1 text-gray-500 hover:text-indigo-600 hover:bg-indigo-50 rounded-md transition-colors ml-1" title="詳細プロフィール・役職の編集">
-                              <Edit3 className="w-3.5 h-3.5"/>
+                            <button onClick={() => setSelectedUserForDetails(extU)} className="p-1 sm:p-1.5 text-gray-500 hover:text-indigo-600 hover:bg-indigo-50 rounded-md transition-colors ml-1" title="詳細プロフィール・役職の編集">
+                              <Edit3 className="w-3.5 h-3.5 sm:w-4 sm:h-4"/>
                             </button>
 
-                            <button onClick={() => setPhotoModalUserId(user.id)} className="p-1 text-indigo-600 hover:bg-indigo-50 rounded-md transition-colors" title="プロフィール写真を設定">
-                                <Camera className="w-3.5 h-3.5"/>
+                            <button onClick={() => setPhotoModalUserId(user.id)} className="p-1 sm:p-1.5 text-indigo-600 hover:bg-indigo-50 rounded-md transition-colors" title="プロフィール写真を設定">
+                                <Camera className="w-3.5 h-3.5 sm:w-4 sm:h-4"/>
                             </button>
 
                             {activeTab === "pending" && (
-                              <button onClick={() => handleAccountStatusChange(user.id, "active")} className="p-1 text-green-600 hover:bg-green-50 rounded-md" title="承認する">
-                                <UserCheck className="w-3.5 h-3.5"/>
+                              <button onClick={() => handleAccountStatusChange(user.id, "active")} className="p-1 sm:p-1.5 text-green-600 hover:bg-green-50 rounded-md" title="承認する">
+                                <UserCheck className="w-3.5 h-3.5 sm:w-4 sm:h-4"/>
                               </button>
                             )}
                             
                             {activeTab === "active" && (user.accountStatus === "active" || user.accountStatus === "unaccessed") && user.id !== currentUser?.id && (
-                              <button onClick={() => handleAccountStatusChange(user.id, "rejected")} className="p-1 text-red-500 hover:bg-red-50 rounded-md" title="アカウントを停止する">
-                                <UserX className="w-3.5 h-3.5"/>
+                              <button onClick={() => handleAccountStatusChange(user.id, "rejected")} className="p-1 sm:p-1.5 text-red-500 hover:bg-red-50 rounded-md" title="アカウントを停止する">
+                                <UserX className="w-3.5 h-3.5 sm:w-4 sm:h-4"/>
                               </button>
                             )}
                             
@@ -810,8 +818,8 @@ export default function UserManagement({ users, setUsers, schoolData, fetchUsers
                               <button onClick={() => {
                                 const restoreStatus = extU.previousAccountStatus || (extU.initialPassword ? "unaccessed" : "active");
                                 handleAccountStatusChange(user.id, restoreStatus);
-                              }} className="p-1 text-green-600 hover:bg-green-50 rounded-md" title="アカウントを復旧する">
-                                <UserCheck className="w-3.5 h-3.5"/>
+                              }} className="p-1 sm:p-1.5 text-green-600 hover:bg-green-50 rounded-md" title="アカウントを復旧する">
+                                <UserCheck className="w-3.5 h-3.5 sm:w-4 sm:h-4"/>
                               </button>
                             )}
                           </div>

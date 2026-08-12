@@ -104,21 +104,21 @@ export default function PersonalTasksPage() {
 
   const filteredUsers = tenantUsers.filter(u => u.name.toLowerCase().includes(searchQuery.toLowerCase()));
 
-  if (isLoading) return <div className="min-h-screen bg-[#F9FAFB] flex justify-center items-center"><Loader2 className="w-8 h-8 animate-spin text-indigo-600" /></div>;
-  if (!hasPermission) return <div className="min-h-screen flex flex-col items-center justify-center p-4"><AlertTriangle className="w-12 h-12 text-red-500 mb-4" /><h1 className="text-xl font-black">アクセス権限がありません</h1></div>;
+  if (isLoading) return <div className="h-full bg-[#F9FAFB] flex justify-center items-center"><Loader2 className="w-8 h-8 animate-spin text-indigo-600" /></div>;
+  if (!hasPermission) return <div className="h-full flex flex-col items-center justify-center p-4"><AlertTriangle className="w-12 h-12 text-red-500 mb-4" /><h1 className="text-xl font-black">アクセス権限がありません</h1></div>;
 
   return (
-    <div className="min-h-screen bg-[#F9FAFB] font-sans flex flex-col text-gray-900">
+    // ★ h-full flex-1 w-full min-h-0 を指定
+    <div className="h-full flex-1 w-full bg-[#F9FAFB] font-sans flex flex-col text-gray-900 overflow-hidden relative min-h-0">
 
-      {/* ナビゲーションサブバー */}
+      {/* ナビゲーションサブバー（固定） */}
       <div className="px-3 sm:px-6 py-2 sm:py-3 border-b border-gray-200 bg-white flex flex-col sm:flex-row sm:items-center justify-between gap-2 flex-shrink-0">
         <div className="flex items-center gap-2 sm:gap-3">
           <div className="p-1.5 sm:p-2 bg-indigo-100 text-indigo-600 rounded-lg sm:rounded-xl shadow-2xs"><Users className="w-4 h-4 sm:w-5 sm:h-5" /></div>
           <div><h1 className="text-sm sm:text-base font-black text-gray-900 tracking-tight">個人別タスク一覧</h1></div>
         </div>
 
-        {/* スマホ横スクロール対応タブ */}
-        <div className="flex items-center gap-1 bg-gray-100 p-1 rounded-xl overflow-x-auto [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none] whitespace-nowrap">
+        <div className="flex items-center gap-1 bg-gray-100 p-1 rounded-xl overflow-x-auto custom-scrollbar whitespace-nowrap">
           <button onClick={() => router.push("/top/tasks")} className="px-3 py-1.5 text-xs font-bold text-gray-600 hover:text-gray-900 rounded-lg transition-colors flex items-center gap-1">
             <KanbanSquare className="w-3.5 h-3.5" /> カンバン
           </button>
@@ -131,10 +131,11 @@ export default function PersonalTasksPage() {
         </div>
       </div>
 
-      <main className="flex-1 max-w-7xl mx-auto w-full p-3 sm:p-4 lg:p-6 flex flex-col gap-4 overflow-y-auto custom-scrollbar">
-        <div className="relative w-full sm:w-64 self-end">
+      <main className="flex-1 max-w-7xl mx-auto w-full p-3 sm:p-4 lg:p-6 flex flex-col gap-4 overflow-y-auto custom-scrollbar pb-24 md:pb-6">
+        <div className="relative w-full sm:w-64 self-end shrink-0">
           <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-400" />
-          <input type="text" placeholder="メンバー名で検索..." value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} className="w-full pl-8 pr-3 py-1.5 sm:py-2 bg-white border border-gray-200 rounded-xl text-xs font-bold focus:outline-none focus:ring-1 focus:ring-indigo-500 transition-all shadow-sm" />
+          {/* ★ ズーム対策: text-[16px] sm:text-xs */}
+          <input type="text" placeholder="メンバー名で検索..." value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} className="w-full pl-8 pr-3 py-2 bg-white border border-gray-200 rounded-xl text-[16px] sm:text-xs font-bold focus:outline-none focus:ring-1 focus:ring-indigo-500 transition-all shadow-sm" />
         </div>
 
         <div className="space-y-4">
@@ -149,7 +150,7 @@ export default function PersonalTasksPage() {
 
               return (
                 <div key={u.id} className={`bg-white rounded-2xl border transition-all overflow-hidden ${isCurrentUser ? 'border-indigo-400 shadow-md ring-1 ring-indigo-200' : 'border-gray-200 shadow-2xs'}`}>
-                  {/* スマホで縦並びになるヘッダー */}
+                  
                   <div className="px-3 sm:px-4 py-3 bg-gray-50/80 border-b border-gray-100 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                     <div className="flex items-center gap-2.5">
                       <div className={`w-8 h-8 rounded-full flex items-center justify-center text-white text-xs font-bold shadow-2xs ${isCurrentUser ? 'bg-indigo-600' : 'bg-gray-400'}`}>{u.name.charAt(0)}</div>
@@ -171,8 +172,7 @@ export default function PersonalTasksPage() {
                     </div>
                   </div>
 
-                  {/* タスク横スクロールエリア */}
-                  <div className="p-3 overflow-x-auto [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none] snap-x snap-mandatory">
+                  <div className="p-3 overflow-x-auto custom-scrollbar snap-x snap-mandatory">
                     {userTasks.length === 0 ? (
                       <p className="text-[11px] font-bold text-gray-400 py-3 text-center">現在担当しているタスクはありません</p>
                     ) : (

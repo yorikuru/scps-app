@@ -5,8 +5,10 @@ import { useRouter } from "next/navigation";
 import { onAuthStateChanged, User } from "firebase/auth";
 import { doc, getDoc, collection, getDocs, query, where } from "firebase/firestore";
 import { auth, db } from "@/lib/firebase";
-import { Loader2, ArrowLeft, ShieldAlert } from "lucide-react";
+// ★ 不足していた CheckCircle2 と AlertCircle を追加
+import { Loader2, ArrowLeft, ShieldAlert, CheckCircle2, AlertCircle } from "lucide-react";
 import MessageDelivery from "../components/MessageDelivery";
+// ★ 型のインポート先を Top ではなく Admin 側の page.tsx (../page) に修正
 import { SchoolData, UserData } from "../page";
 
 export default function TenantMessageDeliveryPage() {
@@ -17,7 +19,6 @@ export default function TenantMessageDeliveryPage() {
   const [tenantUsers, setTenantUsers] = useState<UserData[]>([]);
   const [loading, setLoading] = useState(true);
 
-  // 通知アラート用
   const [alert, setAlert] = useState<{ show: boolean; type: "success" | "error" | "warning"; message: string }>({
     show: false,
     type: "success",
@@ -32,36 +33,32 @@ export default function TenantMessageDeliveryPage() {
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (user) => {
       if (!user) {
-        router.push("/auth/login");
+        router.push("/login");
         return;
       }
       setCurrentUser(user);
 
       try {
-        // ユーザーデータ取得
         const userDoc = await getDoc(doc(db, "users", user.uid));
         if (!userDoc.exists()) {
-          router.push("/auth/login");
+          router.push("/login");
           return;
         }
         const uData = { id: userDoc.id, ...userDoc.data() } as UserData;
         setUserData(uData);
 
-        // 権限チェック (テナント管理者 または IT担当者)
         const canAccess = uData.role === "admin" || (uData as any)?.isITManager === true;
         if (!canAccess) {
           setLoading(false);
           return;
         }
 
-        // 学校データ取得
         if (uData.schoolId) {
           const schoolDoc = await getDoc(doc(db, "schools", uData.schoolId));
           if (schoolDoc.exists()) {
             setSchoolData({ id: schoolDoc.id, ...schoolDoc.data() } as SchoolData);
           }
 
-          // 同一テナントの全ユーザー取得 (宛先選択用)
           const qUsers = query(collection(db, "users"), where("schoolId", "==", uData.schoolId));
           const usersSnap = await getDocs(qUsers);
           const fetchedUsers: UserData[] = [];
@@ -80,20 +77,19 @@ export default function TenantMessageDeliveryPage() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+      <div className="h-full flex items-center justify-center bg-gray-50">
         <Loader2 className="w-8 h-8 text-indigo-600 animate-spin" />
       </div>
     );
   }
 
-  // 権限がない場合のアクセス拒否画面
   const canAccess = userData?.role === "admin" || (userData as any)?.isITManager === true;
   if (!canAccess) {
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
-        <div className="bg-white p-8 rounded-2xl shadow-sm border border-gray-200 max-w-md w-full text-center space-y-4">
-          <ShieldAlert className="w-12 h-12 text-red-500 mx-auto" />
-          <h2 className="text-lg font-black text-gray-900">アクセス権限がありません</h2>
+      <div className="h-full flex items-center justify-center p-4 bg-gray-50">
+        <div className="bg-white p-6 sm:p-8 rounded-2xl shadow-sm border border-gray-200 max-w-sm w-full text-center space-y-4">
+          <ShieldAlert className="w-10 h-10 text-red-500 mx-auto" />
+          <h2 className="text-sm font-black text-gray-900">アクセス権限がありません</h2>
           <p className="text-xs font-bold text-gray-500 leading-relaxed">
             この機能はテナント管理者またはIT担当者のみ利用可能です。
           </p>
@@ -109,26 +105,34 @@ export default function TenantMessageDeliveryPage() {
   }
 
   return (
-    <div className="min-h-screen bg-[#F9FAFB] p-4 lg:p-8 font-sans">
+    <div className="h-full flex-1 w-full flex flex-col font-sans text-gray-900 bg-[#F9FAFB] relative min-h-0">
+      
       {/* アラート通知 */}
       {alert.show && (
-        <div className={`fixed top-4 right-4 z-50 px-4 py-3 rounded-xl shadow-lg border text-xs font-bold transition-all animate-fade-in ${
-          alert.type === "success" ? "bg-emerald-50 text-emerald-800 border-emerald-200" :
-          alert.type === "warning" ? "bg-amber-50 text-amber-800 border-amber-200" :
-          "bg-red-50 text-red-800 border-red-200"
-        }`}>
-          {alert.message}
+        <div className="absolute top-4 inset-x-0 mx-auto w-fit z-50 px-4 py-2.5 rounded-xl shadow-lg border text-[11px] sm:text-xs font-bold transition-all animate-fade-in flex items-center gap-1.5">
+          <div className={`p-1.5 rounded-full ${
+            alert.type === "success" ? "bg-emerald-100 text-emerald-700" :
+            alert.type === "warning" ? "bg-amber-100 text-amber-700" :
+            "bg-red-100 text-red-700"
+          }`}>
+            {alert.type === "success" ? <CheckCircle2 className="w-3.5 h-3.5" /> : <AlertCircle className="w-3.5 h-3.5" />}
+          </div>
+          <span className="text-gray-800 pr-1">{alert.message}</span>
         </div>
       )}
 
-      <div className="max-w-6xl mx-auto">
-        <MessageDelivery
-          schoolData={schoolData}
-          users={tenantUsers}
-          currentUser={userData}
-          showAlert={showAlert}
-        />
-      </div>
+      {/* スクロール領域 */}
+      <main className="flex-1 overflow-y-auto custom-scrollbar p-2 sm:p-4 lg:p-6 pb-20 md:pb-6 relative min-h-0 w-full">
+        <div className="max-w-6xl mx-auto w-full">
+          <MessageDelivery
+            schoolData={schoolData}
+            users={tenantUsers}
+            currentUser={userData}
+            showAlert={showAlert}
+          />
+        </div>
+      </main>
+
     </div>
   );
 }

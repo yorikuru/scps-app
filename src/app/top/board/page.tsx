@@ -12,7 +12,7 @@ import { UserData, Announcement, Category, AppConfig, AlertState, COLOR_MAPPINGS
 import BoardForm from "./components/BoardForm";
 import BoardList from "./components/BoardList";
 import CategoryManager from "./components/CategoryManager"; 
-import { useDialog } from "@/components/DialogContext"; // ★追加
+import { useDialog } from "@/components/DialogContext"; 
 
 const DynamicIcon = ({ name, className }: { name: string, className?: string }) => {
   const IconComponent = (LucideIcons as any)[name] || LucideIcons.Box;
@@ -22,7 +22,7 @@ const DynamicIcon = ({ name, className }: { name: string, className?: string }) 
 export default function BoardPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const { showConfirm } = useDialog(); // ★追加
+  const { showConfirm } = useDialog(); 
   
   const currentTab = searchParams.get("tab") || "list";
   const editId = searchParams.get("editId");
@@ -169,18 +169,15 @@ export default function BoardPage() {
       };
 
       if (editingAnnouncement) {
-        // 既存の投稿を更新
         await updateDoc(doc(db, "announcements", editingAnnouncement.id), payload);
         showToast("success", "連絡事項を更新しました。");
 
-        // 更新時の通知配信処理
         const publishDate = data.publishStartDate ? new Date(data.publishStartDate) : new Date();
         const batch = writeBatch(db);
         let batchCount = 0;
 
         tenantUsers.forEach(user => {
           if (batchCount >= 490) return;
-
           const notifRef = doc(collection(db, "notifications"));
           batch.set(notifRef, {
             userId: user.id,
@@ -200,7 +197,6 @@ export default function BoardPage() {
           await batch.commit();
         }
       } else {
-        // 新規投稿
         await addDoc(collection(db, "announcements"), {
           ...payload, 
           schoolId: userData.schoolId, 
@@ -211,7 +207,6 @@ export default function BoardPage() {
         });
         showToast("success", "新しい連絡事項を配信しました。");
 
-        // 新規投稿時の通知配信処理
         const publishDate = data.publishStartDate ? new Date(data.publishStartDate) : new Date();
         const batch = writeBatch(db);
         let batchCount = 0;
@@ -279,7 +274,6 @@ export default function BoardPage() {
     }
   };
 
-  // ★ カテゴリ削除の確認 (showConfirm の正しい使い方)
   const handleDeleteCategory = (id: string) => {
     showConfirm(
       "このカテゴリを削除しますか？",
@@ -305,37 +299,39 @@ export default function BoardPage() {
   }
 
   return (
-    <div className="h-full font-sans flex flex-col text-gray-900 bg-[#F9FAFB]">
-      <main className="flex-1 w-full max-w-7xl mx-auto p-3 sm:p-4 lg:p-6 flex flex-col min-h-0">
+    // ★ h-full flex-1 w-full で親（TopLayout）にぴったり収まるようにし、スクロール崩れを防ぐ
+    <div className="h-full flex-1 w-full flex flex-col min-h-0 font-sans text-gray-900 bg-[#F9FAFB] relative">
+      <main className="flex-1 w-full max-w-7xl mx-auto p-2 sm:p-4 lg:p-6 flex flex-col min-h-0">
         
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-4 flex-shrink-0">
-          <div className="flex items-center gap-3">
-            <div className={`p-2.5 ${c.lightBg} ${c.text} rounded-xl shadow-sm`}>
-              <DynamicIcon name={appConfig.icon} className="w-6 h-6" />
+        {/* ヘッダー部分は高さ固定 */}
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 sm:gap-4 mb-3 sm:mb-4 shrink-0">
+          <div className="flex items-center gap-2 sm:gap-3">
+            <div className={`p-2 sm:p-2.5 ${c.lightBg} ${c.text} rounded-xl shadow-sm`}>
+              <DynamicIcon name={appConfig.icon} className="w-5 h-5 sm:w-6 sm:h-6" />
             </div>
             <div>
-              <h1 className="text-lg sm:text-xl font-black text-gray-900 tracking-tight">{appConfig.name}</h1>
-              <p className="text-[10px] sm:text-[11px] font-bold text-gray-500 mt-0.5">校内全体や委員会メンバーに連絡事項を配信します。</p>
+              <h1 className="text-base sm:text-lg lg:text-xl font-black text-gray-900 tracking-tight">{appConfig.name}</h1>
+              <p className="text-[9px] sm:text-[10px] font-bold text-gray-500 mt-0.5">校内全体や委員会メンバーに連絡事項を配信します。</p>
             </div>
           </div>
 
-          <div className="flex bg-gray-200/60 p-1 rounded-xl w-fit shadow-inner overflow-x-auto">
+          <div className="flex bg-gray-200/60 p-1 rounded-xl w-fit shadow-inner overflow-x-auto custom-scrollbar">
             <button 
               onClick={() => setTab("list")} 
-              className={`flex items-center whitespace-nowrap px-4 py-2 text-xs font-bold rounded-lg transition-all ${currentTab === "list" && !editId ? "bg-white shadow-sm text-gray-900" : "text-gray-500 hover:text-gray-700"}`}
+              className={`flex items-center whitespace-nowrap px-3 sm:px-4 py-1.5 sm:py-2 text-[11px] sm:text-xs font-bold rounded-lg transition-all ${currentTab === "list" && !editId ? "bg-white shadow-sm text-gray-900" : "text-gray-500 hover:text-gray-700"}`}
             >
               <List className="w-3.5 h-3.5 mr-1.5" /> 連絡一覧
             </button>
             <button 
               onClick={() => setTab("form")} 
-              className={`flex items-center whitespace-nowrap px-4 py-2 text-xs font-bold rounded-lg transition-all ${currentTab === "form" ? "bg-white shadow-sm text-gray-900" : "text-gray-500 hover:text-gray-700"}`}
+              className={`flex items-center whitespace-nowrap px-3 sm:px-4 py-1.5 sm:py-2 text-[11px] sm:text-xs font-bold rounded-lg transition-all ${currentTab === "form" ? "bg-white shadow-sm text-gray-900" : "text-gray-500 hover:text-gray-700"}`}
             >
               <PlusCircle className="w-3.5 h-3.5 mr-1.5" /> {editId ? "連絡を編集" : "新しく配信"}
             </button>
             {canManageSettings && (
               <button 
                 onClick={() => setTab("categories")} 
-                className={`flex items-center whitespace-nowrap px-4 py-2 text-xs font-bold rounded-lg transition-all ${currentTab === "categories" ? "bg-white shadow-sm text-gray-900" : "text-gray-500 hover:text-gray-700"}`}
+                className={`flex items-center whitespace-nowrap px-3 sm:px-4 py-1.5 sm:py-2 text-[11px] sm:text-xs font-bold rounded-lg transition-all ${currentTab === "categories" ? "bg-white shadow-sm text-gray-900" : "text-gray-500 hover:text-gray-700"}`}
               >
                 <Settings className="w-3.5 h-3.5 mr-1.5" /> カテゴリ管理
               </button>
@@ -343,39 +339,41 @@ export default function BoardPage() {
           </div>
         </div>
 
-        {/* コンテンツエリア */}
-        <div className="flex-1 overflow-hidden flex flex-col min-h-0 relative">
+        {/* コンテンツエリア (flex-1 min-h-0 で箱の中にスクロールを封印) */}
+        <div className="flex-1 flex flex-col min-h-0 relative bg-white rounded-2xl shadow-sm border border-gray-200 overflow-hidden">
           {currentTab === "list" && !editId && (
-            <div className="h-full rounded-2xl shadow-sm border border-gray-200 overflow-hidden">
-              <BoardList 
-                announcements={announcements} 
-                categories={categories} 
-                userData={userData}
-                tenantUsers={tenantUsers} 
-                appConfig={appConfig} 
-                onEdit={(a) => setTab("form", a.id)} 
-                onDelete={handleDelete}
-              />
-            </div>
+            <BoardList 
+              announcements={announcements} 
+              categories={categories} 
+              userData={userData}
+              tenantUsers={tenantUsers} 
+              appConfig={appConfig} 
+              onEdit={(a) => setTab("form", a.id)} 
+              onDelete={handleDelete}
+            />
           )}
           
           {currentTab === "form" && (
-            <div className="max-w-4xl w-full mx-auto flex-1 overflow-y-auto custom-scrollbar pb-6">
-              <BoardForm 
-                appConfig={appConfig} categories={categories} editingAnnouncement={editingAnnouncement}
-                uiAlert={uiAlert} isSubmitting={isSubmitting} schoolId={userData?.schoolId || ""}
-                onSubmit={handlePostSubmit} onCancelEdit={() => setTab("list")}
-              />
+            <div className="flex-1 overflow-y-auto custom-scrollbar p-2 sm:p-4 pb-20">
+              <div className="max-w-4xl w-full mx-auto">
+                <BoardForm 
+                  appConfig={appConfig} categories={categories} editingAnnouncement={editingAnnouncement}
+                  uiAlert={uiAlert} isSubmitting={isSubmitting} schoolId={userData?.schoolId || ""}
+                  onSubmit={handlePostSubmit} onCancelEdit={() => setTab("list")}
+                />
+              </div>
             </div>
           )}
 
           {currentTab === "categories" && canManageSettings && (
-            <CategoryManager 
-              categories={categories} appConfig={appConfig}
-              onAdd={handleAddCategory} 
-              onEdit={handleEditCategory} 
-              onDelete={handleDeleteCategory}
-            />
+            <div className="flex-1 overflow-y-auto custom-scrollbar">
+              <CategoryManager 
+                categories={categories} appConfig={appConfig}
+                onAdd={handleAddCategory} 
+                onEdit={handleEditCategory} 
+                onDelete={handleDeleteCategory}
+              />
+            </div>
           )}
         </div>
       </main>

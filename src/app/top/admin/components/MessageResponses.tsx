@@ -30,14 +30,14 @@ export default function MessageResponses({ messages, users, setQueryParams }: Pr
   }
 
   return (
-    <div className="overflow-x-auto">
+    <div className="flex-1 overflow-x-auto overflow-y-auto custom-scrollbar bg-white rounded-b-2xl h-full min-h-0">
       <table className="min-w-full divide-y divide-gray-200 text-left whitespace-nowrap">
-        <thead className="bg-gray-50 text-[11px] font-bold text-gray-500">
+        <thead className="bg-gray-50 text-[10px] sm:text-[11px] font-bold text-gray-500 sticky top-0 z-10 shadow-sm">
           <tr>
-            <th className="px-4 py-3 border-r border-gray-100">メッセージ タイトル</th>
-            <th className="px-4 py-3 border-r border-gray-100 w-32">対応条件</th>
-            <th className="px-4 py-3 border-r border-gray-100 w-48">進捗状況</th>
-            <th className="px-4 py-3 min-w-[300px]">詳細 (未対応者 / 対応者)</th>
+            <th className="px-3 sm:px-4 py-3 border-r border-gray-100 min-w-[200px]">メッセージ タイトル</th>
+            <th className="px-3 sm:px-4 py-3 border-r border-gray-100 w-24 sm:w-32">対応条件</th>
+            <th className="px-3 sm:px-4 py-3 border-r border-gray-100 w-32 sm:w-48">進捗状況</th>
+            <th className="px-3 sm:px-4 py-3 min-w-[250px] sm:min-w-[300px]">詳細 (未対応者 / 対応者)</th>
           </tr>
         </thead>
         <tbody className="bg-white divide-y divide-gray-100 text-xs">
@@ -58,20 +58,20 @@ export default function MessageResponses({ messages, users, setQueryParams }: Pr
 
             return (
               <tr key={msg.id} onClick={() => setQueryParams({ viewId: msg.id })} className="hover:bg-blue-50/50 cursor-pointer transition-colors align-top">
-                <td className="px-4 py-4 border-r border-gray-100 whitespace-normal">
+                <td className="px-3 sm:px-4 py-3 sm:py-4 border-r border-gray-100 whitespace-normal">
                   <div className="font-extrabold text-gray-900 leading-snug">{msg.title}</div>
-                  <div className="text-[9px] text-gray-400 mt-1">配信開始: {msg.startAt ? msg.startAt.replace("T", " ") : "指定なし"}</div>
+                  <div className="text-[8px] sm:text-[9px] text-gray-400 mt-1">配信開始: {msg.startAt ? msg.startAt.replace("T", " ") : "指定なし"}</div>
                 </td>
                 
-                <td className="px-4 py-4 border-r border-gray-100">
-                  <span className={`px-2 py-1 rounded text-[9px] font-bold border ${msg.responseType === "all" ? "bg-red-50 text-red-700 border-red-200" : "bg-blue-50 text-blue-700 border-blue-200"}`}>
+                <td className="px-3 sm:px-4 py-3 sm:py-4 border-r border-gray-100">
+                  <span className={`px-2 py-1 rounded text-[8px] sm:text-[9px] font-bold border inline-block ${msg.responseType === "all" ? "bg-red-50 text-red-700 border-red-200" : "bg-blue-50 text-blue-700 border-blue-200"}`}>
                     {msg.responseType === "all" ? "全員必須" : "誰か1人で完了"}
                   </span>
                 </td>
 
-                <td className="px-4 py-4 border-r border-gray-100">
-                  <div className="flex flex-col gap-1.5 w-full max-w-[150px]">
-                    <div className="flex justify-between items-center text-[10px] font-bold">
+                <td className="px-3 sm:px-4 py-3 sm:py-4 border-r border-gray-100">
+                  <div className="flex flex-col gap-1.5 w-full max-w-[120px] sm:max-w-[150px]">
+                    <div className="flex justify-between items-center text-[9px] sm:text-[10px] font-bold">
                       <span className={isCompleted ? "text-green-600" : "text-red-600"}>{isCompleted ? "完了" : "未完了"}</span>
                       {msg.responseType === "all" ? (
                         <span className="text-gray-500">{respondedCount} / {total}</span>
@@ -85,25 +85,25 @@ export default function MessageResponses({ messages, users, setQueryParams }: Pr
                   </div>
                 </td>
 
-                <td className="px-4 py-4 whitespace-normal">
+                <td className="px-3 sm:px-4 py-3 sm:py-4 whitespace-normal">
                   {msg.responseType === "single" ? (
                     isCompleted ? (
-                      <span className="text-[10px] font-black text-blue-600 flex items-center bg-blue-50 border border-blue-100 px-2 py-1.5 rounded-lg w-fit">
-                        <CheckSquare className="w-3 h-3 mr-1.5"/>
-                        対応済み（対応者: {msg.responses?.map(id => users.find(u=>u.id===id)?.name || "不明").join(", ")}）
+                      <span className="text-[9px] sm:text-[10px] font-black text-blue-600 flex items-center bg-blue-50 border border-blue-100 px-2 py-1.5 rounded-lg w-fit">
+                        <CheckSquare className="w-2.5 h-2.5 sm:w-3 sm:h-3 mr-1 sm:mr-1.5 flex-shrink-0"/>
+                        対応済み（{msg.responses?.map(id => users.find(u=>u.id===id)?.name || "不明").join(", ")}）
                       </span>
                     ) : (
-                      <span className="text-[10px] font-bold text-gray-500">対象者のうち誰か1人が対応すると完了になります</span>
+                      <span className="text-[9px] sm:text-[10px] font-bold text-gray-500 block">対象者のうち誰か1人が対応すると完了になります</span>
                     )
                   ) : (
                     isCompleted ? (
-                      <span className="text-[10px] font-black text-green-600 flex items-center"><CheckSquare className="w-3 h-3 mr-1"/> 全員完了</span>
+                      <span className="text-[9px] sm:text-[10px] font-black text-green-600 flex items-center"><CheckSquare className="w-2.5 h-2.5 sm:w-3 sm:h-3 mr-1"/> 全員完了</span>
                     ) : (
                       <div className="flex flex-wrap gap-1 max-h-32 overflow-y-auto custom-scrollbar">
                         {unrespondedUsers.map(u => (
-                          <span key={u.id} className="text-[9px] font-bold bg-gray-100 text-gray-600 px-1.5 py-0.5 rounded border border-gray-200">{u.name}</span>
+                          <span key={u.id} className="text-[8px] sm:text-[9px] font-bold bg-gray-100 text-gray-600 px-1.5 py-0.5 rounded border border-gray-200">{u.name}</span>
                         ))}
-                        {unrespondedUsers.length === 0 && <span className="text-[10px] font-bold text-gray-400">対象者なし</span>}
+                        {unrespondedUsers.length === 0 && <span className="text-[9px] sm:text-[10px] font-bold text-gray-400">対象者なし</span>}
                       </div>
                     )
                   )}

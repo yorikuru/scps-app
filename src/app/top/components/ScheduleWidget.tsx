@@ -250,7 +250,6 @@ export default function ScheduleWidget({ userData, schoolData, selectedDate }: P
     }
   };
 
-  // 削除の実行本体
   const performDelete = async (eventId: string, googleEventId?: string | null) => {
     if (!userData || !schoolData) return;
     setIsDeleting(true);
@@ -276,7 +275,6 @@ export default function ScheduleWidget({ userData, schoolData, selectedDate }: P
     }
   };
 
-  // ★ showConfirm を用いた削除確認
   const executeDelete = (eventId: string, googleEventId?: string | null) => {
     showConfirm(
       "この予定を削除しますか？",
@@ -340,34 +338,36 @@ export default function ScheduleWidget({ userData, schoolData, selectedDate }: P
   ];
 
   return (
-    <div className="bg-white border border-gray-200 rounded-2xl shadow-2xs overflow-hidden flex flex-col w-full min-w-0">
+    <div className="bg-white border border-gray-200 rounded-2xl shadow-2xs overflow-hidden flex flex-col w-full h-full min-h-0">
       
-      {/* ヘッダー部 */}
-      <div className="px-3.5 py-2.5 border-b border-gray-100 flex justify-between items-center bg-gray-50/50">
-        <h2 className="text-xs sm:text-sm font-black text-gray-900 flex items-center gap-1.5 truncate">
-          <CalendarIcon className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-indigo-600" />
-          スケジュール ({baseDate.getMonth() + 1}月{baseDate.getDate()}日〜)
+      {/* ★ ヘッダー部：flex-wrap を追加し、幅が狭い場合は「追加」ボタンが改行されるように修正 */}
+      <div className="px-3 sm:px-4 py-2.5 sm:py-3 border-b border-gray-100 flex flex-wrap justify-between items-center gap-2 bg-gray-50/50 flex-shrink-0">
+        <h2 className="text-xs sm:text-sm font-black text-gray-900 flex items-center gap-1.5 min-w-0">
+          <CalendarIcon className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-indigo-600 flex-shrink-0" />
+          <span className="truncate">スケジュール ({baseDate.getMonth() + 1}月{baseDate.getDate()}日〜)</span>
         </h2>
         <button 
           onClick={openNewModal}
-          className="px-2.5 py-1 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-[10px] font-bold flex items-center gap-1 transition-colors shadow-2xs flex-shrink-0"
+          className="px-2.5 py-1 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-[10px] font-bold flex items-center gap-1 transition-colors shadow-2xs flex-shrink-0 ml-auto sm:ml-0"
         >
           <Plus className="w-3 h-3" /> 追加
         </button>
       </div>
 
       {/* スケジュール2カラム表示エリア */}
-      <div className="grid grid-cols-1 md:grid-cols-2 divide-y md:divide-y-0 md:divide-x divide-gray-100 bg-white">
+      {/* ★ flex-1 と min-h-0 を指定して高さ 100% を維持しつつ、はみ出しを防ぐ */}
+      <div className="flex-1 min-h-0 grid grid-cols-1 md:grid-cols-2 divide-y md:divide-y-0 md:divide-x divide-gray-100 bg-white">
         {datesToRender.map(({ date, isBase }, index) => {
           const styleInfo = getDateStyle(date, isBase);
           const dayEvents = filterEventsForDate(date);
 
           return (
-            <div key={index} className="p-3 sm:p-3.5 flex flex-col min-h-[140px] max-h-[220px] overflow-hidden">
+            // ★ max-h-[] を外し、親の枠（flex-1）に合わせて自動的に伸び縮みするように修正
+            <div key={index} className="p-3 sm:p-3.5 flex flex-col min-h-0 min-h-[140px]">
               
               {/* 日付ヘッダー */}
-              <div className="flex items-center justify-between mb-2 flex-shrink-0">
-                <div className="flex items-center gap-2">
+              <div className="flex items-center justify-between mb-2 flex-shrink-0 flex-wrap gap-1">
+                <div className="flex items-center gap-2 flex-wrap">
                   <span className={`px-2 py-0.5 rounded-md text-[10px] font-black ${styleInfo.badgeClass}`}>
                     {styleInfo.label}
                   </span>
@@ -380,7 +380,7 @@ export default function ScheduleWidget({ userData, schoolData, selectedDate }: P
                     </span>
                   )}
                 </div>
-                <span className="text-[10px] font-bold text-gray-400">
+                <span className="text-[10px] font-bold text-gray-400 ml-auto">
                   {dayEvents.length}件
                 </span>
               </div>

@@ -39,9 +39,8 @@ export default function BoardForm({ appConfig, categories, editingAnnouncement, 
   const [publishEndDate, setPublishEndDate] = useState("");
   const [isUploading, setIsUploading] = useState(false);
 
-  const { showAlert, showConfirm } = useDialog();
+  const { showAlert } = useDialog();
   
-  // カテゴリ未設定時の警告モーダル用ステート
   const [showCategoryWarning, setShowCategoryWarning] = useState(false);
 
   const editorRef = useRef<HTMLDivElement>(null);
@@ -105,7 +104,6 @@ export default function BoardForm({ appConfig, categories, editingAnnouncement, 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!selectedCategory) {
-      // カテゴリが未設定なら警告モーダルを表示して処理を止める
       setShowCategoryWarning(true);
       return;
     }
@@ -122,102 +120,108 @@ export default function BoardForm({ appConfig, categories, editingAnnouncement, 
 
   return (
     <>
-      <div className="flex flex-col h-full bg-white rounded-2xl shadow-sm border border-gray-200 relative">
-        <div className={`px-5 py-4 border-b flex items-center justify-between ${editingAnnouncement ? 'bg-amber-50/80 border-amber-200 rounded-t-2xl' : 'bg-gray-50/50 border-gray-100 rounded-t-2xl'}`}>
+      {/* ★ スマホ画面内で縦に伸びるよう h-full と flex を指定し、スクロールを内側に閉じ込める */}
+      <div className="flex flex-col h-full bg-white rounded-2xl shadow-sm border border-gray-200 relative min-h-0">
+        
+        <div className={`px-4 sm:px-5 py-3 sm:py-4 border-b flex flex-wrap gap-2 items-center justify-between shrink-0 ${editingAnnouncement ? 'bg-amber-50/80 border-amber-200 rounded-t-2xl' : 'bg-gray-50/50 border-gray-100 rounded-t-2xl'}`}>
           <div className="flex items-center gap-2">
             {editingAnnouncement ? <Edit2 className="w-4 h-4 text-amber-600" /> : <DynamicIcon name={appConfig.icon} className={`w-4 h-4 ${c.text}`} />}
             <h2 className={`text-sm font-black ${editingAnnouncement ? 'text-amber-900' : 'text-gray-900'}`}>{editingAnnouncement ? "連絡事項の編集" : "新しく連絡を配信"}</h2>
           </div>
           {editingAnnouncement && (
-            <button onClick={onCancelEdit} className="text-xs font-bold text-gray-500 hover:text-gray-700 bg-white px-2.5 py-1 rounded border border-gray-200 shadow-sm">キャンセル</button>
+            <button onClick={onCancelEdit} className="text-xs font-bold text-gray-500 hover:text-gray-700 bg-white px-2.5 py-1 rounded border border-gray-200 shadow-sm transition-colors">キャンセル</button>
           )}
         </div>
         
-        <form onSubmit={handleSubmit} className="p-5 sm:p-6 flex flex-col gap-4 flex-1">
+        <form onSubmit={handleSubmit} className="p-3 sm:p-5 flex flex-col gap-3 sm:gap-4 flex-1 overflow-y-auto custom-scrollbar">
+          
           {uiAlert.show && (
-            <div className={`p-3 rounded-xl text-xs font-bold flex items-center shadow-sm animate-fade-in ${uiAlert.type === "success" ? "bg-green-50 text-green-700 border border-green-200" : "bg-red-50 text-red-700 border border-red-200"}`}>
+            <div className={`p-3 rounded-xl text-xs font-bold flex items-center shadow-sm animate-fade-in shrink-0 ${uiAlert.type === "success" ? "bg-green-50 text-green-700 border border-green-200" : "bg-red-50 text-red-700 border border-red-200"}`}>
               {uiAlert.type === "success" ? <CheckCircle2 className="w-4 h-4 mr-1.5" /> : <AlertCircle className="w-4 h-4 mr-1.5" />} {uiAlert.message}
             </div>
           )}
 
-          <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-center">
+          {/* 上部設定エリア */}
+          <div className="flex flex-col sm:flex-row gap-3 sm:gap-4 items-start sm:items-center shrink-0">
             <div className="flex-1 w-full">
-              <label className="block text-xs font-bold text-gray-500 mb-1.5">カテゴリ</label>
+              <label className="block text-[10px] sm:text-xs font-bold text-gray-500 mb-1">カテゴリ</label>
+              {/* ★ ズーム防止： text-[16px] sm:text-sm */}
               <select 
                 value={selectedCategory} onChange={(e) => setSelectedCategory(e.target.value)}
-                className={`w-full bg-gray-50 border border-gray-200 rounded-xl px-3 py-2.5 text-sm font-bold text-gray-900 focus:bg-white focus:outline-none focus:ring-2 ${c.ring}`}
+                className={`w-full bg-gray-50 border border-gray-200 rounded-xl px-3 py-2 sm:py-2.5 text-[16px] sm:text-sm font-bold text-gray-900 focus:bg-white focus:outline-none focus:ring-2 ${c.ring}`}
               >
                 <option value="">(カテゴリなし)</option>
                 {categories.map(cat => <option key={cat.id} value={cat.id}>{cat.name}</option>)}
               </select>
             </div>
-            <div className="pt-0 sm:pt-5 pr-1">
-              <label className="flex items-center gap-2 cursor-pointer bg-red-50 px-3 py-2.5 rounded-xl border border-red-100 hover:bg-red-100 transition-colors">
+            <div className="pt-0 sm:pt-4 w-full sm:w-auto">
+              <label className="flex items-center gap-2 cursor-pointer bg-red-50 px-3 py-2 sm:py-2.5 rounded-xl border border-red-100 hover:bg-red-100 transition-colors h-full">
                 <input type="checkbox" checked={isUrgent} onChange={e => setIsUrgent(e.target.checked)} className="w-4 h-4 text-red-600 rounded cursor-pointer border-red-300 focus:ring-red-500" />
-                <span className="text-xs font-black text-red-700 flex items-center"><AlertOctagon className="w-4 h-4 mr-1" /> 緊急として配信</span>
+                <span className="text-[11px] sm:text-xs font-black text-red-700 flex items-center"><AlertOctagon className="w-3.5 h-3.5 sm:w-4 sm:h-4 mr-1" /> 緊急として配信</span>
               </label>
             </div>
           </div>
 
-          <div className="flex flex-col sm:flex-row gap-4">
+          {/* 日付エリア */}
+          <div className="flex flex-col sm:flex-row gap-3 sm:gap-4 shrink-0">
             <div className="flex-1 w-full">
-              <label className="block text-xs font-bold text-gray-500 mb-1.5">掲載開始日時 <span className="text-red-500">*</span></label>
+              <label className="block text-[10px] sm:text-xs font-bold text-gray-500 mb-1">掲載開始日時 <span className="text-red-500">*</span></label>
               <div className="relative">
                 <CalendarClock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+                {/* ★ ズーム防止： text-[16px] sm:text-sm */}
                 <input
                   type="datetime-local" required value={publishStartDate} onChange={(e) => setPublishStartDate(e.target.value)}
-                  className={`w-full bg-gray-50 border border-gray-200 rounded-xl pl-9 pr-3 py-2 text-sm font-bold text-gray-900 focus:bg-white focus:outline-none focus:ring-2 ${c.ring}`}
+                  className={`w-full bg-gray-50 border border-gray-200 rounded-xl pl-9 pr-2 sm:pr-3 py-2 text-[16px] sm:text-sm font-bold text-gray-900 focus:bg-white focus:outline-none focus:ring-2 ${c.ring}`}
                 />
               </div>
             </div>
             <div className="flex-1 w-full">
-              <label className="block text-xs font-bold text-gray-500 mb-1.5">掲載終了日時 (任意)</label>
+              <label className="block text-[10px] sm:text-xs font-bold text-gray-500 mb-1">掲載終了日時 (任意)</label>
               <div className="relative">
                 <CalendarClock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+                {/* ★ ズーム防止： text-[16px] sm:text-sm */}
                 <input
                   type="datetime-local" value={publishEndDate} onChange={(e) => setPublishEndDate(e.target.value)}
-                  className={`w-full bg-gray-50 border border-gray-200 rounded-xl pl-9 pr-3 py-2 text-sm font-bold text-gray-900 focus:bg-white focus:outline-none focus:ring-2 ${c.ring}`}
+                  className={`w-full bg-gray-50 border border-gray-200 rounded-xl pl-9 pr-2 sm:pr-3 py-2 text-[16px] sm:text-sm font-bold text-gray-900 focus:bg-white focus:outline-none focus:ring-2 ${c.ring}`}
                 />
               </div>
             </div>
           </div>
 
-          <div>
-            <label className="block text-xs font-bold text-gray-500 mb-1.5">タイトル <span className="text-red-500">*</span></label>
+          {/* タイトル */}
+          <div className="shrink-0">
+            <label className="block text-[10px] sm:text-xs font-bold text-gray-500 mb-1">タイトル <span className="text-red-500">*</span></label>
+            {/* ★ ズーム防止： text-[16px] sm:text-sm */}
             <input
               type="text" required value={title} onChange={(e) => setTitle(e.target.value)}
-              className={`w-full bg-white border border-gray-300 rounded-xl px-3.5 py-2.5 text-sm font-bold text-gray-900 focus:outline-none focus:ring-2 ${c.ring} shadow-2xs`}
+              className={`w-full bg-white border border-gray-300 rounded-xl px-3 sm:px-3.5 py-2 sm:py-2.5 text-[16px] sm:text-sm font-bold text-gray-900 focus:outline-none focus:ring-2 ${c.ring} shadow-2xs`}
               placeholder="例: 次回の定例会議について"
             />
           </div>
 
-          <div className="flex-1 flex flex-col min-h-[250px]">
-            <label className="block text-xs font-bold text-gray-500 mb-1.5">本文 <span className="text-red-500">*</span></label>
+          {/* リッチテキスト本文 */}
+          <div className="flex-1 flex flex-col min-h-[250px] sm:min-h-[300px]">
+            <label className="block text-[10px] sm:text-xs font-bold text-gray-500 mb-1">本文 <span className="text-red-500">*</span></label>
             
-            {/* リッチテキストツールバー */}
-            <div className="flex flex-wrap items-center gap-1.5 mb-2 p-1.5 bg-gray-50 border border-gray-200 rounded-xl">
-              {/* 文字色 */}
-              <button type="button" onClick={() => applyFormat('foreColor', '#111827')} className="w-5 h-5 rounded-full bg-gray-900 border border-gray-300 hover:scale-110 transition-transform shadow-2xs" title="黒文字"></button>
-              <button type="button" onClick={() => applyFormat('foreColor', '#ef4444')} className="w-5 h-5 rounded-full bg-red-500 border border-gray-300 hover:scale-110 transition-transform shadow-2xs" title="赤文字"></button>
-              <button type="button" onClick={() => applyFormat('foreColor', '#3b82f6')} className="w-5 h-5 rounded-full bg-blue-500 border border-gray-300 hover:scale-110 transition-transform shadow-2xs" title="青文字"></button>
-              <div className="w-px h-5 bg-gray-300 mx-1"></div>
+            <div className="flex flex-wrap items-center gap-1 mb-1.5 p-1 bg-gray-50 border border-gray-200 rounded-xl shrink-0">
+              <button type="button" onClick={() => applyFormat('foreColor', '#111827')} className="w-5 h-5 sm:w-6 sm:h-6 rounded-full bg-gray-900 border border-gray-300 hover:scale-110 transition-transform shadow-2xs" title="黒文字"></button>
+              <button type="button" onClick={() => applyFormat('foreColor', '#ef4444')} className="w-5 h-5 sm:w-6 sm:h-6 rounded-full bg-red-500 border border-gray-300 hover:scale-110 transition-transform shadow-2xs" title="赤文字"></button>
+              <button type="button" onClick={() => applyFormat('foreColor', '#3b82f6')} className="w-5 h-5 sm:w-6 sm:h-6 rounded-full bg-blue-500 border border-gray-300 hover:scale-110 transition-transform shadow-2xs" title="青文字"></button>
+              <div className="w-px h-5 bg-gray-300 mx-0.5 sm:mx-1"></div>
               
-              {/* 蛍光ペン */}
-              <button type="button" onClick={() => applyFormat('hiliteColor', '#fef08a')} className="w-5 h-5 rounded-full bg-yellow-200 border border-gray-300 hover:scale-110 transition-transform shadow-2xs" title="蛍光（黄）"></button>
-              <button type="button" onClick={() => applyFormat('hiliteColor', '#fbcfe8')} className="w-5 h-5 rounded-full bg-pink-200 border border-gray-300 hover:scale-110 transition-transform shadow-2xs" title="蛍光（ピンク）"></button>
-              <button type="button" onClick={() => applyFormat('hiliteColor', '#bbf7d0')} className="w-5 h-5 rounded-full bg-green-200 border border-gray-300 hover:scale-110 transition-transform shadow-2xs" title="蛍光（緑）"></button>
-              <div className="w-px h-5 bg-gray-300 mx-1"></div>
+              <button type="button" onClick={() => applyFormat('hiliteColor', '#fef08a')} className="w-5 h-5 sm:w-6 sm:h-6 rounded-full bg-yellow-200 border border-gray-300 hover:scale-110 transition-transform shadow-2xs" title="蛍光（黄）"></button>
+              <button type="button" onClick={() => applyFormat('hiliteColor', '#fbcfe8')} className="w-5 h-5 sm:w-6 sm:h-6 rounded-full bg-pink-200 border border-gray-300 hover:scale-110 transition-transform shadow-2xs" title="蛍光（ピンク）"></button>
+              <button type="button" onClick={() => applyFormat('hiliteColor', '#bbf7d0')} className="w-5 h-5 sm:w-6 sm:h-6 rounded-full bg-green-200 border border-gray-300 hover:scale-110 transition-transform shadow-2xs" title="蛍光（緑）"></button>
+              <div className="w-px h-5 bg-gray-300 mx-0.5 sm:mx-1"></div>
 
-              {/* フォント装飾 */}
               <button type="button" onClick={() => applyFormat('bold')} className="p-1.5 hover:bg-white hover:shadow-sm rounded-lg text-gray-700 transition-all" title="太字"><Bold className="w-4 h-4" /></button>
               <button type="button" onClick={() => applyFormat('italic')} className="p-1.5 hover:bg-white hover:shadow-sm rounded-lg text-gray-700 transition-all" title="斜体"><Italic className="w-4 h-4" /></button>
               <button type="button" onClick={() => applyFormat('underline')} className="p-1.5 hover:bg-white hover:shadow-sm rounded-lg text-gray-700 transition-all" title="下線"><Underline className="w-4 h-4" /></button>
-              <div className="w-px h-5 bg-gray-300 mx-1"></div>
+              <div className="w-px h-5 bg-gray-300 mx-0.5 sm:mx-1"></div>
 
-              {/* サイズ変更 */}
               <select 
                 onChange={(e) => applyFormat('fontSize', e.target.value)}
-                className="py-1 px-2 text-xs border border-gray-300 rounded-lg text-gray-700 bg-white hover:bg-gray-50 outline-none cursor-pointer font-bold shadow-2xs"
+                className="py-1 px-1.5 sm:px-2 text-xs border border-gray-300 rounded-lg text-gray-700 bg-white hover:bg-gray-50 outline-none cursor-pointer font-bold shadow-2xs"
                 defaultValue="3"
                 title="文字サイズ"
               >
@@ -226,47 +230,47 @@ export default function BoardForm({ appConfig, categories, editingAnnouncement, 
                 <option value="5">大</option>
                 <option value="7">特大</option>
               </select>
-              <div className="w-px h-5 bg-gray-300 mx-1"></div>
+              <div className="w-px h-5 bg-gray-300 mx-0.5 sm:mx-1"></div>
 
-              {/* リンク */}
               <button type="button" onClick={handleLink} className="p-1.5 hover:bg-white hover:shadow-sm rounded-lg text-gray-600 transition-all" title="リンク挿入"><LinkIcon className="w-4 h-4" /></button>
             </div>
             
+            {/* ★ ズーム防止：スマホ時は text-[16px] (text-base相当) を指定 */}
             <div
               ref={editorRef} contentEditable onInput={(e) => setContent(e.currentTarget.innerHTML)}
-              className={`flex-1 bg-white border border-gray-300 rounded-xl p-4 text-sm text-gray-900 focus:outline-none focus:ring-2 ${c.ring} overflow-y-auto custom-scrollbar leading-relaxed shadow-inner [&_a]:text-blue-600 [&_a]:underline [&_b]:font-black [&_i]:italic [&_u]:underline [&_font[size="2"]]:text-xs [&_font[size="3"]]:text-sm [&_font[size="5"]]:text-xl [&_font[size="7"]]:text-3xl [&_span[style*="background-color"]]:px-1 [&_span[style*="background-color"]]:rounded-sm`}
+              className={`flex-1 bg-white border border-gray-300 rounded-xl p-3 sm:p-4 text-[16px] sm:text-sm text-gray-900 focus:outline-none focus:ring-2 ${c.ring} overflow-y-auto custom-scrollbar leading-relaxed shadow-inner [&_a]:text-blue-600 [&_a]:underline [&_b]:font-black [&_i]:italic [&_u]:underline [&_font[size="2"]]:text-xs [&_font[size="3"]]:text-sm [&_font[size="5"]]:text-xl [&_font[size="7"]]:text-3xl [&_span[style*="background-color"]]:px-1 [&_span[style*="background-color"]]:rounded-sm`}
             />
           </div>
 
-          <div className="bg-gray-50 border border-gray-200 rounded-xl p-3">
+          <div className="bg-gray-50 border border-gray-200 rounded-xl p-2.5 sm:p-3 shrink-0">
             <div className="flex justify-between items-center mb-2">
-              <span className="text-xs font-bold text-gray-600 flex items-center"><Paperclip className="w-3.5 h-3.5 mr-1"/> 添付ファイル (最大2つ)</span>
+              <span className="text-[10px] sm:text-xs font-bold text-gray-600 flex items-center"><Paperclip className="w-3.5 h-3.5 mr-1"/> 添付ファイル (最大2つ)</span>
               {attachments.length < 2 && (
-                <label className={`cursor-pointer px-3 py-1.5 bg-white border border-gray-300 rounded-lg text-xs font-bold text-gray-700 hover:bg-gray-100 flex items-center transition-colors ${isUploading ? 'opacity-50 pointer-events-none' : ''}`}>
-                  {isUploading ? <Loader2 className="w-3.5 h-3.5 mr-1.5 animate-spin" /> : <UploadCloud className="w-3.5 h-3.5 mr-1.5" />} ファイルを追加
+                <label className={`cursor-pointer px-2 sm:px-3 py-1 sm:py-1.5 bg-white border border-gray-300 rounded-lg text-[10px] sm:text-xs font-bold text-gray-700 hover:bg-gray-100 flex items-center transition-colors shadow-2xs ${isUploading ? 'opacity-50 pointer-events-none' : ''}`}>
+                  {isUploading ? <Loader2 className="w-3.5 h-3.5 mr-1 animate-spin" /> : <UploadCloud className="w-3.5 h-3.5 mr-1" />} ファイルを追加
                   <input type="file" className="hidden" multiple onChange={handleFileUpload} ref={fileInputRef} />
                 </label>
               )}
             </div>
             {attachments.length > 0 && (
-              <div className="flex flex-col gap-2">
+              <div className="flex flex-col gap-1.5 sm:gap-2">
                 {attachments.map((file, idx) => (
-                  <div key={idx} className="flex items-center justify-between bg-white border border-gray-200 p-2 rounded-lg shadow-2xs">
+                  <div key={idx} className="flex items-center justify-between bg-white border border-gray-200 p-1.5 sm:p-2 rounded-lg shadow-2xs">
                     <div className="flex items-center gap-2 overflow-hidden">
-                      <div className="p-1.5 bg-blue-50 text-blue-600 rounded-md"><FileIcon className="w-4 h-4" /></div>
-                      <span className="text-xs font-bold text-gray-700 truncate">{file.name}</span>
+                      <div className="p-1 sm:p-1.5 bg-blue-50 text-blue-600 rounded-md"><FileIcon className="w-3.5 h-3.5 sm:w-4 sm:h-4" /></div>
+                      <span className="text-[10px] sm:text-xs font-bold text-gray-700 truncate">{file.name}</span>
                     </div>
-                    <button type="button" onClick={() => setAttachments(prev => prev.filter((_, i) => i !== idx))} className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-md"><X className="w-4 h-4" /></button>
+                    <button type="button" onClick={() => setAttachments(prev => prev.filter((_, i) => i !== idx))} className="p-1 sm:p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-md transition-colors"><X className="w-3.5 h-3.5 sm:w-4 sm:h-4" /></button>
                   </div>
                 ))}
               </div>
             )}
           </div>
 
-          <div className="pt-4 flex justify-end">
+          <div className="pt-2 flex justify-end shrink-0">
             <button
               type="submit" disabled={isSubmitting || isUploading || !title.trim() || !content.trim() || !publishStartDate}
-              className={`px-6 py-2.5 disabled:opacity-50 disabled:cursor-not-allowed text-white text-xs font-bold rounded-xl shadow-md transition-all flex items-center ${editingAnnouncement ? 'bg-amber-600 hover:bg-amber-700' : `${c.bg} ${c.hover}`}`}
+              className={`w-full sm:w-auto justify-center px-6 py-2.5 sm:py-3 disabled:opacity-50 disabled:cursor-not-allowed text-white text-xs sm:text-sm font-bold rounded-xl shadow-md transition-all flex items-center ${editingAnnouncement ? 'bg-amber-600 hover:bg-amber-700' : `${c.bg} ${c.hover}`}`}
             >
               {isSubmitting ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : (editingAnnouncement ? <Edit2 className="w-4 h-4 mr-2" /> : <Send className="w-4 h-4 mr-2" />)}
               {editingAnnouncement ? "編集内容を保存" : "連絡事項を配信する"}
@@ -275,7 +279,6 @@ export default function BoardForm({ appConfig, categories, editingAnnouncement, 
         </form>
       </div>
 
-      {/* ＝＝＝ カテゴリ未設定時の警告モーダル ＝＝＝ */}
       {showCategoryWarning && (
         <div className="absolute inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4 animate-fade-in rounded-2xl">
           <div className="bg-white rounded-2xl shadow-xl w-full max-w-sm overflow-hidden p-6 text-center border border-gray-100">

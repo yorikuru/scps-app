@@ -32,7 +32,6 @@ function AccountContent() {
   const [activeTab, setActiveTab] = useState<TabType>("profile");
 
   useEffect(() => {
-    // URLのパラメータから初期タブを設定
     const tabParam = searchParams.get("tab") as TabType;
     if (tabParam && ["profile", "security", "integrations", "calendar"].includes(tabParam)) {
       setActiveTab(tabParam);
@@ -116,13 +115,12 @@ function AccountContent() {
 
   const handleTabChange = (tab: TabType) => {
     setActiveTab(tab);
-    // URLを書き換える（ページリロードなし）
     router.replace(`/top/account?tab=${tab}`, { scroll: false });
   };
 
   if (isLoading || isProcessingLine) {
     return (
-      <div className="min-h-screen bg-gray-50 flex flex-col justify-center items-center p-4 text-center">
+      <div className="h-full flex flex-col justify-center items-center p-4 text-center bg-gray-50">
         <Loader2 className="animate-spin h-10 w-10 text-blue-600 mb-4" />
         <p className="text-gray-500 font-bold text-sm">
           {isProcessingLine ? "LINEアカウントを連携しています..." : "読み込み中..."}
@@ -132,94 +130,79 @@ function AccountContent() {
   }
 
   return (
-    <div className="min-h-screen bg-[#F4F5F7] py-8 px-4 sm:px-6 lg:px-8 relative">
-      <div className="max-w-4xl mx-auto">
-        <div className="flex items-center justify-between pb-4 border-b border-gray-200 mb-6">
-          <div>
-            <h1 className="text-2xl sm:text-3xl font-extrabold text-gray-900 flex items-center tracking-tight">
-              マイアカウント設定
-            </h1>
-            <p className="mt-2 text-sm text-gray-500 font-medium">プロフィール情報の確認と、システムの設定を行います。</p>
+    // ★ h-full flex-1 w-full で親（TopLayout）にぴったり収まるようにし、スクロール崩れを防ぐ
+    <div className="h-full flex-1 w-full bg-[#F4F5F7] font-sans flex flex-col relative min-h-0">
+      <main className="flex-1 overflow-y-auto custom-scrollbar p-4 sm:p-6 lg:p-8 pb-20 md:pb-8 relative min-h-0 w-full">
+        <div className="max-w-4xl mx-auto w-full">
+          
+          <div className="flex items-center justify-between pb-4 border-b border-gray-200 mb-4 sm:mb-6 shrink-0">
+            <div>
+              <h1 className="text-xl sm:text-2xl lg:text-3xl font-extrabold text-gray-900 flex items-center tracking-tight">
+                マイアカウント設定
+              </h1>
+              <p className="mt-1 sm:mt-2 text-xs sm:text-sm text-gray-500 font-medium">プロフィール情報の確認と、システムの設定を行います。</p>
+            </div>
+            <button
+              onClick={() => router.push("/top")}
+              className="hidden sm:flex items-center text-sm font-bold text-blue-600 hover:text-blue-800 transition-colors bg-white px-4 py-2 border border-gray-200 rounded-xl shadow-sm"
+            >
+              <ArrowLeft className="h-4 w-4 mr-2" /> トップへ戻る
+            </button>
           </div>
-          <button
-            onClick={() => router.push("/top")}
-            className="hidden sm:flex items-center text-sm font-bold text-blue-600 hover:text-blue-800 transition-colors bg-white px-4 py-2 border border-gray-200 rounded-xl shadow-sm"
-          >
-            <ArrowLeft className="h-4 w-4 mr-2" /> トップへ戻る
-          </button>
+
+          {/* タブメニュー (スマホ横スクロール対応) */}
+          <div className="flex overflow-x-auto space-x-1.5 sm:space-x-2 bg-gray-100 p-1.5 rounded-xl sm:rounded-2xl mb-6 sm:mb-8 custom-scrollbar border border-gray-200 shrink-0 snap-x">
+            <button
+              onClick={() => handleTabChange("profile")}
+              className={`flex items-center px-4 sm:px-5 py-2 sm:py-2.5 rounded-lg sm:rounded-xl text-[11px] sm:text-sm font-bold whitespace-nowrap transition-all flex-1 justify-center shrink-0 snap-start ${
+                activeTab === "profile" ? "bg-white text-blue-600 shadow-sm" : "text-gray-500 hover:text-gray-700 hover:bg-gray-200/50"
+              }`}
+            >
+              <UserCircle className="h-3.5 w-3.5 sm:h-4 sm:w-4 mr-1.5 sm:mr-2" />
+              プロフィール
+            </button>
+            
+            <button
+              onClick={() => handleTabChange("security")}
+              className={`flex items-center px-4 sm:px-5 py-2 sm:py-2.5 rounded-lg sm:rounded-xl text-[11px] sm:text-sm font-bold whitespace-nowrap transition-all flex-1 justify-center shrink-0 snap-start ${
+                activeTab === "security" ? "bg-white text-blue-600 shadow-sm" : "text-gray-500 hover:text-gray-700 hover:bg-gray-200/50"
+              }`}
+            >
+              <ShieldCheck className="h-3.5 w-3.5 sm:h-4 sm:w-4 mr-1.5 sm:mr-2" />
+              セキュリティ
+            </button>
+            
+            <button
+              onClick={() => handleTabChange("integrations")}
+              className={`flex items-center px-4 sm:px-5 py-2 sm:py-2.5 rounded-lg sm:rounded-xl text-[11px] sm:text-sm font-bold whitespace-nowrap transition-all flex-1 justify-center shrink-0 snap-start ${
+                activeTab === "integrations" ? "bg-white text-blue-600 shadow-sm" : "text-gray-500 hover:text-gray-700 hover:bg-gray-200/50"
+              }`}
+            >
+              <LinkIcon className="h-3.5 w-3.5 sm:h-4 sm:w-4 mr-1.5 sm:mr-2" />
+              アカウント連携
+            </button>
+
+            <button
+              onClick={() => handleTabChange("calendar")}
+              className={`flex items-center px-4 sm:px-5 py-2 sm:py-2.5 rounded-lg sm:rounded-xl text-[11px] sm:text-sm font-bold whitespace-nowrap transition-all flex-1 justify-center shrink-0 snap-start ${
+                activeTab === "calendar" ? "bg-white text-blue-600 shadow-sm" : "text-gray-500 hover:text-gray-700 hover:bg-gray-200/50"
+              }`}
+            >
+              <Calendar className="h-3.5 w-3.5 sm:h-4 sm:w-4 mr-1.5 sm:mr-2" />
+              カレンダー設定
+            </button>
+          </div>
+
+          {/* コンテンツ */}
+          <div className="space-y-4 sm:space-y-6">
+            {activeTab === "profile" && <ProfileSection currentUser={currentUser} userData={userData} tenantData={tenantData} />}
+            {activeTab === "security" && <SecuritySection currentUser={currentUser} userData={userData} setUserData={setUserData} isProcessing={isProcessing} setIsProcessing={setIsProcessing} />}
+            {activeTab === "integrations" && <IntegrationsSection currentUser={currentUser} userData={userData} setUserData={setUserData} isProcessing={isProcessing} setIsProcessing={setIsProcessing} tenantData={tenantData} linkedProviders={linkedProviders} setLinkedProviders={setLinkedProviders} />}
+            {activeTab === "calendar" && <CalendarSettings userData={userData} />}
+          </div>
+
         </div>
-
-        {/* タブメニュー */}
-        <div className="flex overflow-x-auto space-x-2 bg-gray-100 p-1.5 rounded-2xl mb-8 no-scrollbar border border-gray-200">
-          <button
-            onClick={() => handleTabChange("profile")}
-            className={`flex items-center px-5 py-2.5 rounded-xl text-sm font-bold whitespace-nowrap transition-all flex-1 justify-center ${
-              activeTab === "profile" 
-                ? "bg-white text-blue-600 shadow-sm" 
-                : "text-gray-500 hover:text-gray-700 hover:bg-gray-200/50"
-            }`}
-          >
-            <UserCircle className="h-4 w-4 mr-2" />
-            プロフィール
-          </button>
-          
-          <button
-            onClick={() => handleTabChange("security")}
-            className={`flex items-center px-5 py-2.5 rounded-xl text-sm font-bold whitespace-nowrap transition-all flex-1 justify-center ${
-              activeTab === "security" 
-                ? "bg-white text-blue-600 shadow-sm" 
-                : "text-gray-500 hover:text-gray-700 hover:bg-gray-200/50"
-            }`}
-          >
-            <ShieldCheck className="h-4 w-4 mr-2" />
-            セキュリティ
-          </button>
-          
-          <button
-            onClick={() => handleTabChange("integrations")}
-            className={`flex items-center px-5 py-2.5 rounded-xl text-sm font-bold whitespace-nowrap transition-all flex-1 justify-center ${
-              activeTab === "integrations" 
-                ? "bg-white text-blue-600 shadow-sm" 
-                : "text-gray-500 hover:text-gray-700 hover:bg-gray-200/50"
-            }`}
-          >
-            <LinkIcon className="h-4 w-4 mr-2" />
-            アカウント連携
-          </button>
-
-          <button
-            onClick={() => handleTabChange("calendar")}
-            className={`flex items-center px-5 py-2.5 rounded-xl text-sm font-bold whitespace-nowrap transition-all flex-1 justify-center ${
-              activeTab === "calendar" 
-                ? "bg-white text-blue-600 shadow-sm" 
-                : "text-gray-500 hover:text-gray-700 hover:bg-gray-200/50"
-            }`}
-          >
-            <Calendar className="h-4 w-4 mr-2" />
-            カレンダー設定
-          </button>
-        </div>
-
-        {/* タブに応じたコンテンツの表示 */}
-        <div className="space-y-6">
-          {activeTab === "profile" && (
-            <ProfileSection currentUser={currentUser} userData={userData} tenantData={tenantData} />
-          )}
-
-          {activeTab === "security" && (
-            <SecuritySection currentUser={currentUser} userData={userData} setUserData={setUserData} isProcessing={isProcessing} setIsProcessing={setIsProcessing} />
-          )}
-
-          {activeTab === "integrations" && (
-            <IntegrationsSection currentUser={currentUser} userData={userData} setUserData={setUserData} isProcessing={isProcessing} setIsProcessing={setIsProcessing} tenantData={tenantData} linkedProviders={linkedProviders} setLinkedProviders={setLinkedProviders} />
-          )}
-
-          {activeTab === "calendar" && (
-            <CalendarSettings userData={userData} />
-          )}
-        </div>
-
-      </div>
+      </main>
     </div>
   );
 }
@@ -227,8 +210,8 @@ function AccountContent() {
 export default function AccountPage() {
   return (
     <Suspense fallback={
-      <div className="min-h-screen bg-gray-50 flex justify-center items-center">
-        <Loader2 className="animate-spin h-10 w-10 text-blue-600" />
+      <div className="h-full flex justify-center items-center bg-gray-50">
+        <Loader2 className="animate-spin h-8 w-8 text-blue-600" />
       </div>
     }>
       <AccountContent />
