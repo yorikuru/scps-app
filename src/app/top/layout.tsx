@@ -2,8 +2,8 @@
 
 import React, { useEffect, useState } from "react";
 import { useRouter, usePathname } from "next/navigation";
-import { onAuthStateChanged } from "firebase/auth";
-import { doc, collection, query, where, onSnapshot, orderBy } from "firebase/firestore";
+import { onAuthStateChanged, signOut } from "firebase/auth";
+import { doc, collection, query, where, onSnapshot, orderBy, getDoc, setDoc, serverTimestamp } from "firebase/firestore";
 import { auth, db } from "@/lib/firebase";
 import { Loader2, ShieldAlert } from "lucide-react";
 
@@ -11,6 +11,7 @@ import Sidebar from "./components/Sidebar";
 import Header from "./components/Header";
 import DisasterAlertWidget from "./components/DisasterAlertWidget";
 import { UserData, SchoolData, SystemMessage, SystemApp } from "./page";
+import { PresenceState } from "./presence/types";
 
 type ExtendedSchoolData = SchoolData & {
   availableModules?: string[];
@@ -23,10 +24,8 @@ export default function TopLayout({ children }: { children: React.ReactNode }) {
   const router = useRouter();
   const pathname = usePathname();
   
-  // ★ 初期値は true (PC用に開いておく) に設定
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
   
-  // ★ 追加：初回読み込み時に画面幅を判定し、スマホサイズならサイドバーを閉じる
   useEffect(() => {
     if (typeof window !== "undefined" && window.innerWidth < 768) {
       setIsSidebarOpen(false);
@@ -63,6 +62,76 @@ export default function TopLayout({ children }: { children: React.ReactNode }) {
     });
     return () => unsubscribeAuth();
   }, [router]);
+
+  // ★ ログイン中の自動プレゼンス判別 (Visibility API ＆ ログアウト監視)
+  useEffect(() => {
+    if (!userData?.id || !userData?.schoolId) return;
+
+    const updatePresenceState = async (newState: PresenceState, isAuto: boolean) => {
+      try {
+        const ref = doc(db, "presence_statuses", userData.id);
+        const snap = await getDoc(ref);
+        const nowIso = new Date().toISOString();
+
+        if (!snap.exists()) {
+          await setDoc(ref, {
+            userId: userData.id,
+            schoolId: userData.schoolId,
+            userName: userData.name,
+            userPhotoURL: userData.photoURL || null,
+            positionName: userData.positionName || "",
+            role: userData.role,
+            systemId: (userData as any).systemId || "",
+            currentState: newState,
+            isAutoOnline: isAuto,
+            lastActiveAt: nowIso,
+            updatedAt: serverTimestamp(),
+          });
+        } else {
+          const data = snap.data();
+          // 手動設定やスケジュール優先：isAutoOnline が false (手動) の場合は勝手に自動上書きしない
+          if (data.isAutoOnline !== false || newState === "offline") {
+            await setDoc(ref, {
+              ...data,
+              currentState: newState,
+              isAutoOnline: isAuto,
+              lastActiveAt: nowIso,
+              updatedAt: serverTimestamp(),
+            }, { merge: true });
+          }
+        }
+      } catch (e) {
+        console.error(e);
+      }
+    };
+
+    // 初期化時は「連絡可能」に
+    updatePresenceState("available", true);
+
+    const handleVisibilityChange = () => {
+      if (document.hidden) {
+        // タブから離れた -> 退席中
+        updatePresenceState("away", true);
+      } else {
+        // タブに戻ってきた -> 連絡可能
+        updatePresenceState("available", true);
+      }
+    };
+
+    const handleBeforeUnload = () => {
+      // ページを閉じる・離脱 -> オフライン
+      const ref = doc(db, "presence_statuses", userData.id);
+      setDoc(ref, { currentState: "offline", isAutoOnline: true, lastActiveAt: new Date().toISOString() }, { merge: true }).catch(()=>{});
+    };
+
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+    window.addEventListener("beforeunload", handleBeforeUnload);
+
+    return () => {
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
+      window.removeEventListener("beforeunload", handleBeforeUnload);
+    };
+  }, [userData]);
 
   useEffect(() => {
     if (!userData) return;
@@ -182,6 +251,13 @@ export default function TopLayout({ children }: { children: React.ReactNode }) {
   }, [pathname, isLoading, userData, schoolData, systemApps]);
 
   const handleLogout = async () => {
+    // ログアウト時にステータスをオフラインに確実に更新してからサインアウト
+    if (userData?.id) {
+      try {
+        const ref = doc(db, "presence_statuses", userData.id);
+        await setDoc(ref, { currentState: "offline", isAutoOnline: true, lastActiveAt: new Date().toISOString() }, { merge: true });
+      } catch (e) {}
+    }
     await auth.signOut();
     router.push("/login");
   };

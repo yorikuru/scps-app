@@ -3,7 +3,7 @@
 import React, { useState, useEffect } from "react";
 import { collection, getDocs, addDoc, updateDoc, deleteDoc, doc, query, orderBy, writeBatch } from "firebase/firestore";
 import { db } from "@/lib/firebase";
-import { Plus, Edit2, Trash2, Save, X, Loader2, LayoutGrid, Globe, CheckSquare, Square, Search, ShieldCheck } from "lucide-react";
+import { Plus, Edit2, Trash2, Save, X, Loader2, LayoutGrid, Globe, CheckSquare, Square, Search, ShieldCheck, ArrowUp, ArrowDown } from "lucide-react";
 import * as LucideIcons from "lucide-react";
 import { useDialog } from "@/components/DialogContext";
 
@@ -28,14 +28,37 @@ export type SystemApp = {
   defaultRoles: RolePermissions; 
 };
 
+// Tailwindの標準カラーパレット
 const TAILWIND_COLORS = [
-  "slate", "gray", "zinc", "neutral", "stone", "red", "orange", "amber", 
-  "yellow", "lime", "green", "emerald", "teal", "cyan", "sky", "blue", 
-  "indigo", "violet", "purple", "fuchsia", "pink", "rose"
+  { name: "slate", hex: "#64748b" },
+  { name: "gray", hex: "#6b7280" },
+  { name: "zinc", hex: "#71717a" },
+  { name: "neutral", hex: "#737373" },
+  { name: "stone", hex: "#78716c" },
+  { name: "red", hex: "#ef4444" },
+  { name: "orange", hex: "#f97316" },
+  { name: "amber", hex: "#f59e0b" },
+  { name: "yellow", hex: "#eab308" },
+  { name: "lime", hex: "#84cc16" },
+  { name: "green", hex: "#22c55e" },
+  { name: "emerald", hex: "#10b981" },
+  { name: "teal", hex: "#14b8a6" },
+  { name: "cyan", hex: "#06b6d4" },
+  { name: "sky", hex: "#0ea5e9" },
+  { name: "blue", hex: "#3b82f6" },
+  { name: "indigo", hex: "#6366f1" },
+  { name: "violet", hex: "#8b5cf6" },
+  { name: "purple", hex: "#a855f7" },
+  { name: "fuchsia", hex: "#d946ef" },
+  { name: "pink", hex: "#ec4899" },
+  { name: "rose", hex: "#f43f5e" }
 ];
 
 const AVAILABLE_ICONS = [
-  "Activity", "AlertCircle", "Archive", "Award", "BarChart2", "Bell", "BookOpen", "Bookmark", "Box", "Briefcase", "Calendar", "Camera", "CheckCircle", "CheckSquare", "Clipboard", "Clock", "Cloud", "Code", "CreditCard", "Database", "FileText", "Folder", "Globe", "Grid", "Home", "Image", "Inbox", "Info", "Key", "Layers", "LayoutDashboard", "Link", "List", "Lock", "Mail", "MapPin", "MessageSquare", "MessageSquareText", "Monitor", "Phone", "PieChart", "Save", "Search", "Send", "Settings", "ShieldCheck", "Smartphone", "Star", "Tablet", "Trash2", "Upload", "User", "Users", "Video"
+  // 既存のアイコン
+  "Activity", "AlertCircle", "Archive", "Award", "BarChart2", "Bell", "BookOpen", "Bookmark", "Box", "Briefcase", "Calendar", "Camera", "CheckCircle", "CheckSquare", "Clipboard", "Clock", "Cloud", "Code", "CreditCard", "Database", "FileText", "Folder", "Globe", "Grid", "Home", "Image", "Inbox", "Info", "Key", "Layers", "LayoutDashboard", "Link", "List", "Lock", "Mail", "MapPin", "MessageSquare", "MessageSquareText", "Monitor", "Phone", "PieChart", "Save", "Search", "Send", "Settings", "ShieldCheck", "Smartphone", "Star", "Tablet", "Trash2", "Upload", "User", "Users", "Video", "Zap",
+  // 拡充されたアイコン群
+  "Airplay", "AlignLeft", "Anchor", "Aperture", "AtSign", "Battery", "Bluetooth", "Book", "BookmarkPlus", "Compass", "Cpu", "Disc", "DollarSign", "Download", "Droplet", "Edit", "ExternalLink", "Eye", "EyeOff", "FastForward", "Feather", "File", "Film", "Filter", "Flag", "FolderPlus", "Gift", "GitBranch", "GitCommit", "GitMerge", "GitPullRequest", "Glasses", "HardDrive", "Hash", "Headphones", "HelpCircle", "LifeBuoy", "Map", "Maximize", "Mic", "MicOff", "Minimize", "Minus", "Moon", "Music", "Navigation", "Octagon", "Package", "Paperclip", "Percent", "Play", "Plus", "Power", "Printer", "Radio", "RefreshCw", "Repeat", "Rewind", "RotateCcw", "RotateCw", "Rss", "Scissors", "Server", "Share", "Shield", "ShoppingBag", "ShoppingCart", "Shuffle", "Sidebar", "SkipBack", "SkipForward", "Slack", "Sliders", "Speaker", "Square", "Sun", "Sunrise", "Sunset", "Table", "Tag", "Terminal", "ThumbsDown", "ThumbsUp", "ToggleLeft", "ToggleRight", "Tool", "TrendingDown", "TrendingUp", "Triangle", "Truck", "Tv", "Umbrella", "UserCheck", "UserMinus", "UserPlus", "UserX", "Volume", "Volume1", "Volume2", "VolumeX", "Watch", "Wifi", "WifiOff", "Wind", "Wrench"
 ];
 
 const ROLE_LABELS: Record<keyof RolePermissions, string> = {
@@ -53,7 +76,6 @@ const DynamicIcon = ({ name, className }: { name: string, className?: string }) 
   return <IconComponent className={className} />;
 };
 
-// ★ Props から showAlert を削除しました
 export default function AppManagement() {
   const [apps, setApps] = useState<SystemApp[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -62,10 +84,8 @@ export default function AppManagement() {
   const [isSaving, setIsSaving] = useState(false);
   const [iconSearch, setIconSearch] = useState("");
 
-  // ★ ダイアログフックを取得
   const { showAlert, showConfirm } = useDialog();
 
-  // 配信管理モーダル用ステート
   const [isDeployModalOpen, setIsDeployModalOpen] = useState(false);
   const [deployApp, setDeployApp] = useState<SystemApp | null>(null);
   const [tenants, setTenants] = useState<any[]>([]);
@@ -93,7 +113,7 @@ export default function AppManagement() {
   };
 
   const openNewModal = () => {
-    setFormData({ appId: "", name: "", description: "", icon: "Box", color: "indigo", path: "", isActive: true, order: apps.length * 10, defaultRoles: DEFAULT_ROLES });
+    setFormData({ appId: "", name: "", description: "", icon: "Box", color: "indigo", path: "", isActive: true, order: (apps.length + 1) * 10, defaultRoles: DEFAULT_ROLES });
     setIsEditing(false); setIconSearch(""); setIsModalOpen(true);
   };
 
@@ -113,7 +133,27 @@ export default function AppManagement() {
     } catch (error) { showAlert("保存に失敗しました。", "error"); } finally { setIsSaving(false); }
   };
 
-  // 削除処理本体
+  // 表示順をワンクリックで入れ替える機能
+  const handleMoveOrder = async (index: number, direction: "up" | "down") => {
+    const targetIndex = direction === "up" ? index - 1 : index + 1;
+    if (targetIndex < 0 || targetIndex >= apps.length) return;
+
+    const currentApp = apps[index];
+    const targetApp = apps[targetIndex];
+
+    try {
+      const batch = writeBatch(db);
+      const tempOrder = currentApp.order;
+      batch.update(doc(db, "system_apps", currentApp.id), { order: targetApp.order });
+      batch.update(doc(db, "system_apps", targetApp.id), { order: tempOrder });
+      
+      await batch.commit();
+      fetchApps();
+    } catch (error) {
+      showAlert("表示順の変更に失敗しました。", "error");
+    }
+  };
+
   const executeDelete = async (id: string) => {
     try { 
       await deleteDoc(doc(db, "system_apps", id)); 
@@ -124,9 +164,7 @@ export default function AppManagement() {
     }
   };
 
-  // 削除確認
   const handleDelete = (id: string) => {
-    // ★ showConfirm に置換
     showConfirm(
       "本当に削除しますか？\n全テナントから完全にアクセスできなくなります。",
       () => executeDelete(id),
@@ -141,7 +179,6 @@ export default function AppManagement() {
     }));
   };
 
-  // 配信管理モーダルを開く
   const openDeployModal = async (app: SystemApp) => {
     setDeployApp(app);
     setIsDeployModalOpen(true);
@@ -161,13 +198,12 @@ export default function AppManagement() {
     const filteredIds = tenants.filter(t => t.name.includes(tenantSearch) || t.schoolCode.includes(tenantSearch)).map(t => t.id);
     const allSelected = filteredIds.every(id => selectedTenants.includes(id));
     if (allSelected) {
-      setSelectedTenants(prev => prev.filter(id => !filteredIds.includes(id))); // 選択解除
+      setSelectedTenants(prev => prev.filter(id => !filteredIds.includes(id)));
     } else {
-      setSelectedTenants(prev => Array.from(new Set([...prev, ...filteredIds]))); // 全選択
+      setSelectedTenants(prev => Array.from(new Set([...prev, ...filteredIds])));
     }
   };
 
-  // 一括ON/OFF 実行処理本体
   const executeBulkProcess = async (action: "enable" | "disable") => {
     setIsDeploying(true);
     try {
@@ -195,10 +231,8 @@ export default function AppManagement() {
     }
   };
 
-  // 一括ON / OFFの確認
   const executeBulkDeploy = (action: "enable" | "disable") => {
     if (selectedTenants.length === 0) return;
-    // ★ showConfirm に置換
     showConfirm(
       `選択した ${selectedTenants.length} 件のテナントに対して、このアプリを「${action === 'enable' ? '利用ON' : '利用OFF'}」にします。よろしいですか？`,
       () => executeBulkProcess(action),
@@ -213,71 +247,104 @@ export default function AppManagement() {
   if (isLoading) return <div className="flex justify-center py-12"><Loader2 className="animate-spin h-8 w-8 text-indigo-600" /></div>;
 
   return (
-    <div className="space-y-6 animate-fade-in">
-      <div className="flex justify-between items-center bg-white p-5 rounded-2xl shadow-sm border border-gray-200">
+    <div className="space-y-6 animate-fade-in w-full min-w-0 max-w-7xl mx-auto pb-12">
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center bg-white p-5 rounded-2xl shadow-sm border border-gray-200 gap-4">
         <div>
-          <h2 className="text-lg font-black text-gray-900 flex items-center gap-2">
+          <h2 className="text-lg font-black text-gray-900 flex items-center gap-2.5">
             <LayoutGrid className="h-5 w-5 text-indigo-600" /> プラグイン・アプリ管理
           </h2>
-          <p className="text-xs font-bold text-gray-500 mt-1">システム全体で提供するアプリの作成、権限設定、テナントへの一括配信を行います。</p>
+          <p className="text-xs font-bold text-gray-500 mt-1">サイドバー等に表示されるアプリの順序並び替え、作成、権限設定、テナントへの一括配信を行います。</p>
         </div>
-        <button onClick={openNewModal} className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-bold rounded-xl flex items-center shadow-sm transition-colors">
+        <button onClick={openNewModal} className="w-full sm:w-auto px-4 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white text-xs sm:text-sm font-bold rounded-xl flex items-center justify-center shadow-sm transition-colors shrink-0">
           <Plus className="h-4 w-4 mr-1.5" /> アプリを新規作成
         </button>
       </div>
 
-      <div className="bg-white border border-gray-200 shadow-sm rounded-2xl overflow-hidden">
-        <div className="overflow-x-auto">
-          <table className="min-w-full divide-y divide-gray-200">
+      <div className="bg-white border border-gray-200 shadow-sm rounded-2xl overflow-hidden w-full">
+        <div className="overflow-x-auto custom-scrollbar w-full">
+          <table className="min-w-full divide-y divide-gray-200 min-w-[700px]">
             <thead className="bg-gray-50/80">
               <tr>
-                <th className="px-6 py-3.5 text-left text-[11px] font-black text-gray-500 uppercase tracking-wider">アプリ情報</th>
-                <th className="px-6 py-3.5 text-left text-[11px] font-black text-gray-500 uppercase tracking-wider">システム設定</th>
-                <th className="px-6 py-3.5 text-center text-[11px] font-black text-gray-500 uppercase tracking-wider">稼働状況</th>
-                <th className="px-6 py-3.5 text-right text-[11px] font-black text-gray-500 uppercase tracking-wider">アクション</th>
+                <th className="px-4 sm:px-6 py-3.5 text-center text-[11px] font-black text-gray-500 uppercase tracking-wider w-24">表示順</th>
+                <th className="px-4 sm:px-6 py-3.5 text-left text-[11px] font-black text-gray-500 uppercase tracking-wider">アプリ情報</th>
+                <th className="px-4 sm:px-6 py-3.5 text-left text-[11px] font-black text-gray-500 uppercase tracking-wider hidden md:table-cell">システムパス</th>
+                <th className="px-4 sm:px-6 py-3.5 text-center text-[11px] font-black text-gray-500 uppercase tracking-wider">稼働状況</th>
+                <th className="px-4 sm:px-6 py-3.5 text-right text-[11px] font-black text-gray-500 uppercase tracking-wider">アクション</th>
               </tr>
             </thead>
             <tbody className="bg-white divide-y divide-gray-100">
               {apps.length === 0 ? (
-                <tr><td colSpan={4} className="px-6 py-8 text-center text-sm font-bold text-gray-400">アプリが登録されていません</td></tr>
+                <tr><td colSpan={5} className="px-6 py-8 text-center text-sm font-bold text-gray-400">アプリが登録されていません</td></tr>
               ) : (
-                apps.map(app => (
-                  <tr key={app.id} className="hover:bg-gray-50/50 transition-colors">
-                    <td className="px-6 py-4">
-                      <div className="flex items-center">
-                        <div className={`p-2.5 rounded-xl bg-${app.color}-50 border border-${app.color}-100 text-${app.color}-600`}>
-                          <DynamicIcon name={app.icon} className="h-5 w-5" />
+                apps.map((app, index) => {
+                  const ColorHex = TAILWIND_COLORS.find(c => c.name === app.color)?.hex || "#6366f1";
+                  return (
+                    <tr key={app.id} className="hover:bg-gray-50/50 transition-colors">
+                      <td className="px-4 sm:px-6 py-3 sm:py-4 text-center">
+                        <div className="flex items-center justify-center gap-1">
+                          <button 
+                            type="button"
+                            onClick={() => handleMoveOrder(index, "up")}
+                            disabled={index === 0}
+                            className="p-1.5 text-gray-400 hover:text-indigo-600 hover:bg-gray-100 rounded-lg disabled:opacity-20 transition-colors"
+                            title="上に移動"
+                          >
+                            <ArrowUp className="h-4 w-4" />
+                          </button>
+                          <button 
+                            type="button"
+                            onClick={() => handleMoveOrder(index, "down")}
+                            disabled={index === apps.length - 1}
+                            className="p-1.5 text-gray-400 hover:text-indigo-600 hover:bg-gray-100 rounded-lg disabled:opacity-20 transition-colors"
+                            title="下に移動"
+                          >
+                            <ArrowDown className="h-4 w-4" />
+                          </button>
                         </div>
-                        <div className="ml-4">
-                          <p className="text-sm font-black text-gray-900">{app.name}</p>
-                          <p className="text-xs font-bold text-gray-500 mt-0.5 max-w-xs truncate">{app.description}</p>
+                      </td>
+
+                      <td className="px-4 sm:px-6 py-3 sm:py-4">
+                        <div className="flex items-center">
+                          <div 
+                            className="p-2.5 rounded-xl flex items-center justify-center shadow-2xs border border-gray-100 shrink-0"
+                            style={{ backgroundColor: `${ColorHex}15`, color: ColorHex }}
+                          >
+                            <DynamicIcon name={app.icon} className="h-5 w-5" />
+                          </div>
+                          <div className="ml-4 min-w-0">
+                            <p className="text-sm font-black text-gray-900 truncate">{app.name}</p>
+                            <p className="text-[10px] font-bold text-gray-500 mt-0.5 truncate max-w-xs">{app.description}</p>
+                          </div>
                         </div>
-                      </div>
-                    </td>
-                    <td className="px-6 py-4">
-                      <div className="text-xs font-bold text-gray-700 bg-gray-100 inline-block px-2 py-1 rounded-md mb-1">{app.path}</div>
-                      <div className="text-[10px] font-bold text-gray-400">ID: {app.appId} | 順序: {app.order}</div>
-                    </td>
-                    <td className="px-6 py-4 text-center">
-                      <span className={`px-2.5 py-1 inline-flex text-[10px] font-black rounded-full border ${app.isActive ? 'bg-green-50 text-green-700 border-green-200' : 'bg-gray-100 text-gray-500 border-gray-200'}`}>
-                        {app.isActive ? "稼働中" : "システム停止中"}
-                      </span>
-                    </td>
-                    <td className="px-6 py-4 text-right">
-                      <div className="flex items-center justify-end gap-2">
-                        <button onClick={() => openDeployModal(app)} className="px-3 py-1.5 text-[11px] font-bold text-blue-700 bg-blue-50 border border-blue-200 hover:bg-blue-100 rounded-lg transition-colors flex items-center">
-                          <Globe className="h-3.5 w-3.5 mr-1" /> 配信管理
-                        </button>
-                        <button onClick={() => { setFormData(app); setIsEditing(true); setIsModalOpen(true); }} className="p-1.5 text-gray-500 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors">
-                          <Edit2 className="h-4 w-4" />
-                        </button>
-                        <button onClick={() => handleDelete(app.id)} className="p-1.5 text-gray-500 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors">
-                          <Trash2 className="h-4 w-4" />
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                ))
+                      </td>
+
+                      <td className="px-4 sm:px-6 py-3 sm:py-4 hidden md:table-cell">
+                        <div className="text-xs font-bold text-gray-700 bg-gray-100 inline-block px-2 py-1 rounded-md mb-1">{app.path}</div>
+                        <div className="text-[10px] font-bold text-gray-400">ID: {app.appId} | Order: {app.order}</div>
+                      </td>
+
+                      <td className="px-4 sm:px-6 py-3 sm:py-4 text-center">
+                        <span className={`px-2.5 py-1 inline-flex text-[10px] font-black rounded-full border ${app.isActive ? 'bg-green-50 text-green-700 border-green-200' : 'bg-gray-100 text-gray-500 border-gray-200'}`}>
+                          {app.isActive ? "稼働中" : "停止中"}
+                        </span>
+                      </td>
+
+                      <td className="px-4 sm:px-6 py-3 sm:py-4 text-right">
+                        <div className="flex items-center justify-end gap-2">
+                          <button onClick={() => openDeployModal(app)} className="px-3 py-1.5 text-[11px] font-bold text-blue-700 bg-blue-50 border border-blue-200 hover:bg-blue-100 rounded-lg transition-colors flex items-center shrink-0">
+                            <Globe className="h-3.5 w-3.5 mr-1" /> 配信管理
+                          </button>
+                          <button onClick={() => { setFormData(app); setIsEditing(true); setIsModalOpen(true); }} className="p-1.5 text-gray-500 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors shrink-0" title="編集">
+                            <Edit2 className="h-4 w-4" />
+                          </button>
+                          <button onClick={() => handleDelete(app.id)} className="p-1.5 text-gray-500 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors shrink-0" title="削除">
+                            <Trash2 className="h-4 w-4" />
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  )
+                })
               )}
             </tbody>
           </table>
@@ -286,103 +353,103 @@ export default function AppManagement() {
 
       {/* 編集・作成モーダル */}
       {isModalOpen && (
-        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
-          <div className="bg-white rounded-3xl shadow-2xl w-full max-w-5xl overflow-hidden flex flex-col max-h-[90vh] animate-fade-in">
-            <div className="px-6 py-4 border-b border-gray-100 flex justify-between items-center bg-gray-50/80">
+        <div className="fixed inset-0 z-[60] flex items-end sm:items-center justify-center bg-black/60 backdrop-blur-sm sm:p-4 animate-fade-in">
+          <div className="bg-white rounded-t-3xl sm:rounded-3xl shadow-2xl w-full max-w-5xl overflow-hidden flex flex-col h-[90vh] sm:max-h-[90vh] animate-slide-up sm:animate-fade-in border border-gray-200">
+            
+            <div className="px-6 py-4 border-b border-gray-100 flex justify-between items-center bg-gray-50/80 shrink-0">
               <h3 className="text-sm font-black text-gray-900">{isEditing ? "アプリ設定の編集" : "新しいアプリの登録"}</h3>
               <button onClick={() => setIsModalOpen(false)} className="p-1.5 text-gray-400 hover:bg-gray-200 rounded-full transition-colors"><X className="h-5 w-5" /></button>
             </div>
 
-            <form onSubmit={handleSave} className="p-6 overflow-y-auto flex-1 custom-scrollbar">
-              <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+            <form onSubmit={handleSave} className="p-6 overflow-y-auto flex-1 custom-scrollbar w-full min-h-0">
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 w-full">
                 
                 {/* 左カラム：基本情報と権限 */}
                 <div className="space-y-6">
                   <div className="grid grid-cols-2 gap-4">
                     <div>
                       <label className="block text-[11px] font-black text-gray-500 mb-1.5 uppercase">アプリID <span className="text-red-500">*</span></label>
-                      <input type="text" required value={formData.appId} onChange={e => setFormData({...formData, appId: e.target.value})} className="w-full bg-gray-50 border border-gray-200 rounded-xl p-2.5 text-sm font-bold focus:bg-white" placeholder="例: board" disabled={isEditing} />
+                      <input type="text" required value={formData.appId} onChange={e => setFormData({...formData, appId: e.target.value})} className="w-full bg-gray-50 border border-gray-200 rounded-xl p-3 text-sm font-bold focus:bg-white outline-none focus:border-indigo-500" placeholder="例: board" disabled={isEditing} />
                     </div>
                     <div>
-                      <label className="block text-[11px] font-black text-gray-500 mb-1.5 uppercase">表示順序 <span className="text-red-500">*</span></label>
-                      <input type="number" required value={formData.order} onChange={e => setFormData({...formData, order: Number(e.target.value)})} className="w-full bg-gray-50 border border-gray-200 rounded-xl p-2.5 text-sm font-bold focus:bg-white" />
+                      <label className="block text-[11px] font-black text-gray-500 mb-1.5 uppercase">並び順序 (数値) <span className="text-red-500">*</span></label>
+                      <input type="number" required value={formData.order} onChange={e => setFormData({...formData, order: Number(e.target.value)})} className="w-full bg-gray-50 border border-gray-200 rounded-xl p-3 text-sm font-bold focus:bg-white outline-none focus:border-indigo-500" />
                     </div>
                   </div>
 
                   <div>
                     <label className="block text-[11px] font-black text-gray-500 mb-1.5 uppercase">アプリ名 (デフォルト) <span className="text-red-500">*</span></label>
-                    <input type="text" required value={formData.name} onChange={e => setFormData({...formData, name: e.target.value})} className="w-full bg-gray-50 border border-gray-200 rounded-xl p-2.5 text-sm font-bold focus:bg-white" placeholder="例: お知らせボード" />
+                    <input type="text" required value={formData.name} onChange={e => setFormData({...formData, name: e.target.value})} className="w-full bg-gray-50 border border-gray-200 rounded-xl p-3 text-sm font-bold focus:bg-white outline-none focus:border-indigo-500" placeholder="例: お知らせボード" />
                   </div>
 
                   <div>
                     <label className="block text-[11px] font-black text-gray-500 mb-1.5 uppercase">説明・概要</label>
-                    <textarea rows={2} value={formData.description} onChange={e => setFormData({...formData, description: e.target.value})} className="w-full bg-gray-50 border border-gray-200 rounded-xl p-2.5 text-sm font-bold focus:bg-white resize-none" />
+                    <textarea rows={2} value={formData.description} onChange={e => setFormData({...formData, description: e.target.value})} className="w-full bg-gray-50 border border-gray-200 rounded-xl p-3 text-sm font-bold focus:bg-white resize-none outline-none focus:border-indigo-500" />
                   </div>
 
                   <div>
                     <label className="block text-[11px] font-black text-gray-500 mb-1.5 uppercase">URLパス <span className="text-red-500">*</span></label>
-                    <input type="text" required value={formData.path} onChange={e => setFormData({...formData, path: e.target.value})} className="w-full bg-gray-50 border border-gray-200 rounded-xl p-2.5 text-sm font-bold focus:bg-white" placeholder="例: /app/board" />
+                    <input type="text" required value={formData.path} onChange={e => setFormData({...formData, path: e.target.value})} className="w-full bg-gray-50 border border-gray-200 rounded-xl p-3 text-sm font-bold focus:bg-white outline-none focus:border-indigo-500" placeholder="例: /app/board" />
                   </div>
 
-                  {/* 役職ごとのデフォルト権限設定 */}
-                  <div className="bg-indigo-50/50 border border-indigo-100 rounded-xl p-4">
+                  <div className="bg-indigo-50/50 border border-indigo-100 rounded-2xl p-4">
                     <label className="block text-[11px] font-black text-indigo-900 mb-3 uppercase flex items-center">
-                      <ShieldCheck className="w-3.5 h-3.5 mr-1" /> デフォルト利用権限
+                      <ShieldCheck className="w-4 h-4 mr-1.5 text-indigo-600" /> デフォルト利用権限
                     </label>
                     <div className="grid grid-cols-2 gap-3">
                       {(Object.keys(ROLE_LABELS) as Array<keyof RolePermissions>).map(roleKey => (
-                        <label key={roleKey} className="flex items-center gap-2 cursor-pointer bg-white p-2 rounded-lg border border-gray-200 hover:border-indigo-300">
+                        <label key={roleKey} className="flex items-center gap-2.5 cursor-pointer bg-white p-2.5 rounded-xl border border-gray-200 hover:border-indigo-300 transition-colors shadow-2xs">
                           <input type="checkbox" checked={formData.defaultRoles?.[roleKey]} onChange={() => handleRoleToggle(roleKey)} className="w-4 h-4 text-indigo-600 rounded" />
                           <span className="text-xs font-bold text-gray-800">{ROLE_LABELS[roleKey]}</span>
                         </label>
                       ))}
                     </div>
-                    <p className="text-[10px] font-bold text-indigo-500 mt-3">※各テナントの管理者画面で学校ごとに個別に上書き（オーバーライド）が可能です。</p>
+                    <p className="text-[10px] font-bold text-indigo-500 mt-3 leading-relaxed">※各テナントの管理者画面で学校ごとに個別に上書き（オーバーライド）が可能です。</p>
                   </div>
                 </div>
 
                 {/* 右カラム：デザイン設定 */}
                 <div className="space-y-6">
-                  {/* カラーとシステム稼働設定 */}
-                  <div className="flex items-center justify-between p-3 bg-gray-50 rounded-xl border border-gray-200">
+                  <div className="flex items-center justify-between p-4 bg-gray-50 rounded-2xl border border-gray-200">
                     <div className="flex items-center gap-3">
                       <input type="checkbox" id="isActive" checked={formData.isActive} onChange={e => setFormData({...formData, isActive: e.target.checked})} className="w-4 h-4 text-indigo-600 rounded" />
                       <div>
                         <label htmlFor="isActive" className="text-sm font-black text-gray-900 cursor-pointer">システム全体で稼働中</label>
-                        <p className="text-[9px] text-gray-500 font-bold mt-0.5">OFFにすると特権管理者以外は全テナントで利用不可</p>
+                        <p className="text-[10px] text-gray-500 font-bold mt-0.5">OFFにすると特権管理者以外は全テナントで利用不可</p>
                       </div>
                     </div>
                   </div>
 
                   <div>
                     <label className="block text-[11px] font-black text-gray-500 mb-2 uppercase">テーマカラー</label>
-                    <div className="flex flex-wrap gap-2 p-3 bg-gray-50 border border-gray-200 rounded-xl">
-                      {TAILWIND_COLORS.map(color => (
+                    <div className="flex flex-wrap gap-2.5 p-4 bg-gray-50 border border-gray-200 rounded-2xl max-h-48 overflow-y-auto">
+                      {TAILWIND_COLORS.map(colorItem => (
                         <div 
-                          key={color} onClick={() => setFormData({...formData, color})}
-                          className={`w-6 h-6 rounded-full cursor-pointer transition-transform border-2 ${formData.color === color ? 'border-gray-900 scale-110 shadow-md' : 'border-transparent'}`}
-                          style={{ backgroundColor: color === 'stone' ? '#78716c' : color === 'zinc' ? '#71717a' : color === 'neutral' ? '#737373' : color === 'slate' ? '#64748b' : undefined }}
+                          key={colorItem.name} 
+                          onClick={() => setFormData({...formData, color: colorItem.name})}
+                          className={`w-7 h-7 rounded-full cursor-pointer transition-transform border-2 flex items-center justify-center ${formData.color === colorItem.name ? 'border-gray-900 scale-110 shadow-md' : 'border-transparent hover:scale-105'}`}
+                          title={colorItem.name}
                         >
-                          <div className={`w-full h-full rounded-full bg-${color}-500`}></div>
+                          <div className="w-full h-full rounded-full border border-black/10" style={{ backgroundColor: colorItem.hex }}></div>
                         </div>
                       ))}
                     </div>
                   </div>
 
                   {/* アイコン選択 */}
-                  <div className="flex-1 flex flex-col h-[280px]">
-                    <label className="block text-[11px] font-black text-gray-500 mb-2 uppercase flex justify-between items-center">
+                  <div className="flex-1 flex flex-col sm:h-[280px]">
+                    <label className="flex flex-col sm:flex-row sm:items-center sm:justify-between text-[11px] font-black text-gray-500 mb-2 uppercase gap-2">
                       <span>アイコン選択 (Lucide)</span>
-                      <div className="relative">
-                        <Search className="w-3 h-3 absolute left-2 top-1/2 -translate-y-1/2 text-gray-400" />
-                        <input type="text" placeholder="検索..." value={iconSearch} onChange={e => setIconSearch(e.target.value)} className="w-32 pl-6 pr-2 py-1 text-xs font-normal border border-gray-300 rounded-md focus:outline-none focus:border-indigo-500" />
+                      <div className="relative w-full sm:w-auto">
+                        <Search className="w-3.5 h-3.5 absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-400" />
+                        <input type="text" placeholder="検索..." value={iconSearch} onChange={e => setIconSearch(e.target.value)} className="w-full sm:w-36 pl-8 pr-2 py-1 text-xs font-normal border border-gray-300 rounded-lg focus:outline-none focus:border-indigo-500" />
                       </div>
                     </label>
-                    <div className="bg-gray-50 border border-gray-200 rounded-xl p-3 flex-1 overflow-y-auto custom-scrollbar flex flex-wrap gap-2 content-start">
+                    <div className="bg-gray-50 border border-gray-200 rounded-2xl p-3 max-h-[160px] sm:max-h-full sm:flex-1 overflow-y-auto custom-scrollbar flex flex-wrap gap-2 content-start">
                       {filteredIcons.map(iconName => (
                         <div 
                           key={iconName} onClick={() => setFormData({...formData, icon: iconName})}
-                          className={`p-2 rounded-lg cursor-pointer flex items-center justify-center transition-colors ${formData.icon === iconName ? 'bg-indigo-600 text-white shadow-sm' : 'bg-white text-gray-600 border border-gray-200 hover:bg-gray-100'}`}
+                          className={`p-2 rounded-xl cursor-pointer flex items-center justify-center transition-colors shadow-2xs ${formData.icon === iconName ? 'bg-indigo-600 text-white' : 'bg-white text-gray-600 border border-gray-200 hover:bg-gray-100'}`}
                           title={iconName}
                         >
                           <DynamicIcon name={iconName} className="w-5 h-5" />
@@ -394,11 +461,11 @@ export default function AppManagement() {
                 </div>
               </div>
 
-              <div className="pt-6 mt-6 border-t border-gray-100 flex items-center justify-end gap-3">
-                <button type="button" onClick={() => setIsModalOpen(false)} className="px-5 py-2.5 text-xs font-bold text-gray-600 bg-gray-100 hover:bg-gray-200 rounded-xl transition-colors">
+              <div className="pt-6 mt-6 border-t border-gray-100 flex flex-col-reverse sm:flex-row items-center justify-end gap-3 pb-6 sm:pb-0 shrink-0">
+                <button type="button" onClick={() => setIsModalOpen(false)} className="w-full sm:w-auto px-5 py-2.5 text-sm font-bold text-gray-600 bg-gray-100 hover:bg-gray-200 rounded-xl transition-colors">
                   キャンセル
                 </button>
-                <button type="submit" disabled={isSaving} className="px-8 py-2.5 text-xs font-bold text-white bg-gray-900 hover:bg-black rounded-xl shadow-md transition-all flex items-center">
+                <button type="submit" disabled={isSaving} className="w-full sm:w-auto px-8 py-2.5 text-sm font-bold text-white bg-gray-900 hover:bg-black rounded-xl shadow-md transition-all flex items-center justify-center disabled:opacity-50">
                   {isSaving ? <Loader2 className="animate-spin h-4 w-4 mr-2" /> : <Save className="h-4 w-4 mr-2" />}
                   保存して設定を反映
                 </button>
@@ -410,33 +477,39 @@ export default function AppManagement() {
 
       {/* テナントへの一括配信・管理モーダル */}
       {isDeployModalOpen && deployApp && (
-        <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-fade-in">
-          <div className="bg-white rounded-3xl shadow-2xl w-full max-w-2xl overflow-hidden flex flex-col h-[80vh]">
-            <div className="px-6 py-4 border-b border-gray-100 flex justify-between items-center bg-gray-50/80">
+        <div className="fixed inset-0 z-[70] flex items-end sm:items-center justify-center bg-black/60 backdrop-blur-sm sm:p-4 animate-fade-in">
+          <div className="bg-white rounded-t-3xl sm:rounded-3xl shadow-2xl w-full max-w-2xl overflow-hidden flex flex-col h-[85vh] sm:h-[80vh] border border-gray-200 animate-slide-up sm:animate-fade-in">
+            <div className="px-6 py-4 border-b border-gray-100 flex justify-between items-center bg-gray-50/80 shrink-0">
               <div className="flex items-center gap-3">
-                <div className={`p-2 rounded-lg bg-${deployApp.color}-100 text-${deployApp.color}-600`}>
+                <div 
+                  className="p-2 rounded-xl border border-gray-100 shadow-2xs"
+                  style={{ 
+                    backgroundColor: `${TAILWIND_COLORS.find(c=>c.name===deployApp.color)?.hex || '#6366f1'}15`, 
+                    color: TAILWIND_COLORS.find(c=>c.name===deployApp.color)?.hex || '#6366f1' 
+                  }}
+                >
                   <DynamicIcon name={deployApp.icon} className="h-5 w-5" />
                 </div>
                 <div>
-                  <h3 className="text-sm font-black text-gray-900">配信設定: {deployApp.name}</h3>
-                  <p className="text-[10px] font-bold text-gray-500">{selectedTenants.length} 件の学校が選択されています</p>
+                  <h3 className="text-sm font-black text-gray-900 leading-tight">配信設定: {deployApp.name}</h3>
+                  <p className="text-[10px] font-bold text-gray-500 mt-0.5">{selectedTenants.length} 件の学校が選択されています</p>
                 </div>
               </div>
-              <button onClick={() => setIsDeployModalOpen(false)} className="p-1.5 text-gray-400 hover:bg-gray-200 rounded-full"><X className="h-5 w-5" /></button>
+              <button onClick={() => setIsDeployModalOpen(false)} className="p-1.5 text-gray-400 hover:bg-gray-200 rounded-full transition-colors"><X className="h-5 w-5" /></button>
             </div>
 
-            <div className="p-4 border-b border-gray-100 flex justify-between items-center">
-              <div className="relative w-64">
+            <div className="p-4 border-b border-gray-100 flex flex-col sm:flex-row sm:justify-between sm:items-center gap-3 shrink-0 bg-white">
+              <div className="relative w-full sm:w-64">
                 <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
-                <input type="text" placeholder="学校名で検索..." value={tenantSearch} onChange={e => setTenantSearch(e.target.value)} className="w-full pl-9 pr-3 py-1.5 text-xs font-bold bg-gray-100 border-transparent rounded-lg focus:bg-white focus:border-indigo-500 outline-none" />
+                <input type="text" placeholder="学校名で検索..." value={tenantSearch} onChange={e => setTenantSearch(e.target.value)} className="w-full pl-9 pr-3 py-2 text-xs font-bold bg-gray-50 border border-gray-200 rounded-xl focus:bg-white focus:border-indigo-500 outline-none transition-colors" />
               </div>
-              <button onClick={selectAllFiltered} className="text-xs font-bold text-indigo-600 hover:text-indigo-800 bg-indigo-50 px-3 py-1.5 rounded-lg border border-indigo-100">
+              <button onClick={selectAllFiltered} className="text-xs font-bold text-indigo-700 hover:text-indigo-800 bg-indigo-50 px-3 py-2 rounded-xl border border-indigo-100 w-full sm:w-auto transition-colors text-center">
                 表示中の学校をすべて選択/解除
               </button>
             </div>
 
-            <div className="flex-1 overflow-y-auto p-2 custom-scrollbar">
-              <div className="space-y-1.5">
+            <div className="flex-1 overflow-y-auto p-3 custom-scrollbar bg-gray-50/30">
+              <div className="space-y-2">
                 {filteredTenants.length === 0 ? (
                   <p className="text-xs text-center text-gray-400 py-8 font-bold">該当する学校が見つかりません</p>
                 ) : (
@@ -445,19 +518,19 @@ export default function AppManagement() {
                     const isCurrentlyON = tenant.availableModules?.includes(deployApp.appId);
 
                     return (
-                      <div key={tenant.id} onClick={() => toggleTenantSelection(tenant.id)} className={`p-3 border rounded-xl flex items-center justify-between cursor-pointer transition-colors ${isSelected ? 'bg-blue-50/50 border-blue-300' : 'bg-white border-gray-200 hover:border-gray-300'}`}>
-                        <div className="flex items-center gap-3">
-                          {isSelected ? <CheckSquare className="w-5 h-5 text-blue-600" /> : <Square className="w-5 h-5 text-gray-300" />}
-                          <div>
-                            <p className="text-sm font-black text-gray-900">{tenant.name}</p>
-                            <p className="text-[10px] font-bold text-gray-500">{tenant.schoolCode}</p>
+                      <div key={tenant.id} onClick={() => toggleTenantSelection(tenant.id)} className={`p-3 border rounded-2xl flex items-center justify-between cursor-pointer transition-colors shadow-2xs ${isSelected ? 'bg-blue-50/50 border-blue-300' : 'bg-white border-gray-200 hover:border-gray-300'}`}>
+                        <div className="flex items-center gap-3 min-w-0">
+                          {isSelected ? <CheckSquare className="w-5 h-5 text-blue-600 shrink-0" /> : <Square className="w-5 h-5 text-gray-300 shrink-0" />}
+                          <div className="min-w-0 pr-2">
+                            <p className="text-sm font-black text-gray-900 truncate">{tenant.name}</p>
+                            <p className="text-[10px] font-bold text-gray-500 mt-0.5 truncate">コード: {tenant.schoolCode}</p>
                           </div>
                         </div>
-                        <div>
+                        <div className="shrink-0">
                           {isCurrentlyON ? (
-                            <span className="px-2 py-0.5 text-[9px] font-bold bg-green-100 text-green-700 border border-green-200 rounded-md">現在: ON</span>
+                            <span className="px-2 py-1 text-[9px] font-black bg-green-100 text-green-700 border border-green-200 rounded-lg">現在: ON</span>
                           ) : (
-                            <span className="px-2 py-0.5 text-[9px] font-bold bg-gray-100 text-gray-500 border border-gray-200 rounded-md">現在: OFF</span>
+                            <span className="px-2 py-1 text-[9px] font-black bg-gray-100 text-gray-500 border border-gray-200 rounded-lg">現在: OFF</span>
                           )}
                         </div>
                       </div>
@@ -467,14 +540,14 @@ export default function AppManagement() {
               </div>
             </div>
 
-            <div className="p-4 border-t border-gray-100 bg-gray-50 flex justify-between items-center gap-3">
-              <p className="text-xs font-bold text-gray-500">選択した学校に対して、このアプリを...</p>
-              <div className="flex gap-2">
-                <button onClick={() => executeBulkDeploy("disable")} disabled={isDeploying || selectedTenants.length === 0} className="px-6 py-2 text-xs font-bold text-red-700 bg-white border border-red-200 hover:bg-red-50 rounded-xl disabled:opacity-50">
-                  一括で OFF にする
+            <div className="p-4 border-t border-gray-100 bg-white flex flex-col sm:flex-row sm:justify-between sm:items-center gap-3 shrink-0 rounded-b-3xl pb-6 sm:pb-4">
+              <p className="text-xs font-bold text-gray-500 text-center sm:text-left">選択した学校に対して、このアプリを...</p>
+              <div className="flex gap-2 w-full sm:w-auto">
+                <button onClick={() => executeBulkDeploy("disable")} disabled={isDeploying || selectedTenants.length === 0} className="flex-1 sm:flex-none px-6 py-2.5 text-xs font-bold text-red-700 bg-white border border-red-200 hover:bg-red-50 rounded-xl disabled:opacity-50 transition-colors text-center">
+                  一括OFF
                 </button>
-                <button onClick={() => executeBulkDeploy("enable")} disabled={isDeploying || selectedTenants.length === 0} className="px-6 py-2 text-xs font-bold text-white bg-blue-600 hover:bg-blue-700 rounded-xl shadow-sm disabled:opacity-50 flex items-center">
-                  {isDeploying ? <Loader2 className="animate-spin h-3.5 w-3.5 mr-1" /> : null}一括で ON にする
+                <button onClick={() => executeBulkDeploy("enable")} disabled={isDeploying || selectedTenants.length === 0} className="flex-1 sm:flex-none px-6 py-2.5 text-xs font-bold text-white bg-blue-600 hover:bg-blue-700 rounded-xl shadow-sm disabled:opacity-50 flex items-center justify-center transition-colors">
+                  {isDeploying ? <Loader2 className="animate-spin h-3.5 w-3.5 mr-1.5" /> : null}一括ON
                 </button>
               </div>
             </div>

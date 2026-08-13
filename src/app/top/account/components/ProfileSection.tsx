@@ -127,7 +127,7 @@ export default function ProfileSection({ currentUser, userData, tenantData }: Pr
       <div className="px-4 sm:px-6 py-4 sm:py-5 border-b border-gray-100 bg-white">
         <h3 className="text-base sm:text-lg font-extrabold text-gray-900 flex items-center">
           <UserIcon className="mr-2 h-4 w-4 sm:h-5 sm:w-5 text-blue-600" />
-          プロフィール情報
+          プロフィール情報（編集不可）
         </h3>
       </div>
       <div className="p-0">

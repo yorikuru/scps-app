@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useEffect, useState } from "react";
-import { useRouter, usePathname } from "next/navigation";
+import { useRouter } from "next/navigation";
 import { onAuthStateChanged, signOut } from "firebase/auth";
 import { doc, getDoc, collection, getDocs, updateDoc, arrayUnion, query, orderBy, where, onSnapshot } from "firebase/firestore";
 import { auth, db } from "@/lib/firebase";
@@ -49,6 +49,7 @@ export type UserData = {
   googleCalendarAccessToken?: string;
   googleCalendarRefreshToken?: string;
   googleCalendarTokenExpiry?: number;
+  systemId?: string;
 };
 
 export type SchoolData = {
@@ -58,6 +59,8 @@ export type SchoolData = {
   requireMfa?: boolean | string;
   mfaPolicies?: { email: MfaPolicy; totp: MfaPolicy; passkey: MfaPolicy; };
   availableModules?: string[];
+  customAppNames?: Record<string, string>;
+  appPermissions?: Record<string, any>;
   sharedGoogleCalendarId?: string;
   location?: string;
   postalCode?: string;
@@ -276,20 +279,20 @@ export default function PortalTopPage() {
 
   if (isLoading) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-50 dark:bg-gray-950">
-        <Loader2 className="animate-spin h-10 w-10 text-blue-600" />
+      <div className="min-h-screen flex items-center justify-center bg-gray-50">
+        <Loader2 className="animate-spin h-10 w-10 text-indigo-600" />
       </div>
     );
   }
 
   if (schoolData?.status === "suspended" && userData?.role !== "system_admin") {
     return (
-      <div className="min-h-screen bg-gray-50 dark:bg-gray-950 flex flex-col items-center justify-center px-4">
-        <div className="bg-white dark:bg-gray-900 shadow rounded-lg max-w-md w-full p-8 text-center border-t-4 border-red-600">
+      <div className="min-h-screen bg-gray-50 flex flex-col items-center justify-center px-4">
+        <div className="bg-white shadow rounded-lg max-w-md w-full p-8 text-center border-t-4 border-red-600">
           <Building2 className="h-12 w-12 text-red-600 mx-auto mb-4" />
-          <h2 className="text-xl font-bold text-gray-900 dark:text-white mb-2">サービス提供停止中</h2>
-          <p className="text-sm text-gray-600 dark:text-gray-400 mb-6">現在、所属する組織のシステム利用が一時停止されています。</p>
-          <button onClick={handleLogout} className="w-full py-2 bg-gray-100 dark:bg-gray-800 rounded-md font-bold text-sm">ログアウト</button>
+          <h2 className="text-xl font-bold text-gray-900 mb-2">サービス提供停止中</h2>
+          <p className="text-sm text-gray-600 mb-6">現在、所属する組織のシステム利用が一時停止されています。</p>
+          <button onClick={handleLogout} className="w-full py-2 bg-gray-100 hover:bg-gray-200 rounded-md font-bold text-sm transition-colors">ログアウト</button>
         </div>
       </div>
     );
@@ -297,12 +300,12 @@ export default function PortalTopPage() {
 
   if (userData?.accountStatus === "pending") {
     return (
-      <div className="min-h-screen bg-gray-50 dark:bg-gray-950 flex flex-col items-center justify-center px-4">
-        <div className="bg-white dark:bg-gray-900 shadow rounded-lg max-w-md w-full p-8 text-center border-t-4 border-yellow-400">
+      <div className="min-h-screen bg-gray-50 flex flex-col items-center justify-center px-4">
+        <div className="bg-white shadow rounded-lg max-w-md w-full p-8 text-center border-t-4 border-yellow-400">
           <AlertTriangle className="h-12 w-12 text-yellow-600 mx-auto mb-4" />
-          <h2 className="text-xl font-bold text-gray-900 dark:text-white mb-2">管理者の承認待ちです</h2>
-          <p className="text-sm text-gray-600 dark:text-gray-400 mb-6">承認されるまでログインできません。</p>
-          <button onClick={handleLogout} className="w-full py-2 bg-gray-100 dark:bg-gray-800 rounded-md font-bold text-sm">ログアウト</button>
+          <h2 className="text-xl font-bold text-gray-900 mb-2">管理者の承認待ちです</h2>
+          <p className="text-sm text-gray-600 mb-6">承認されるまでログインできません。</p>
+          <button onClick={handleLogout} className="w-full py-2 bg-gray-100 hover:bg-gray-200 rounded-md font-bold text-sm transition-colors">ログアウト</button>
         </div>
       </div>
     );
@@ -310,12 +313,12 @@ export default function PortalTopPage() {
 
   if (userData?.accountStatus === "rejected") {
     return (
-      <div className="min-h-screen bg-gray-50 dark:bg-gray-950 flex flex-col items-center justify-center px-4">
-        <div className="bg-white dark:bg-gray-900 shadow rounded-lg max-w-md w-full p-8 text-center border-t-4 border-red-500">
+      <div className="min-h-screen bg-gray-50 flex flex-col items-center justify-center px-4">
+        <div className="bg-white shadow rounded-lg max-w-md w-full p-8 text-center border-t-4 border-red-500">
           <ShieldBan className="h-12 w-12 text-red-600 mx-auto mb-4" />
-          <h2 className="text-xl font-bold text-gray-900 dark:text-white mb-2">アクセスが拒否されました</h2>
-          <p className="text-sm text-gray-600 dark:text-gray-400 mb-6">このアカウントは現在利用停止されています。</p>
-          <button onClick={handleLogout} className="w-full py-2 bg-gray-100 dark:bg-gray-800 rounded-md font-bold text-sm">ログアウト</button>
+          <h2 className="text-xl font-bold text-gray-900 mb-2">アクセスが拒否されました</h2>
+          <p className="text-sm text-gray-600 mb-6">このアカウントは現在利用停止されています。</p>
+          <button onClick={handleLogout} className="w-full py-2 bg-gray-100 hover:bg-gray-200 rounded-md font-bold text-sm transition-colors">ログアウト</button>
         </div>
       </div>
     );
@@ -326,9 +329,7 @@ export default function PortalTopPage() {
   }
 
   return (
-    // ★ ここにスクロール領域を設定（h-full overflow-y-auto）することで、
-    // 外側の Layout（サイドバー・ヘッダー）は固定したまま、この中身だけがスクロールするようになります。
-    <div className="flex-1 w-full h-full overflow-y-auto overscroll-y-none scroll-smooth pb-20 md:pb-6">
+    <div className="flex-1 w-full h-full overflow-y-auto overscroll-y-none scroll-smooth pb-20 md:pb-6 bg-gray-50 font-sans">
       <NormalTop 
         userData={userData} 
         schoolData={schoolData} 

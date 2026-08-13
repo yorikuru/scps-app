@@ -84,3 +84,50 @@ body {
     font-size: 13px;
   }
 }
+
+/* ===================================================
+   印刷用レイアウトの強制リセット
+   （SCPSの固定レイアウトを解除し、A4出力に最適化）
+   =================================================== */
+   @media print {
+    @page {
+      size: A4 portrait;
+      margin: 12mm;
+    }
+    
+    /* HTML/BODYのスクロールロックを解除 */
+    html, body, #__next {
+      height: auto !important;
+      overflow: visible !important;
+      position: static !important;
+      background-color: white !important;
+    }
+  
+    /* サイドバー、ヘッダー、モバイルナビなどを強制非表示 */
+    aside, nav, header, .sidebar, .header-container, .mobile-nav {
+      display: none !important;
+    }
+  
+    /* メインコンテンツエリアのスクロールも解除し、全体を表示 */
+    main, .flex-1, .overflow-y-auto, .overflow-hidden {
+      height: auto !important;
+      overflow: visible !important;
+      position: static !important;
+      max-height: none !important;
+    }
+  
+    /* UI要素（ボタン、影、ボーダー等）を印刷用に最適化 */
+    button, .shadow-sm, .shadow-md, .shadow-2xs {
+      box-shadow: none !important;
+    }
+    
+    /* 印刷対象外とする共通クラス */
+    .print\:hidden {
+      display: none !important;
+    }
+    
+    /* 印刷用のみ表示するクラス */
+    .print\:block {
+      display: block !important;
+    }
+  }

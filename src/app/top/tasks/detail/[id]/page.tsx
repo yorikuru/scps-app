@@ -7,7 +7,7 @@ import { doc, getDoc, getDocs, collection, query, where, updateDoc, deleteDoc, w
 import { auth, db } from "@/lib/firebase";
 import { 
   ArrowLeft, CheckCircle2, AlertCircle, Calendar as CalendarIcon, 
-  User as UserIcon, Flag, AlertTriangle, Loader2, Star, Trash2, Edit3, X, Search
+  User as UserIcon, Flag, AlertTriangle, Loader2, Star, Trash2, Edit3, X, Search, ChevronRight
 } from "lucide-react";
 
 type UserData = { id: string; name: string; schoolId: string; role: string; };
@@ -22,12 +22,12 @@ type Task = {
   completedBy: string[]; createdAt: string;
 };
 
-const STATUS_CONFIG: Record<TaskStatus, { label: string, color: string }> = {
-  not_started: { label: "未着手", color: "bg-gray-100 text-gray-700 border-gray-300" },
-  in_progress: { label: "進行中", color: "bg-blue-100 text-blue-700 border-blue-300" },
-  waiting: { label: "確認待ち", color: "bg-amber-100 text-amber-700 border-amber-300" },
-  pending: { label: "保留", color: "bg-purple-100 text-purple-700 border-purple-300" },
-  done: { label: "完了", color: "bg-emerald-100 text-emerald-700 border-emerald-300" },
+const STATUS_CONFIG: Record<TaskStatus, { label: string, color: string, iconColor: string }> = {
+  not_started: { label: "未着手", color: "bg-gray-100 text-gray-700 border-gray-300", iconColor: "text-gray-500" },
+  in_progress: { label: "進行中", color: "bg-blue-100 text-blue-700 border-blue-300", iconColor: "text-blue-500" },
+  waiting: { label: "確認待ち", color: "bg-amber-100 text-amber-700 border-amber-300", iconColor: "text-amber-500" },
+  pending: { label: "保留", color: "bg-purple-100 text-purple-700 border-purple-300", iconColor: "text-purple-500" },
+  done: { label: "完了", color: "bg-emerald-100 text-emerald-700 border-emerald-300", iconColor: "text-emerald-500" },
 };
 
 const PRIORITY_CONFIG: Record<TaskPriority, { label: string, color: string, icon: React.ReactNode }> = {
@@ -67,6 +67,9 @@ export default function TaskDetailPage() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [toast, setToast] = useState<{ show: boolean, message: string, type: "success" | "error" }>({ show: false, message: "", type: "success" });
   const [deleteConfirm, setDeleteConfirm] = useState(false);
+  
+  // ★ ステータス変更モーダル用ステート
+  const [statusModalOpen, setStatusModalOpen] = useState(false);
 
   useEffect(() => {
     const unsubscribeAuth = onAuthStateChanged(auth, async (user) => {
@@ -237,6 +240,55 @@ export default function TaskDetailPage() {
     catch (error) { showToast("error", "削除に失敗しました。"); }
   };
 
+  // ★ 追加：ワンタップステータス変更処理
+  const changeTaskStatus = async (newStatus: TaskStatus) => {
+    if (!task || !userData || task.status === newStatus) return;
+    setStatusModalOpen(false);
+
+    const payload: any = {};
+    let finalStatus = newStatus;
+
+    if (newStatus === "done") {
+      if (task.assignees.length > 1) {
+        if (task.completionRequirement === "leader") {
+          if (userData.id !== task.leaderId) { 
+            showToast("error", "タスク主任のみ完了報告ができます。"); 
+            return; 
+          }
+        } else if (task.completionRequirement === "all") {
+          if (!task.completedBy.includes(userData.id)) {
+            const newCompletedBy = [...task.completedBy, userData.id];
+            payload.completedBy = newCompletedBy;
+            const allDone = task.assignees.every(id => newCompletedBy.includes(id));
+            if (!allDone) { 
+              finalStatus = task.status; 
+              showToast("success", "完了報告を記録しました。全員の報告が必要です。"); 
+            } else { 
+              showToast("success", "全員の報告が揃い、完了しました！"); 
+            }
+          } else { 
+            showToast("error", "すでに完了報告済みです。"); 
+            return; 
+          }
+        }
+      }
+    }
+    
+    if (task.status === "done" && newStatus !== "done") payload.completedBy = [];
+    if (finalStatus !== task.status) payload.status = finalStatus;
+    
+    if (Object.keys(payload).length > 0) {
+      try { 
+        await updateDoc(doc(db, "tasks", task.id), payload);
+        setTask(prev => prev ? { ...prev, ...payload } : null);
+        setFormStatus(finalStatus);
+        if (payload.completedBy) setFormCompletedBy(payload.completedBy);
+      } catch (error) { 
+        showToast("error", "ステータス変更に失敗しました。"); 
+      }
+    }
+  };
+
   if (isLoading) return <div className="h-full bg-[#F9FAFB] flex justify-center items-center"><Loader2 className="w-8 h-8 animate-spin text-indigo-600" /></div>;
 
   if (!task) return (
@@ -247,8 +299,10 @@ export default function TaskDetailPage() {
     </div>
   );
 
+  const isAllRequirement = task.completionRequirement === "all" && task.assignees.length > 1;
+  const hasReported = isAllRequirement && task.completedBy.includes(userData?.id || "");
+
   return (
-    // ★ h-full flex-1 w-full min-h-0 を指定して外側にスクロールを漏らさない
     <div className="h-full flex-1 w-full bg-[#F9FAFB] font-sans flex flex-col text-gray-900 overflow-hidden relative min-h-0">
 
       {toast.show && (
@@ -271,12 +325,33 @@ export default function TaskDetailPage() {
           
           <div className="px-4 sm:px-6 py-4 bg-gray-50/80 border-b border-gray-200 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shrink-0">
             <div className="flex items-center gap-2 flex-wrap">
-              <span className={`px-2.5 py-1 rounded-lg text-[10px] sm:text-xs font-bold border ${STATUS_CONFIG[task.status].color}`}>
-                {STATUS_CONFIG[task.status].label}
-              </span>
-              <span className={`px-2.5 py-1 rounded-lg text-[10px] sm:text-xs font-bold flex items-center gap-1 border ${PRIORITY_CONFIG[task.priority].color}`}>
+              {/* ★ ステータスバッジをクリッカブルなボタンに変更 */}
+              {!isEditing ? (
+                <button 
+                  onClick={() => setStatusModalOpen(true)}
+                  className={`px-3 py-1.5 rounded-xl text-xs font-bold border shadow-xs hover:opacity-80 transition-opacity flex items-center gap-1.5 ${STATUS_CONFIG[task.status].color}`}
+                  title="ステータスを変更"
+                >
+                  {task.status === "done" && <CheckCircle2 className="w-3.5 h-3.5" />}
+                  {STATUS_CONFIG[task.status].label}
+                  <ChevronRight className="w-3 h-3 opacity-60 ml-0.5" />
+                </button>
+              ) : (
+                <span className={`px-2.5 py-1 rounded-lg text-[10px] sm:text-xs font-bold border ${STATUS_CONFIG[task.status].color}`}>
+                  {STATUS_CONFIG[task.status].label}
+                </span>
+              )}
+              
+              <span className={`px-2.5 py-1.5 rounded-xl text-[10px] sm:text-xs font-bold flex items-center gap-1 border ${PRIORITY_CONFIG[task.priority].color}`}>
                 {PRIORITY_CONFIG[task.priority].icon} {PRIORITY_CONFIG[task.priority].label}
               </span>
+
+              {/* 全員完了報告が必要な場合のバッジ */}
+              {!isEditing && isAllRequirement && (
+                <span className="ml-2 px-2 py-1 bg-white border border-gray-200 text-gray-600 rounded-lg text-[10px] font-bold shadow-xs">
+                  完了報告: {task.completedBy.length} / {task.assignees.length} 名
+                </span>
+              )}
             </div>
             
             <div className="flex items-center gap-2 justify-end">
@@ -334,11 +409,25 @@ export default function TaskDetailPage() {
                   {task.description || "メモはありません。"}
                 </div>
               </div>
+
+              {/* ★ 画面下部にもワンタップの完了ボタンを表示 (未完了かつ自分のタスクの場合) */}
+              {task.status !== "done" && task.assignees.includes(userData?.id || "") && (
+                <div className="pt-6 flex justify-center">
+                   <button 
+                     onClick={() => changeTaskStatus("done")}
+                     className="px-8 py-3.5 bg-emerald-50 text-emerald-600 border border-emerald-200 hover:bg-emerald-500 hover:text-white rounded-xl shadow-sm text-sm font-black transition-colors flex items-center gap-2"
+                   >
+                     <CheckCircle2 className="w-5 h-5" />
+                     {isAllRequirement && !hasReported ? "自分の作業の完了を報告する" : "このタスクを「完了」にする"}
+                   </button>
+                </div>
+              )}
             </div>
           ) : (
             <form onSubmit={handleUpdate} className="p-4 sm:p-6 lg:p-8 space-y-5 flex-1 overflow-y-auto">
               <div>
                 <label className="block text-[10px] sm:text-xs font-bold text-gray-500 mb-1">タスク名 <span className="text-red-500">*</span></label>
+                {/* ★ スマホズーム対策 text-[16px] */}
                 <input type="text" required value={formTitle} onChange={e => setFormTitle(e.target.value)} className="w-full bg-white border border-gray-300 rounded-xl px-3 py-2.5 sm:px-4 sm:py-3 text-[16px] sm:text-sm font-bold text-gray-900 focus:ring-2 focus:ring-indigo-500 outline-none shadow-2xs" />
               </div>
 
@@ -442,6 +531,49 @@ export default function TaskDetailPage() {
           )}
         </div>
       </main>
+
+      {/* ★ 追加：ステータス変更モーダル */}
+      {statusModalOpen && task && (
+        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/40 backdrop-blur-sm sm:p-4 animate-fade-in">
+          <div className="bg-white rounded-t-2xl sm:rounded-2xl shadow-2xl w-full max-w-sm flex flex-col overflow-hidden animate-slide-up sm:animate-fade-in">
+            <div className="p-4 border-b border-gray-100 flex justify-between items-center bg-gray-50/50">
+              <div>
+                <h3 className="text-sm font-black text-gray-900">ステータスの変更</h3>
+                <p className="text-[10px] text-gray-500 mt-0.5">現在の状態: {STATUS_CONFIG[task.status].label}</p>
+              </div>
+              <button onClick={() => setStatusModalOpen(false)} className="p-1.5 text-gray-400 hover:bg-gray-200 rounded-lg transition-colors">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            
+            <div className="p-4 sm:p-5 flex flex-col gap-2.5">
+              {(Object.keys(STATUS_CONFIG) as TaskStatus[]).map(statusKey => {
+                const conf = STATUS_CONFIG[statusKey];
+                const isCurrent = task.status === statusKey;
+                
+                return (
+                  <button
+                    key={statusKey}
+                    onClick={() => changeTaskStatus(statusKey)}
+                    disabled={isCurrent}
+                    className={`w-full text-left flex items-center justify-between p-3.5 rounded-xl border-2 transition-all ${
+                      isCurrent 
+                        ? `${conf.color.replace('border-', 'border-')} border-current bg-white opacity-50 cursor-default` 
+                        : `border-gray-100 bg-white hover:${conf.color.split(' ')[0]} hover:border-${conf.color.split(' ')[2].split('-')[1]}-300 shadow-sm`
+                    }`}
+                  >
+                    <div className="flex items-center gap-3">
+                      <div className={`w-3 h-3 rounded-full ${conf.iconColor.replace('text-', 'bg-')}`}></div>
+                      <span className={`text-sm font-black ${isCurrent ? 'text-gray-900' : 'text-gray-700'}`}>{conf.label}</span>
+                    </div>
+                    {isCurrent && <span className="text-[10px] font-bold text-gray-400">現在</span>}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        </div>
+      )}
 
       {deleteConfirm && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4">

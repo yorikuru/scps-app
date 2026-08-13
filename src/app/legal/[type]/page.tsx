@@ -74,34 +74,37 @@ export default function LegalDocumentPage() {
 
   if (!config) {
     return (
-      <div className="min-h-screen flex flex-col items-center justify-center bg-gray-50">
-        <p className="text-gray-500 font-bold mb-4">ページが見つかりません</p>
-        <button onClick={() => router.back()} className="px-4 py-2 bg-blue-600 text-white rounded-lg font-bold">戻る</button>
+      <div className="min-h-screen flex flex-col items-center justify-center bg-gray-50 p-4">
+        <p className="text-gray-500 font-bold mb-4 text-sm">ページが見つかりません</p>
+        <button onClick={() => router.back()} className="px-5 py-2.5 bg-blue-600 text-white rounded-xl font-bold text-sm shadow-sm transition-colors hover:bg-blue-700">戻る</button>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 dark:bg-gray-950 print:bg-white text-gray-900 dark:text-gray-100 print:text-black">
+    <div className="min-h-screen bg-gray-50 print:bg-white text-gray-900 print:text-black font-sans flex flex-col">
       
-      {/* 画面用ヘッダー（印刷時は非表示、スマホでコンパクト化） */}
-      <header className="bg-white dark:bg-gray-900 border-b border-gray-200 dark:border-gray-800 px-3 sm:px-6 py-2.5 sm:py-4 flex items-center justify-between sticky top-0 z-50 print:hidden shadow-sm">
-        <button 
-          onClick={() => router.back()}
-          className="flex items-center text-xs sm:text-sm font-bold text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white transition-colors"
-        >
-          <ArrowLeft className="h-4 w-4 sm:mr-1.5" /> <span className="hidden sm:inline">戻る</span>
-        </button>
+      {/* 画面用ヘッダー（印刷時は非表示） */}
+      <header className="bg-white border-b border-gray-200 px-3 sm:px-6 py-2.5 sm:py-4 flex items-center justify-between sticky top-0 z-50 print:hidden shadow-sm shrink-0">
+        <div className="flex items-center min-w-0">
+          <button 
+            onClick={() => router.back()}
+            className="flex items-center text-xs sm:text-sm font-bold text-gray-500 hover:text-gray-900 transition-colors p-1.5 sm:p-0 mr-1.5 sm:mr-3 shrink-0 rounded-lg hover:bg-gray-100 sm:hover:bg-transparent"
+          >
+            <ArrowLeft className="h-4 w-4 sm:mr-1.5" /> <span className="hidden sm:inline">戻る</span>
+          </button>
+          
+          <h1 className="text-xs sm:text-base font-extrabold text-gray-800 truncate min-w-0">
+            <span className="hidden sm:inline">生徒会ポータル (SCPS) </span>法務情報
+          </h1>
+        </div>
         
-        <h1 className="text-xs sm:text-sm font-extrabold text-gray-800 dark:text-gray-200 truncate mx-2">
-          <span className="hidden sm:inline">生徒会ポータル (SCPS) </span>法務情報
-        </h1>
-        
+        {/* スマホUI時は印刷ボタンを非表示 (hidden sm:flex) */}
         <button 
           onClick={handlePrint}
-          className="flex items-center px-2.5 py-1.5 sm:px-4 sm:py-2 bg-indigo-50 dark:bg-indigo-900/40 text-indigo-700 dark:text-indigo-300 rounded-lg text-[11px] sm:text-sm font-bold hover:bg-indigo-100 dark:hover:bg-indigo-900/60 transition-colors border border-indigo-200 dark:border-indigo-800"
+          className="hidden sm:flex items-center px-4 py-2 bg-indigo-50 text-indigo-700 rounded-xl text-sm font-bold hover:bg-indigo-100 transition-colors border border-indigo-200 shadow-sm shrink-0 ml-3"
         >
-          <Printer className="h-4 w-4 sm:mr-1.5" /> <span className="hidden sm:inline">PDF保存・印刷</span>
+          <Printer className="h-4 w-4 mr-1.5" /> <span>PDF保存・印刷</span>
         </button>
       </header>
 
@@ -111,38 +114,38 @@ export default function LegalDocumentPage() {
         <p className="text-[10px] text-gray-600 mt-1">発行: YORIKURU / 出力日: {new Date().toLocaleDateString('ja-JP')}</p>
       </div>
 
-      {/* コンテンツメインエリア（スマホでは余白を削減） */}
-      <main className="max-w-6xl mx-auto p-3 sm:p-6 lg:p-10 print:p-0 print:max-w-none print:m-0">
+      {/* コンテンツメインエリア */}
+      <main className="flex-1 w-full max-w-4xl mx-auto p-3 sm:p-6 lg:p-10 print:p-0 print:max-w-none print:m-0 flex flex-col">
         
         {isLoading ? (
-          <div className="flex flex-col justify-center items-center py-20 print:hidden">
+          <div className="flex-1 flex flex-col justify-center items-center py-20 print:hidden">
             <Loader2 className="animate-spin h-8 w-8 sm:h-10 sm:w-10 text-indigo-600 mb-4" />
-            <p className="text-xs sm:text-sm font-bold text-gray-500">文書を読み込んでいます...</p>
+            <p className="text-[11px] sm:text-sm font-bold text-gray-500">文書を読み込んでいます...</p>
           </div>
         ) : error ? (
-          <div className="bg-red-50 p-4 sm:p-6 rounded-xl border border-red-200 text-center print:hidden">
-            <p className="text-xs sm:text-sm text-red-700 font-bold">{error}</p>
+          <div className="bg-red-50 p-4 sm:p-6 rounded-2xl border border-red-200 text-center print:hidden shadow-sm mt-4">
+            <p className="text-[11px] sm:text-sm text-red-700 font-bold">{error}</p>
           </div>
         ) : (
-          <div className="bg-white dark:bg-gray-900 print:bg-white rounded-2xl sm:rounded-3xl shadow-sm border border-gray-200 dark:border-gray-800 print:border-none print:shadow-none p-4 sm:p-8 print:p-0">
+          <div className="bg-white print:bg-white rounded-2xl sm:rounded-3xl shadow-sm border border-gray-200 print:border-none print:shadow-none p-4 sm:p-8 md:p-10 print:p-0 flex-1">
             
             {/* タイトルエリア */}
-            <div className="text-center mb-5 sm:mb-8 pb-4 sm:pb-6 border-b border-gray-100 dark:border-gray-800 print:border-none print:mb-2 print:pb-2">
-              <div className="flex justify-center mb-3 sm:mb-4 print:hidden">
-                <div className="p-2.5 sm:p-3 bg-indigo-50 dark:bg-indigo-900/30 rounded-xl sm:rounded-2xl">
-                  <config.icon className="h-6 w-6 sm:h-8 sm:w-8 text-indigo-600 dark:text-indigo-400" />
+            <div className="text-center mb-5 sm:mb-8 pb-4 sm:pb-6 border-b border-gray-100 print:border-none print:mb-2 print:pb-2">
+              <div className="flex justify-center mb-3 sm:mb-5 print:hidden">
+                <div className="p-2.5 sm:p-4 bg-indigo-50 rounded-xl sm:rounded-2xl border border-indigo-100 shadow-sm">
+                  <config.icon className="h-6 w-6 sm:h-8 sm:w-8 text-indigo-600" />
                 </div>
               </div>
-              <h1 className="text-lg sm:text-xl md:text-2xl font-black text-gray-900 dark:text-white print:text-base tracking-tight mb-1.5 sm:mb-2 leading-tight">
+              <h1 className="text-lg sm:text-2xl md:text-3xl font-black text-gray-900 print:text-base tracking-tight mb-2 leading-snug">
                 {config.title}
               </h1>
-              <p className="text-[10px] sm:text-xs font-bold text-gray-500 dark:text-gray-400 print:text-[9px] print:text-right print:mt-[-15px]">
+              <p className="text-[10px] sm:text-xs font-bold text-gray-500 print:text-[9px] print:text-right print:mt-[-15px]">
                 最終更新日: {updatedAt}
               </p>
             </div>
 
-            {/* 本文エリア（スマホでは文字を小さくし、行間を少し詰める） */}
-            <div className="prose prose-sm dark:prose-invert print:prose-black max-w-none prose-headings:font-black prose-p:leading-relaxed prose-a:text-indigo-600 whitespace-pre-wrap font-sans text-xs sm:text-sm print:text-[8px] print:leading-[1.15] print:max-w-full">
+            {/* 本文エリア */}
+            <div className="prose prose-sm sm:prose-base print:prose-black max-w-none prose-headings:font-black prose-p:leading-loose prose-a:text-indigo-600 whitespace-pre-wrap font-medium text-[11px] sm:text-sm md:text-[15px] text-gray-800 print:text-[8px] print:leading-[1.15] print:max-w-full">
               {content}
             </div>
             
@@ -152,7 +155,7 @@ export default function LegalDocumentPage() {
       </main>
 
       {/* フッター（印刷時は非表示） */}
-      <footer className="text-center py-4 sm:py-6 text-[10px] sm:text-xs font-bold text-gray-400 print:hidden">
+      <footer className="text-center py-4 sm:py-6 text-[9px] sm:text-[11px] font-bold text-gray-400 print:hidden shrink-0">
         &copy; {new Date().getFullYear()} YORIKURU All rights reserved.
       </footer>
     </div>

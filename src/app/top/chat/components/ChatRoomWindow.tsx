@@ -4,7 +4,7 @@ import React, { useEffect, useState, useRef, useCallback } from "react";
 import { collection, query, where, orderBy, onSnapshot, addDoc, updateDoc, deleteDoc, doc, serverTimestamp, writeBatch } from "firebase/firestore";
 import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
 import { db, storage } from "@/lib/firebase";
-import { Send, Paperclip, ImagePlus, FileIcon, Loader2, X, Pencil, Trash2, SmilePlus, Bold, Italic, Underline, Strikethrough, Link as LinkIcon, Palette, Highlighter, Info, Type, Users, Reply } from "lucide-react";
+import { Send, Paperclip, ImagePlus, FileIcon, Loader2, X, Pencil, Trash2, SmilePlus, Bold, Italic, Underline, Strikethrough, Link as LinkIcon, Palette, Highlighter, Info, Type, Users, Reply, AlertTriangle } from "lucide-react";
 import { UserData, ExternalUser, ChatRoom, ChatMessage, ChatAttachment, ChatReaction, AppConfig, COLOR_MAPPINGS, Position, getDefaultChatPermissions } from "../types";
 import ChatRoomHeader from "./ChatRoomHeader";
 import ChatRoomSettingsModal from "./ChatRoomSettingsModal";
@@ -65,6 +65,9 @@ export default function ChatRoomWindow({ userData, tenantUsers, externalUsers, p
 
   const [replyingTo, setReplyingTo] = useState<ChatMessage | null>(null);
 
+  // ★ 退会ユーザー検知＆削除パネル用ステート
+  const [showDeletedUserPanel, setShowDeletedUserPanel] = useState(false);
+
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const imageInputRef = useRef<HTMLInputElement>(null);
@@ -113,6 +116,39 @@ export default function ChatRoomWindow({ userData, tenantUsers, externalUsers, p
 
   const roomMembers = getRoomMembers();
 
+  // ★ 退会したユーザー（ダイレクトチャット等で相手が見つからない場合）の判定
+  const isOtherUserDeleted = useCallback(() => {
+    if (room.type === "direct") {
+      const otherId = room.members.find(id => id !== userData.id);
+      if (otherId && !getUserById(otherId)) {
+        return true;
+      }
+    }
+    return false;
+  }, [room, userData.id, getUserById]);
+
+  // ルーム変更時にパネル表示状態をリセット（＝再度このルームを表示したら同じメッセージが表示される）
+  useEffect(() => {
+    setShowSettings(false);
+    setReplyingTo(null); 
+    if (isOtherUserDeleted()) {
+      setShowDeletedUserPanel(true);
+    } else {
+      setShowDeletedUserPanel(false);
+    }
+  }, [room.id, isOtherUserDeleted]);
+
+  // ★ 削除ハンドラー
+  const handleConfirmDeleteRoom = async () => {
+    try {
+      await deleteDoc(doc(db, "chat_rooms", room.id));
+      showAlert("チャットルームを削除しました", "success");
+      onBack();
+    } catch (e) {
+      showAlert("削除に失敗しました", "error");
+    }
+  };
+
   const filteredMentionUsers = [
     { id: "all", name: "all", role: "" },
     ...roomMembers.map(u => ({ id: u.id, name: u.name, role: "role" in u ? u.role : "外部" }))
@@ -131,11 +167,6 @@ export default function ChatRoomWindow({ userData, tenantUsers, externalUsers, p
     window.addEventListener("keydown", handleEsc);
     return () => window.removeEventListener("keydown", handleEsc);
   }, [onBack, showLinkModal, reactionDetailMsg, readDetailMsg, mentionState.show, showSettings, replyingTo]);
-
-  useEffect(() => {
-    setShowSettings(false);
-    setReplyingTo(null); 
-  }, [room.id]);
 
   useEffect(() => {
     if (!room.id) return;
@@ -202,6 +233,7 @@ export default function ChatRoomWindow({ userData, tenantUsers, externalUsers, p
   };
 
   const handleSendMessage = async () => {
+    if (isOtherUserDeleted()) return; // 相手が退会ユーザーの場合は送信不可
     const textContent = editorRef.current?.textContent?.trim() || "";
     const hasImage = editorRef.current?.querySelector('img') !== null;
     if (!textContent && !hasImage && attachments.length === 0) return;
@@ -460,6 +492,8 @@ export default function ChatRoomWindow({ userData, tenantUsers, externalUsers, p
     );
   };
 
+  const isDeletedUserRoom = isOtherUserDeleted();
+
   return (
     <div className="flex flex-col h-full bg-[#eaf0ed] sm:bg-[#f3f4f6] relative font-sans" onClick={() => { setShowReactionMenuFor(null); setLongPressedMsgId(null); }}>
       <style dangerouslySetInnerHTML={{__html: `
@@ -497,6 +531,35 @@ export default function ChatRoomWindow({ userData, tenantUsers, externalUsers, p
         isExternalMode={"category" in userData}
       />
 
+      {/* ★ 退会したユーザーとのチャットルーム場合の削除パネル */}
+      {showDeletedUserPanel && isDeletedUserRoom && (
+        <div className="bg-amber-50 border-b border-amber-200 p-3 sm:p-4 flex flex-col sm:flex-row items-center justify-between gap-3 shrink-0 shadow-sm animate-fade-in z-20">
+          <div className="flex items-center gap-2.5 min-w-0">
+            <div className="p-2 bg-amber-100 text-amber-700 rounded-xl shrink-0">
+              <AlertTriangle className="w-5 h-5" />
+            </div>
+            <div className="min-w-0">
+              <h4 className="text-xs sm:text-sm font-black text-amber-900 truncate">このチャットの相手は退会しました</h4>
+              <p className="text-[10px] font-bold text-amber-700 truncate">チャットルームを削除しますか？</p>
+            </div>
+          </div>
+          <div className="flex items-center gap-2 shrink-0 w-full sm:w-auto justify-end">
+            <button 
+              onClick={() => setShowDeletedUserPanel(false)}
+              className="px-3.5 py-1.5 bg-white hover:bg-gray-50 text-gray-700 border border-gray-300 rounded-xl text-xs font-bold transition-colors shadow-2xs"
+            >
+              いいえ
+            </button>
+            <button 
+              onClick={handleConfirmDeleteRoom}
+              className="px-3.5 py-1.5 bg-red-600 hover:bg-red-700 text-white rounded-xl text-xs font-bold transition-colors shadow-sm flex items-center gap-1.5"
+            >
+              <Trash2 className="w-3.5 h-3.5" /> はい (削除する)
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* メッセージ一覧 */}
       <div className="flex-1 overflow-y-auto p-2 sm:p-4 space-y-3 sm:space-y-4 custom-scrollbar">
         {displayedMessages.map((msg, idx) => {
@@ -528,11 +591,12 @@ export default function ChatRoomWindow({ userData, tenantUsers, externalUsers, p
                   onMouseLeave={handleTouchEnd}
                 >
                   
-                  {/* PCホバー または スマホ長押しで表示されるアクションメニュー */}
                   <div className={`absolute -top-4 transition-opacity z-20 flex items-center gap-0.5 bg-white p-0.5 rounded-lg shadow-md border border-gray-200 w-max ${isMenuVisible ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'} ${isMe ? 'right-0' : 'left-0'}`}>
                     <button onClick={(e) => { e.stopPropagation(); setShowReactionMenuFor(msg.id); setLongPressedMsgId(null); }} className="p-1.5 text-gray-500 hover:text-indigo-600 hover:bg-gray-100 rounded-md transition-colors" title="リアクション"><SmilePlus className="w-3.5 h-3.5" /></button>
                     
-                    <button onClick={(e) => { e.stopPropagation(); setReplyingTo(msg); editorRef.current?.focus(); setLongPressedMsgId(null); }} className="p-1.5 text-gray-500 hover:text-blue-600 hover:bg-gray-100 rounded-md transition-colors" title="リプライ"><Reply className="w-3.5 h-3.5" /></button>
+                    {!isDeletedUserRoom && (
+                      <button onClick={(e) => { e.stopPropagation(); setReplyingTo(msg); editorRef.current?.focus(); setLongPressedMsgId(null); }} className="p-1.5 text-gray-500 hover:text-blue-600 hover:bg-gray-100 rounded-md transition-colors" title="リプライ"><Reply className="w-3.5 h-3.5" /></button>
+                    )}
                     
                     {isMe && readCount === 0 && !editingMessageId && (
                       <>
@@ -592,7 +656,6 @@ export default function ChatRoomWindow({ userData, tenantUsers, externalUsers, p
                           editingMessageId === msg.id ? (
                             <div className="flex flex-col w-full min-w-[240px] bg-white rounded-xl border border-indigo-500 shadow-lg overflow-visible z-20">
                               <RichTextToolbar targetRef={editEditorRef} />
-                              {/* ★ ズーム防止：スマホ時は text-[16px] (text-base相当) を指定 */}
                               <div ref={editEditorRef} contentEditable onKeyDown={(e) => handleKeyDown(e, true)} className="text-[16px] sm:text-[13px] p-2 focus:outline-none min-h-[50px] chat-html-content bg-white rounded-b-xl" />
                               <div className="flex justify-end gap-1.5 p-1.5 bg-gray-50 border-t border-gray-100 rounded-b-xl"><button onClick={() => setEditingMessageId(null)} className="text-[10px] font-bold px-2.5 py-1 text-gray-600 hover:bg-gray-200 rounded transition-colors">キャンセル</button><button onClick={() => handleEditSave(msg.id)} className="text-[10px] font-bold px-3 py-1 bg-indigo-600 hover:bg-indigo-700 text-white rounded shadow-sm transition-colors">保存</button></div>
                             </div>
@@ -635,77 +698,84 @@ export default function ChatRoomWindow({ userData, tenantUsers, externalUsers, p
         <div ref={messagesEndRef} />
       </div>
 
-      {/* 入力欄エリア */}
+      {/* 入力欄エリア（相手が退会ユーザーの場合は送信禁止） */}
       <div className="m-2 sm:m-4 bg-white border border-gray-300 rounded-xl shadow-sm shrink-0 flex flex-col focus-within:border-indigo-500 focus-within:ring-1 focus-within:ring-indigo-500 transition-all relative z-30">
         
-        {mentionState.show && filteredMentionUsers.length > 0 && (
-          <div className="absolute bottom-full left-0 mb-1 bg-white border border-gray-200 shadow-xl rounded-xl w-64 max-h-48 overflow-y-auto z-[100] custom-scrollbar animate-slide-up">
-            <div className="px-2 py-1.5 bg-gray-50 border-b border-gray-100 text-[9px] font-bold text-gray-500 sticky top-0 z-10">メンションする人を選択</div>
-            {filteredMentionUsers.map((u, i) => (
-              <div key={u.id} onClick={() => insertMention(u)} onMouseEnter={() => setMentionIndex(i)} className={`px-2 py-2 flex items-center gap-2 cursor-pointer border-b border-gray-50 last:border-0 ${i === mentionIndex ? 'bg-indigo-50' : 'hover:bg-gray-50'}`}>
-                {u.id === "all" ? <div className="w-6 h-6 rounded bg-indigo-100 flex items-center justify-center"><Users className="w-3.5 h-3.5 text-indigo-600" /></div> : <UserAvatar name={u.name} url={(getUserById(u.id) as any)?.photoURL} className="w-6 h-6 text-[9px]" />}
-                <div className="flex flex-col min-w-0"><span className={`text-[11px] font-bold truncate ${i === mentionIndex ? 'text-indigo-800' : 'text-gray-900'}`}>@{u.id === 'all' ? '全員' : u.name}</span>{u.role && <span className="text-[9px] text-gray-500">{u.role === "teacher" ? "教職員" : u.role}</span>}</div>
-              </div>
-            ))}
+        {isDeletedUserRoom ? (
+          <div className="p-3 bg-gray-100 rounded-xl text-center text-xs font-bold text-gray-500">
+            このユーザーは退会したため、メッセージを送信できません。
           </div>
-        )}
-
-        {replyingTo && (
-          <div className="flex items-center justify-between p-1.5 bg-gray-50 border-b border-gray-100 rounded-t-xl z-20 relative">
-            <div className="flex items-center gap-1.5 min-w-0">
-              <Reply className="w-3.5 h-3.5 text-gray-400 shrink-0" />
-              <div className="flex flex-col min-w-0">
-                <span className="text-[9px] font-bold text-gray-700">{getUserById(replyingTo.senderId)?.name || "退会ユーザー"} に返信</span>
-                <span className="text-[10px] text-gray-500 truncate">{replyingTo.text.replace(/<[^>]*>?/gm, '').replace(/&nbsp;/g, ' ') || "画像・ファイル"}</span>
+        ) : (
+          <>
+            {mentionState.show && filteredMentionUsers.length > 0 && (
+              <div className="absolute bottom-full left-0 mb-1 bg-white border border-gray-200 shadow-xl rounded-xl w-64 max-h-48 overflow-y-auto z-[100] custom-scrollbar animate-slide-up">
+                <div className="px-2 py-1.5 bg-gray-50 border-b border-gray-100 text-[9px] font-bold text-gray-500 sticky top-0 z-10">メンションする人を選択</div>
+                {filteredMentionUsers.map((u, i) => (
+                  <div key={u.id} onClick={() => insertMention(u)} onMouseEnter={() => setMentionIndex(i)} className={`px-2 py-2 flex items-center gap-2 cursor-pointer border-b border-gray-50 last:border-0 ${i === mentionIndex ? 'bg-indigo-50' : 'hover:bg-gray-50'}`}>
+                    {u.id === "all" ? <div className="w-6 h-6 rounded bg-indigo-100 flex items-center justify-center"><Users className="w-3.5 h-3.5 text-indigo-600" /></div> : <UserAvatar name={u.name} url={(getUserById(u.id) as any)?.photoURL} className="w-6 h-6 text-[9px]" />}
+                    <div className="flex flex-col min-w-0"><span className={`text-[11px] font-bold truncate ${i === mentionIndex ? 'text-indigo-800' : 'text-gray-900'}`}>@{u.id === 'all' ? '全員' : u.name}</span>{u.role && <span className="text-[9px] text-gray-500">{u.role === "teacher" ? "教職員" : u.role}</span>}</div>
+                  </div>
+                ))}
               </div>
-            </div>
-            <button onClick={() => setReplyingTo(null)} className="p-1 text-gray-400 hover:text-gray-600 hover:bg-gray-200 rounded transition-colors">
-              <X className="w-3.5 h-3.5" />
-            </button>
-          </div>
-        )}
+            )}
 
-        {showToolbar && <RichTextToolbar targetRef={editorRef} />}
-        
-        {attachments.length > 0 && (
-          <div className="flex gap-1.5 p-2 bg-white border-b border-gray-100 overflow-x-auto no-scrollbar">
-            {attachments.map((file, idx) => (
-              <div key={idx} className="relative p-1.5 bg-gray-50 rounded border border-gray-200 flex items-center gap-1.5 max-w-[140px] shadow-sm shrink-0">
-                {file.type.startsWith('image/') ? <img src={URL.createObjectURL(file)} className="w-6 h-6 object-cover rounded shadow-sm" alt="preview"/> : <div className="w-6 h-6 rounded bg-white border border-gray-200 flex items-center justify-center"><FileIcon className="w-3 h-3 text-gray-500"/></div>}
-                <span className="text-[9px] font-medium text-gray-700 truncate">{file.name}</span>
-                <button onClick={() => setAttachments(prev => prev.filter((_, i) => i !== idx))} className="absolute -top-1.5 -right-1.5 bg-gray-500 hover:bg-red-500 text-white rounded-full p-0.5 shadow-md transition-colors"><X className="w-3 h-3"/></button>
+            {replyingTo && (
+              <div className="flex items-center justify-between p-1.5 bg-gray-50 border-b border-gray-100 rounded-t-xl z-20 relative">
+                <div className="flex items-center gap-1.5 min-w-0">
+                  <Reply className="w-3.5 h-3.5 text-gray-400 shrink-0" />
+                  <div className="flex flex-col min-w-0">
+                    <span className="text-[9px] font-bold text-gray-700">{getUserById(replyingTo.senderId)?.name || "退会ユーザー"} に返信</span>
+                    <span className="text-[10px] text-gray-500 truncate">{replyingTo.text.replace(/<[^>]*>?/gm, '').replace(/&nbsp;/g, ' ') || "画像・ファイル"}</span>
+                  </div>
+                </div>
+                <button onClick={() => setReplyingTo(null)} className="p-1 text-gray-400 hover:text-gray-600 hover:bg-gray-200 rounded transition-colors">
+                  <X className="w-3.5 h-3.5" />
+                </button>
               </div>
-            ))}
-          </div>
-        )}
+            )}
 
-        {/* ★ ズーム防止：スマホ時は text-[16px] (text-base相当) を指定 */}
-        <div ref={editorRef} contentEditable onInput={handleEditorInput} onKeyDown={(e) => handleKeyDown(e, false)} data-placeholder="メッセージを入力... (@でメンション)" className={`flex-1 max-h-32 min-h-[36px] px-3 py-2 text-[16px] sm:text-[14px] focus:outline-none overflow-y-auto custom-scrollbar placeholder-empty chat-html-content bg-white ${showToolbar && !replyingTo ? '' : 'rounded-t-xl'}`} />
-
-        <div className="flex items-center justify-between px-1.5 py-1 bg-white border-t border-gray-100 rounded-b-xl">
-          <div className="flex items-center gap-0.5">
-            <button type="button" onClick={() => setShowToolbar(!showToolbar)} className={`p-1.5 rounded transition-colors ${showToolbar ? 'text-indigo-600 bg-indigo-50' : 'text-gray-400 hover:bg-gray-100 hover:text-gray-600'}`} title="書式設定"><Type className="w-4 h-4" /></button>
-            <div className="w-px h-3 bg-gray-300 mx-0.5"></div>
+            {showToolbar && <RichTextToolbar targetRef={editorRef} />}
             
-            {perms.canSendPhoto && (
-              <>
-                <button type="button" onClick={() => imageInputRef.current?.click()} className="p-1.5 text-gray-400 hover:text-indigo-600 hover:bg-indigo-50 rounded transition-colors" title="画像を添付"><ImagePlus className="w-4 h-4" /></button>
-                <input type="file" ref={imageInputRef} onChange={handleFileChange} accept="image/*" multiple className="hidden" />
-              </>
+            {attachments.length > 0 && (
+              <div className="flex gap-1.5 p-2 bg-white border-b border-gray-100 overflow-x-auto no-scrollbar">
+                {attachments.map((file, idx) => (
+                  <div key={idx} className="relative p-1.5 bg-gray-50 rounded border border-gray-200 flex items-center gap-1.5 max-w-[140px] shadow-sm shrink-0">
+                    {file.type.startsWith('image/') ? <img src={URL.createObjectURL(file)} className="w-6 h-6 object-cover rounded shadow-sm" alt="preview"/> : <div className="w-6 h-6 rounded bg-white border border-gray-200 flex items-center justify-center"><FileIcon className="w-3 h-3 text-gray-500"/></div>}
+                    <span className="text-[9px] font-medium text-gray-700 truncate">{file.name}</span>
+                    <button onClick={() => setAttachments(prev => prev.filter((_, i) => i !== idx))} className="absolute -top-1.5 -right-1.5 bg-gray-500 hover:bg-red-500 text-white rounded-full p-0.5 shadow-md transition-colors"><X className="w-3 h-3"/></button>
+                  </div>
+                ))}
+              </div>
             )}
 
-            {perms.canSendFile && (
-              <>
-                <button type="button" onClick={() => fileInputRef.current?.click()} className="p-1.5 text-gray-400 hover:text-indigo-600 hover:bg-indigo-50 rounded transition-colors" title="ファイルを添付"><Paperclip className="w-4 h-4" /></button>
-                <input type="file" ref={fileInputRef} onChange={handleFileChange} accept="*/*" multiple className="hidden" />
-              </>
-            )}
-          </div>
+            <div ref={editorRef} contentEditable onInput={handleEditorInput} onKeyDown={(e) => handleKeyDown(e, false)} data-placeholder="メッセージを入力... (@でメンション)" className={`flex-1 max-h-32 min-h-[36px] px-3 py-2 text-[16px] sm:text-[14px] focus:outline-none overflow-y-auto custom-scrollbar placeholder-empty chat-html-content bg-white ${showToolbar && !replyingTo ? '' : 'rounded-t-xl'}`} />
 
-          <button onClick={handleSendMessage} disabled={(!editorHtml && attachments.length === 0) || isSending || isUploading} className={`px-3 py-1.5 rounded text-[12px] font-bold transition-all flex items-center gap-1 ${editorHtml || attachments.length > 0 ? 'bg-indigo-600 text-white hover:bg-indigo-700 shadow-sm' : 'bg-gray-100 text-gray-400'}`}>
-            {isSending || isUploading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <><Send className="w-3.5 h-3.5" /> <span className="hidden sm:inline">送信</span></>}
-          </button>
-        </div>
+            <div className="flex items-center justify-between px-1.5 py-1 bg-white border-t border-gray-100 rounded-b-xl">
+              <div className="flex items-center gap-0.5">
+                <button type="button" onClick={() => setShowToolbar(!showToolbar)} className={`p-1.5 rounded transition-colors ${showToolbar ? 'text-indigo-600 bg-indigo-50' : 'text-gray-400 hover:bg-gray-100 hover:text-gray-600'}`} title="書式設定"><Type className="w-4 h-4" /></button>
+                <div className="w-px h-3 bg-gray-300 mx-0.5"></div>
+                
+                {perms.canSendPhoto && (
+                  <>
+                    <button type="button" onClick={() => imageInputRef.current?.click()} className="p-1.5 text-gray-400 hover:text-indigo-600 hover:bg-indigo-50 rounded transition-colors" title="画像を添付"><ImagePlus className="w-4 h-4" /></button>
+                    <input type="file" ref={imageInputRef} onChange={handleFileChange} accept="image/*" multiple className="hidden" />
+                  </>
+                )}
+
+                {perms.canSendFile && (
+                  <>
+                    <button type="button" onClick={() => fileInputRef.current?.click()} className="p-1.5 text-gray-400 hover:text-indigo-600 hover:bg-indigo-50 rounded transition-colors" title="ファイルを添付"><Paperclip className="w-4 h-4" /></button>
+                    <input type="file" ref={fileInputRef} onChange={handleFileChange} accept="*/*" multiple className="hidden" />
+                  </>
+                )}
+              </div>
+
+              <button onClick={handleSendMessage} disabled={(!editorHtml && attachments.length === 0) || isSending || isUploading} className={`px-3 py-1.5 rounded text-[12px] font-bold transition-all flex items-center gap-1 ${editorHtml || attachments.length > 0 ? 'bg-indigo-600 text-white hover:bg-indigo-700 shadow-sm' : 'bg-gray-100 text-gray-400'}`}>
+                {isSending || isUploading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <><Send className="w-3.5 h-3.5" /> <span className="hidden sm:inline">送信</span></>}
+              </button>
+            </div>
+          </>
+        )}
       </div>
 
       {showLinkModal && (
@@ -714,7 +784,6 @@ export default function ChatRoomWindow({ userData, tenantUsers, externalUsers, p
             <div className="p-3 border-b border-gray-100 bg-gray-50 flex justify-between items-center"><h3 className="text-xs font-black text-gray-900 flex items-center gap-1.5"><LinkIcon className="w-3.5 h-3.5 text-indigo-600" /> リンクを挿入</h3><button onClick={() => setShowLinkModal(false)} className="p-1.5 hover:bg-gray-200 rounded-md text-gray-500"><X className="w-3.5 h-3.5"/></button></div>
             <div className="p-4">
               <label className="block text-[10px] font-bold text-gray-600 mb-1">URL</label>
-              {/* ★ ズーム防止：スマホ時は text-[16px] (text-base相当) を指定 */}
               <input type="url" placeholder="https://..." value={linkUrl} onChange={e => setLinkUrl(e.target.value)} autoFocus className="w-full border border-gray-300 rounded-lg px-2.5 py-1.5 text-[16px] sm:text-xs focus:ring-2 focus:ring-indigo-500 outline-none" />
               <button onClick={handleLinkSave} disabled={!linkUrl} className="w-full mt-4 py-2 bg-indigo-600 text-white text-[11px] font-bold rounded-lg shadow-sm hover:bg-indigo-700 disabled:bg-gray-300 transition-colors">挿入する</button>
             </div>

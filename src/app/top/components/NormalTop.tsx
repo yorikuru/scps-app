@@ -12,14 +12,17 @@ import {
 import { UserData, SchoolData, SystemApp } from "../page";
 
 import ScheduleWidget from "./ScheduleWidget";
-import MemberStatusBoard from "./MemberStatusBoard";
 import AdminNotificationWidget, { ExtendedSystemMessage } from "./AdminNotificationWidget";
 import BoardWidget from "./BoardWidget";
 import WeatherWidget from "./WeatherWidget";
+import PresenceWidget from "./PresenceWidget";
+import { UserPresence } from "../presence/types";
 
+// ★ 修正：appPermissionsの型を追加
 type ExtendedSchoolData = SchoolData & {
   availableModules?: string[];
   customAppNames?: Record<string, string>;
+  appPermissions?: Record<string, any>;
 };
 
 const DynamicIcon = ({ name, className }: { name: string, className?: string }) => {
@@ -75,6 +78,7 @@ export default function NormalTop({ userData, schoolData, messages, systemApps, 
 
   const [allTasks, setAllTasks] = useState<any[]>([]);
   const [rentals, setRentals] = useState<any[]>([]); 
+  const [presences, setPresences] = useState<UserPresence[]>([]); 
   
   const [unreadCounts, setUnreadCounts] = useState<Record<string, number>>({});
   const [chatUnreadCount, setChatUnreadCount] = useState(0);
@@ -104,7 +108,14 @@ export default function NormalTop({ userData, schoolData, messages, systemApps, 
       setRentals(fetched);
     });
 
-    return () => { unsubTasks(); unsubRentals(); };
+    const qPresences = query(collection(db, "presence_statuses"), where("schoolId", "==", schoolData.id));
+    const unsubPresences = onSnapshot(qPresences, (snapshot) => {
+      const fetched: UserPresence[] = [];
+      snapshot.forEach(d => fetched.push({ id: d.id, ...d.data() } as UserPresence));
+      setPresences(fetched);
+    });
+
+    return () => { unsubTasks(); unsubRentals(); unsubPresences(); };
   }, [schoolData]);
 
   useEffect(() => {
@@ -140,16 +151,17 @@ export default function NormalTop({ userData, schoolData, messages, systemApps, 
   const userAllowedApps = useMemo(() => {
     if (!schoolData || !userData || !systemApps) return [];
     const exSchoolData = schoolData as ExtendedSchoolData;
+    
     return systemApps.filter(app => {
       if (!app.isActive) return false;
       const appId = (app as any).appId || app.id;
       const isTenantAllowed = exSchoolData.availableModules?.includes(appId);
-      const isUserAllowed = userData.allowedModules?.includes(appId);
+      if (!isTenantAllowed) return false;
       const roleKey = (userData?.role || "guest") as string;
       const defaultRoles = (app as any).defaultRoles || { admin: true, it_manager: true, teacher: true, officer: true, guest: false };
-      const perms = (exSchoolData as any)?.appPermissions?.[appId] || defaultRoles;
+      const perms = exSchoolData.appPermissions?.[appId] || defaultRoles;
       if (perms[roleKey] === false) return false;
-      return isTenantAllowed && isUserAllowed;
+      return true;
     }).map(app => {
       const appId = (app as any).appId || app.id;
       const customName = exSchoolData.customAppNames?.[appId];
@@ -169,6 +181,9 @@ export default function NormalTop({ userData, schoolData, messages, systemApps, 
 
   const equipmentApp = userAllowedApps.find(app => app.id === "equipment");
   const equipmentC = equipmentApp ? (APP_COLOR_MAPPINGS[(equipmentApp as any).color] || APP_COLOR_MAPPINGS.default) : APP_COLOR_MAPPINGS.default;
+
+  const presenceApp = userAllowedApps.find(app => app.id === "presence");
+  const presenceC = presenceApp ? (APP_COLOR_MAPPINGS[(presenceApp as any).color] || APP_COLOR_MAPPINGS.default) : APP_COLOR_MAPPINGS.default;
 
   const isOverdue = (dueDate: string | null, dueTime: string | null | undefined, status: string) => {
     if (!dueDate || status === "done") return false;
@@ -212,30 +227,27 @@ export default function NormalTop({ userData, schoolData, messages, systemApps, 
   
   const activeRentalsCount = activeRentals.length;
 
+  // ★ 修正：「連絡可能(available)」のみを抽出するように変更
+  const activePresences = presences.filter(p => p.currentState === "available");
+
   return (
     <div className="p-2 sm:p-4 lg:p-6 w-full min-w-0">
       <div className="max-w-7xl mx-auto space-y-2.5 sm:space-y-4 w-full min-w-0">
 
-        {/* ＝＝＝＝ 1段目：左右の2段組（スマホでも50%ずつに分割） ＝＝＝＝ */}
         <div className="grid grid-cols-2 lg:grid-cols-12 gap-2.5 sm:gap-4 lg:gap-5 w-full min-w-0 lg:h-[220px]">
           
-          {/* 左側：スケジュール */}
-          {/* h-full を指定し、スマホでもPCでも枠の高さを安定させる */}
           <div className="col-span-1 lg:col-span-8 xl:col-span-9 min-w-0 flex flex-col h-full">
             <ScheduleWidget userData={userData} schoolData={schoolData} selectedDate={selectedDate} />
           </div>
           
-          {/* 右側：スマホでは「アプリ＋天気」の上下分割。PCでは「天気」のみ。 */}
           <div className="col-span-1 lg:col-span-4 xl:col-span-3 min-w-0 flex flex-col gap-2.5 sm:gap-4 h-full">
             
-            {/* ★ スマホ専用：コンパクトアプリメニュー (高さを半分＝flex-1 で確保) */}
             <div className="lg:hidden flex-1 flex flex-col min-h-0 bg-white border border-gray-200 rounded-2xl shadow-2xs overflow-hidden">
               <div className="px-2.5 py-1.5 border-b border-gray-100 flex justify-between items-center bg-gray-50/50 shrink-0">
                 <h2 className="text-[10px] sm:text-xs font-black text-gray-900 flex items-center gap-1.5 truncate">
                   <Grid className="w-3 h-3 text-gray-500" /> クイック起動
                 </h2>
               </div>
-              {/* 高さが50%分あるので、縦横スクロール可能なグリッドに */}
               <div className="p-1.5 sm:p-2 bg-white flex-1 overflow-y-auto overflow-x-hidden custom-scrollbar">
                 <div className="grid grid-cols-3 gap-y-2.5 gap-x-1.5 place-items-start w-full">
                   {userAllowedApps.map(app => {
@@ -257,7 +269,6 @@ export default function NormalTop({ userData, schoolData, messages, systemApps, 
                         <div className={`relative w-8 h-8 sm:w-10 sm:h-10 rounded-[10px] sm:rounded-xl flex items-center justify-center transition-transform group-hover:scale-105 shadow-sm border border-gray-100/50 shrink-0 ${c.lightBg} ${c.text}`}>
                           <DynamicIcon name={app.icon} className="w-4 h-4 sm:w-5 sm:h-5" />
                           
-                          {/* 通知バッジ */}
                           {isTasksApp ? (
                             <div className="absolute -top-1 -right-1 flex gap-[1px] z-10 scale-[0.75] sm:scale-90 origin-top-right">
                               {taskRedCount > 0 && <span className="w-4 h-4 bg-red-500 border-2 border-white rounded-full flex items-center justify-center text-[8px] font-black text-white shadow-sm">{taskRedCount > 99 ? '99+' : taskRedCount}</span>}
@@ -286,7 +297,6 @@ export default function NormalTop({ userData, schoolData, messages, systemApps, 
               </div>
             </div>
 
-            {/* 天気ウィジェット (PCでは全高、スマホでは flex-1 で残り50%を占める) */}
             <div className="flex-1 flex flex-col min-h-0">
               <WeatherWidget schoolData={schoolData} />
             </div>
@@ -294,7 +304,6 @@ export default function NormalTop({ userData, schoolData, messages, systemApps, 
           </div>
         </div>
 
-        {/* ＝＝＝＝ 2段目以降 ＝＝＝＝ */}
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-2.5 sm:gap-4 lg:gap-5 w-full min-w-0">
           
           <div className="lg:col-span-6 space-y-2.5 sm:space-y-4 min-w-0">
@@ -352,6 +361,14 @@ export default function NormalTop({ userData, schoolData, messages, systemApps, 
 
           <div className="lg:col-span-6 space-y-2.5 sm:space-y-4 min-w-0">
             
+            {presenceApp && (
+              <PresenceWidget 
+                presenceApp={presenceApp as any} 
+                presenceC={presenceC} 
+                activePresences={activePresences} 
+              />
+            )}
+
             {tasksApp && (
               <div className="bg-white border border-gray-200 rounded-2xl shadow-2xs overflow-hidden flex flex-col min-w-0">
                 <div className="px-3.5 py-2.5 border-b border-gray-100 flex justify-between items-center bg-gray-50/50">
@@ -424,11 +441,6 @@ export default function NormalTop({ userData, schoolData, messages, systemApps, 
                 </div>
               </div>
             )}
-
-            <div className="min-w-0">
-              <MemberStatusBoard userData={userData} tenantUsers={tenantUsers} />
-            </div>
-
           </div>
 
         </div>

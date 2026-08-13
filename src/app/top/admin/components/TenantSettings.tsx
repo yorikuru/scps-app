@@ -1,15 +1,13 @@
 "use client";
 
 import React, { useState, useEffect, useRef } from "react";
-import { doc, updateDoc } from "firebase/firestore";
+import { doc, updateDoc, collection, query, where, getDocs } from "firebase/firestore";
 import { ref, uploadBytes, getDownloadURL, deleteObject } from "firebase/storage";
 import { db, storage } from "@/lib/firebase";
 import { Settings, Loader2, Building, Mail, User, Key, Camera, Upload, Trash2, CheckCircle2, Calendar, Tag, MapPin, Search } from "lucide-react";
 import { SchoolData } from "../page";
 
 type ExtendedSchoolData = SchoolData & {
-  adminName?: string;
-  adminEmail?: string;
   schoolType?: string;
   status?: string;
   createdAt?: any;
@@ -21,6 +19,12 @@ type ExtendedSchoolData = SchoolData & {
   longitude?: number;
 };
 
+type AdminUser = {
+  id: string;
+  name: string;
+  email: string;
+};
+
 type Props = {
   schoolData: SchoolData | null;
   showAlert: (type: "success" | "error" | "warning", message: string) => void;
@@ -30,8 +34,6 @@ export default function TenantSettings({ schoolData, showAlert }: Props) {
   const exSchoolData = schoolData as ExtendedSchoolData;
 
   const [name, setName] = useState("");
-  const [adminName, setAdminName] = useState("");
-  const [adminEmail, setAdminEmail] = useState("");
   const [schoolType, setSchoolType] = useState("high_school");
   
   const [location, setLocation] = useState("");
@@ -47,11 +49,13 @@ export default function TenantSettings({ schoolData, showAlert }: Props) {
 
   const [isSaving, setIsSaving] = useState(false);
 
+  // テナント管理者一覧用のステート
+  const [adminUsers, setAdminUsers] = useState<AdminUser[]>([]);
+  const [isLoadingAdmins, setIsLoadingAdmins] = useState(true);
+
   useEffect(() => {
     if (exSchoolData) {
       setName(exSchoolData.name || "");
-      setAdminName(exSchoolData.adminName || "");
-      setAdminEmail(exSchoolData.adminEmail || "");
       setSchoolType(exSchoolData.schoolType || "high_school");
       
       setLocation(exSchoolData.location || "");
@@ -64,6 +68,33 @@ export default function TenantSettings({ schoolData, showAlert }: Props) {
       setAllowMicrosoft(exSchoolData.allowedAuthProviders?.includes("microsoft") || exSchoolData.allowedAuthProviders?.includes("all") || false);
     }
   }, [exSchoolData]);
+
+  // Firestoreから role === "admin" のユーザーを取得
+  useEffect(() => {
+    const fetchAdmins = async () => {
+      if (!exSchoolData?.id) return;
+      setIsLoadingAdmins(true);
+      try {
+        const q = query(
+          collection(db, "users"),
+          where("schoolId", "==", exSchoolData.id),
+          where("role", "==", "admin")
+        );
+        const snap = await getDocs(q);
+        const fetched: AdminUser[] = [];
+        snap.forEach(docSnap => {
+          const data = docSnap.data();
+          fetched.push({ id: docSnap.id, name: data.name, email: data.email });
+        });
+        setAdminUsers(fetched);
+      } catch (error) {
+        console.error("Failed to fetch admin users", error);
+      } finally {
+        setIsLoadingAdmins(false);
+      }
+    };
+    fetchAdmins();
+  }, [exSchoolData?.id]);
 
   const handleZipcodeSearch = async () => {
     if (!postalCode) return;
@@ -208,10 +239,9 @@ export default function TenantSettings({ schoolData, showAlert }: Props) {
       if (allowGoogle) newProviders.push("google");
       if (allowMicrosoft) newProviders.push("microsoft");
 
+      // adminName と adminEmail の更新を除外
       const updatePayload: Record<string, any> = {
         name: name.trim(),
-        adminName: adminName.trim(),
-        adminEmail: adminEmail.trim(),
         schoolType: schoolType,
         location: location.trim(),       
         postalCode: postalCode.trim(),   
@@ -418,35 +448,40 @@ export default function TenantSettings({ schoolData, showAlert }: Props) {
                 </div>
               </div>
 
-              <div>
-                <label className="block text-[10px] sm:text-xs font-bold text-gray-700 mb-1">責任管理者 氏名</label>
-                <div className="relative">
-                  <User className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-                  <input 
-                    type="text" 
-                    value={adminName} 
-                    onChange={e => setAdminName(e.target.value)} 
-                    placeholder="例: 山田 太郎" 
-                    className="w-full pl-9 pr-3 py-2 border border-gray-300 rounded-xl text-[16px] sm:text-xs font-bold focus:ring-2 focus:ring-indigo-500 outline-none" 
-                  />
+              {/* 手入力の代わりにテナント管理者のリストを表示 */}
+              <div className="sm:col-span-2 mt-1">
+                <label className="block text-[10px] sm:text-xs font-bold text-gray-700 mb-1.5 flex items-center justify-between">
+                  テナント管理者
+                </label>
+                <div className="bg-gray-50/50 p-3 sm:p-4 rounded-xl border border-gray-100">
+                  {isLoadingAdmins ? (
+                    <div className="flex items-center gap-2 text-gray-500 text-[10px] sm:text-xs font-bold">
+                      <Loader2 className="w-4 h-4 animate-spin" /> 読み込み中...
+                    </div>
+                  ) : adminUsers.length === 0 ? (
+                    <div className="text-[10px] sm:text-xs text-gray-500 font-bold">
+                      テナント管理者が設定されていません。
+                    </div>
+                  ) : (
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                      {adminUsers.map(admin => (
+                        <div key={admin.id} className="bg-white p-3 rounded-lg border border-gray-200 shadow-2xs flex flex-col gap-1.5">
+                          <div className="flex items-center gap-2 text-[11px] sm:text-xs font-black text-gray-900">
+                            <User className="w-3.5 h-3.5 text-indigo-600" />
+                            {admin.name}
+                          </div>
+                          <div className="flex items-center gap-2 text-[9px] sm:text-[10px] font-bold text-gray-500">
+                            <Mail className="w-3.5 h-3.5" />
+                            {admin.email || "メール未設定"}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
                 </div>
               </div>
 
-              <div>
-                <label className="block text-[10px] sm:text-xs font-bold text-gray-700 mb-1">責任管理者 メールアドレス</label>
-                <div className="relative">
-                  <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-                  <input 
-                    type="email" 
-                    value={adminEmail} 
-                    onChange={e => setAdminEmail(e.target.value)} 
-                    placeholder="例: it@yorikuru.com" 
-                    className="w-full pl-9 pr-3 py-2 border border-gray-300 rounded-xl text-[16px] sm:text-xs font-bold focus:ring-2 focus:ring-indigo-500 outline-none" 
-                  />
-                </div>
-              </div>
             </div>
-
           </div>
         </div>
 

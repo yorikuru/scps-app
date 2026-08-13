@@ -6,20 +6,35 @@ import {
   GraduationCap, Building2, Briefcase, Shield, Sparkles, Pin, Globe, Star, 
   Filter, ArrowUpDown, Image as ImageIcon, Edit3, Settings, Paperclip 
 } from "lucide-react";
-import { updateDoc, doc, collection, query, where, getDocs, addDoc, serverTimestamp } from "firebase/firestore";
+import { updateDoc, doc, collection, query, where, getDocs, addDoc, serverTimestamp, onSnapshot } from "firebase/firestore";
 import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
 import { db, storage } from "@/lib/firebase";
 import { UserData, ExternalUser, ChatRoom, ChatMessage, AppConfig, COLOR_MAPPINGS, Position, ChatRoomType, getDefaultChatPermissions } from "../types";
 import GroupCreateModal from "./GroupCreateModal";
 import { useDialog } from "@/components/DialogContext";
+import { PRESENCE_CONFIG, PresenceState, UserPresence } from "../../presence/types";
 
-// ★ アバターのサイズを小さめに調整 (w-10 h-10 -> w-8 h-8 / w-9 h-9 等)
-const UserAvatar = ({ name, url, isExternal = false, className = "w-9 h-9 text-xs" }: { name: string, url?: string | null, isExternal?: boolean, className?: string }) => {
-  return url ? (
-    <img src={url} alt={name} className={`${className} rounded-full object-cover shadow-2xs flex-shrink-0 border border-gray-100 bg-white`} />
-  ) : (
-    <div className={`${className} rounded-full bg-gradient-to-tr ${isExternal ? 'from-yellow-400 to-amber-500' : 'from-indigo-500 to-purple-600'} flex items-center justify-center text-white font-bold flex-shrink-0 shadow-2xs`}>
-      {name.charAt(0)}
+const UserAvatar = ({ 
+  name, url, isExternal = false, className = "w-9 h-9 text-xs", presenceState 
+}: { 
+  name: string, url?: string | null, isExternal?: boolean, className?: string, presenceState?: PresenceState 
+}) => {
+  const config = presenceState ? PRESENCE_CONFIG[presenceState] : null;
+
+  return (
+    <div className="relative inline-block flex-shrink-0">
+      {url ? (
+        <img src={url} alt={name} className={`${className} rounded-full object-cover shadow-2xs border border-gray-100 bg-white`} />
+      ) : (
+        <div className={`${className} rounded-full bg-gradient-to-tr ${isExternal ? 'from-yellow-400 to-amber-500' : 'from-indigo-500 to-purple-600'} flex items-center justify-center text-white font-bold shadow-2xs`}>
+          {name.charAt(0)}
+        </div>
+      )}
+      {config && !isExternal && (
+        <div className="absolute -bottom-0.5 -right-0.5 bg-white rounded-full p-[1px] shadow-sm">
+          <config.icon className={`w-3 h-3 ${config.fillClass}`} />
+        </div>
+      )}
     </div>
   );
 };
@@ -41,12 +56,15 @@ type Props = {
   isExternalMode?: boolean; 
   schoolName?: string;
   schoolLogoURL?: string;
+  schoolData?: any; 
+  systemApps?: any[]; 
 };
 
 export default function ChatList({ 
   userData, tenantUsers, externalUsers, positions, chatRooms, activeRoomId, 
   onSelectRoom, onCreatePrivateRoom, onJoinOfficialRoom, onTogglePin, 
-  onOpenExternalUserManagement, onOpenSettings, appConfig, isExternalMode = false, schoolName, schoolLogoURL
+  onOpenExternalUserManagement, onOpenSettings, appConfig, isExternalMode = false, schoolName, schoolLogoURL,
+  schoolData, systemApps = []
 }: Props) {
   const [activeTab, setActiveTab] = useState<"chats" | "contacts" | "external" | "settings">("chats"); 
   const [searchQuery, setSearchQuery] = useState("");
@@ -65,11 +83,47 @@ export default function ChatList({
   const [targetRoomIdForIcon, setTargetRoomIdForIcon] = useState<string | null>(null);
 
   const [allMessagesCache, setAllMessagesCache] = useState<ChatMessage[] | null>(null);
+  const [presences, setPresences] = useState<UserPresence[]>([]);
 
   const c = COLOR_MAPPINGS[appConfig.color] || COLOR_MAPPINGS.default;
 
   const isInternalUser = userData ? !("category" in userData) : false;
   const internalUser = isInternalUser ? (userData as UserData) : null;
+
+  // ★ presenceアプリが有効かどうかの判定
+  const isPresenceEnabled = React.useMemo(() => {
+    if (!schoolData || !internalUser || isExternalMode) return false;
+    const exSchool = schoolData as any;
+    
+    const isTenantAllowed = exSchool.availableModules?.includes("presence");
+    if (!isTenantAllowed) return false;
+
+    const isUserAllowed = (internalUser as any).allowedModules?.includes("presence");
+    if (!isUserAllowed) return false;
+
+    const roleKey = (internalUser.role || "guest") as string;
+    const perms = exSchool.appPermissions?.["presence"] || { admin: true, it_manager: true, teacher: true, officer: true, guest: false };
+    if (perms[roleKey] === false) return false;
+
+    return true;
+  }, [schoolData, internalUser, isExternalMode]);
+
+  useEffect(() => {
+    if (!isPresenceEnabled || !userData?.schoolId) return;
+    const q = query(collection(db, "presence_statuses"), where("schoolId", "==", userData.schoolId));
+    const unsub = onSnapshot(q, (snap) => {
+      const list: UserPresence[] = [];
+      snap.forEach(d => list.push({ id: d.id, ...d.data() } as UserPresence));
+      setPresences(list);
+    });
+    return () => unsub();
+  }, [isPresenceEnabled, userData?.schoolId]);
+
+  const getUserPresenceState = (userId: string): PresenceState | undefined => {
+    if (!isPresenceEnabled) return undefined;
+    const p = presences.find(item => item.userId === userId);
+    return p ? p.currentState : "offline";
+  };
 
   const perms = isInternalUser && internalUser ? getDefaultChatPermissions(internalUser) : {
     canUseChat: true, canCreateExternalUser: false, canViewExternalUser: false, 
@@ -122,16 +176,17 @@ export default function ChatList({
 
   const getRoomInfo = (room: ChatRoom) => {
     let name = room.name || "グループ";
+    let otherMemberId = null;
     if (room.type === "tenant_all") {
       name = `全メンバーチャット (${schoolName || "テナント"})`;
     }
     if (room.isOfficial || room.type === "custom_group") {
-      return { name, avatar: null, isGroup: true, isExternal: false };
+      return { name, avatar: null, isGroup: true, isExternal: false, otherMemberId: null };
     }
-    const otherMemberId = room.members.find(id => id !== userData.id);
+    otherMemberId = room.members.find(id => id !== userData.id);
     const otherUser = getUserById(otherMemberId || "");
     const isExt = externalUsers.some(e => e.id === otherMemberId);
-    return { name: otherUser?.name || "退会したユーザー", avatar: (otherUser as UserData)?.photoURL || null, isGroup: false, isExternal: isExt };
+    return { name: otherUser?.name || "退会したユーザー", avatar: (otherUser as UserData)?.photoURL || null, isGroup: false, isExternal: isExt, otherMemberId };
   };
 
   const filteredRooms = chatRooms.filter(room => {
@@ -271,30 +326,29 @@ export default function ChatList({
     }
 
     const isMentioned = unreadCount > 0 && previewMessage && (previewMessage.includes('@全員') || previewMessage.includes(`@${userData.name}`));
+    const presenceState = !info.isGroup && info.otherMemberId ? getUserPresenceState(info.otherMemberId) : undefined;
 
     return (
       <div 
         key={room.id} 
         onClick={() => onSelectRoom(room.id)}
         onContextMenu={(e) => handleContextMenu(e, room.id)}
-        // ★ リストアイテムの余白 (p-3 -> p-2 sm:p-2.5) を詰めてコンパクト化
         className={`flex items-center gap-2.5 p-2 sm:p-2.5 cursor-pointer transition-colors group relative ${isSelected ? `${c.lightBg} border-l-2 ${c.border}` : 'hover:bg-gray-50 border-l-2 border-transparent'}`}
       >
         {info.isGroup ? (
-          // ★ グループアイコンのサイズ縮小 (w-11 -> w-9)
           <div className={`w-9 h-9 rounded-full flex items-center justify-center text-white flex-shrink-0 shadow-sm relative ${room.iconURL ? 'bg-transparent border border-gray-200' : roomConfig?.color || 'bg-gray-700'}`}>
             {room.iconURL ? (
               <img src={room.iconURL} alt={info.name} className="w-full h-full rounded-full object-cover" />
             ) : roomConfig?.imgUrl ? (
               <img src={roomConfig.imgUrl} alt={info.name} className="w-full h-full rounded-full object-cover" />
             ) : roomConfig?.icon ? (
-              <roomConfig.icon className="w-4 h-4"/> // アイコンも少し小さく
+              <roomConfig.icon className="w-4 h-4"/>
             ) : (
               <Users className="w-4 h-4"/>
             )}
           </div>
         ) : (
-          <UserAvatar name={info.name} url={info.avatar} isExternal={info.isExternal} className="w-9 h-9 text-xs" />
+          <UserAvatar name={info.name} url={info.avatar} isExternal={info.isExternal} className="w-9 h-9 text-xs" presenceState={presenceState} />
         )}
         <div className="flex-1 min-w-0 pr-6">
           <div className="flex justify-between items-end mb-0.5">
@@ -306,7 +360,6 @@ export default function ChatList({
             <span className={`text-[8px] font-bold flex-shrink-0 ml-1 ${unreadCount > 0 ? 'text-red-500' : 'text-gray-400'}`}>{formatTime(room.updatedAt)}</span>
           </div>
           <div className="flex justify-between items-center gap-2">
-            {/* ★ プレビューメッセージの文字サイズ調整 */}
             <p className={`text-[10px] truncate ${unreadCount > 0 || isMessageHit ? 'text-gray-900 font-bold' : 'text-gray-500 font-medium'}`}>
               {isMessageHit && <Search className="w-2.5 h-2.5 inline-block mr-0.5 text-indigo-500" />}
               {previewMessage}
@@ -423,7 +476,6 @@ export default function ChatList({
         </div>
       )}
 
-      {/* ★ トークヘッダー部分のパディング縮小 */}
       <div className="p-2 sm:p-3 border-b border-gray-100 bg-gray-50/50 shrink-0">
         <div className="flex justify-between items-center mb-2">
           <h2 className="text-xs sm:text-sm font-black text-gray-900 px-1">トークを選択</h2>
@@ -464,7 +516,6 @@ export default function ChatList({
 
       <div className="flex-1 overflow-y-auto custom-scrollbar relative">
         
-        {/* === トークタブ === */}
         {activeTab === "chats" && (
           <div className="pb-4">
             {filteredRooms.length === 0 ? (
@@ -491,7 +542,6 @@ export default function ChatList({
           </div>
         )}
 
-        {/* === アドレス帳タブ === */}
         {!isExternalMode && activeTab === "contacts" && (
           <div className="p-2 sm:p-3 pb-6">
             {!searchQuery && isInternalUser && internalUser && (
@@ -504,7 +554,7 @@ export default function ChatList({
                   }} 
                   className="flex items-center gap-2.5 p-2 mb-3 bg-gray-50 rounded-xl border border-gray-100 cursor-pointer hover:bg-gray-100 transition-colors"
                 >
-                  <UserAvatar name={userData.name} url={(userData as any).photoURL} className="w-10 h-10 text-sm" />
+                  <UserAvatar name={userData.name} url={(userData as any).photoURL} className="w-10 h-10 text-sm" presenceState={getUserPresenceState(userData.id)} />
                   <div className="flex-1 min-w-0">
                     <h4 className="text-xs font-black text-gray-900 truncate">{userData.name}</h4>
                     <span className="text-[9px] font-bold text-gray-500 truncate block">{internalUser.positionName || "自分のプロフィール"}</span>
@@ -629,6 +679,8 @@ export default function ChatList({
                     return cleanNum ? cleanNum.padStart(6, '0') : "000000";
                   };
 
+                  const presenceState = !isExt ? getUserPresenceState(u.id) : undefined;
+
                   return (
                     <div 
                       key={u.id} 
@@ -638,7 +690,7 @@ export default function ChatList({
                       }} 
                       className="flex items-center gap-2.5 p-1.5 hover:bg-gray-50 rounded-lg cursor-pointer transition-colors group"
                     >
-                      <UserAvatar name={u.name} url={(u as any).photoURL} isExternal={isExt} className="w-8 h-8 text-xs" />
+                      <UserAvatar name={u.name} url={(u as any).photoURL} isExternal={isExt} className="w-8 h-8 text-xs" presenceState={presenceState} />
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-1.5">
                           <h4 className="text-[11px] font-black text-gray-900 truncate">{u.name}</h4>
@@ -657,7 +709,6 @@ export default function ChatList({
           </div>
         )}
 
-        {/* === 外部管理タブ === */}
         {!isExternalMode && activeTab === "external" && perms.canViewExternalUser && (
           <div className="p-2 sm:p-3 pb-6 animate-fade-in">
             <div className="flex justify-between items-center mb-2">
@@ -707,7 +758,6 @@ export default function ChatList({
           </div>
         )}
 
-        {/* === チャット設定サブメニュー（管理者向け） === */}
         {!isExternalMode && activeTab === "settings" && onOpenSettings && (
           <div className="p-3 pb-6 animate-fade-in">
             <div className="flex justify-between items-center mb-3">
