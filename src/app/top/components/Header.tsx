@@ -44,7 +44,7 @@ type Props = {
   handleLogout: () => void;
   isProfileMenuOpen: boolean;
   setIsProfileMenuOpen: (open: boolean) => void;
-  schoolData?: SchoolData | null; // ★ schoolData を受け取れるように拡張
+  schoolData?: SchoolData | null; 
 };
 
 export default function Header({
@@ -82,20 +82,16 @@ export default function Header({
 
   const currentSchoolData = schoolData || fetchedSchoolData;
 
-  // ★ presenceアプリがテナント・ユーザーに許可されているか判定
   const isPresenceEnabled = useMemo(() => {
     if (!currentSchoolData || !userData) return false;
     const exSchool = currentSchoolData as any;
     
-    // 1. テナントの availableModules に含まれているか
     const isTenantAllowed = exSchool.availableModules?.includes("presence");
     if (!isTenantAllowed) return false;
 
-    // 2. ユーザーの allowedModules に含まれているか
     const isUserAllowed = (userData as any).allowedModules?.includes("presence");
     if (!isUserAllowed) return false;
 
-    // 3. 役職ごとのロール権限
     const roleKey = (userData.role || "guest") as string;
     const perms = exSchool.appPermissions?.["presence"] || { admin: true, it_manager: true, teacher: true, officer: true, guest: false };
     if (perms[roleKey] === false) return false;
@@ -308,11 +304,11 @@ export default function Header({
         isAutoOnline: false,
         updatedAt: serverTimestamp(),
       }, { merge: true });
-      showAlert("ステータスを更新しました。");
+      showAlert("ステータスを更新しました。"); // ★ エラー解消
       setIsProfileMenuOpen(false);
       setIsPresenceQuickEditOpen(false);
     } catch (e) {
-      showAlert("更新に失敗しました。");
+      showAlert("更新に失敗しました。"); // ★ エラー解消
     } finally {
       setIsUpdatingPresence(false);
     }
@@ -389,7 +385,7 @@ export default function Header({
                     return (
                       <div 
                         key={n.id} 
-                        onClick={() => { setIsNotifOpen(false); router.push(n.linkUrl || '/top/notice'); }}
+                        onClick={() => { setIsNotifOpen(false); router.push(`/top/notice?id=${n.id}`); }}
                         className={`p-2.5 hover:bg-gray-50 transition-colors group flex gap-2.5 relative cursor-pointer ${!n.isRead ? 'bg-blue-50/20' : ''}`}
                       >
                         {!n.isRead && <div className="absolute left-0 top-0 bottom-0 w-0.5 bg-blue-500"></div>}
@@ -445,7 +441,7 @@ export default function Header({
           <LogOut className="w-4 h-4" />
         </button>
 
-        {/* プロフィールメニュー（presenceアプリが有効な場合のみステータスバッジ＆クイック編集を表示） */}
+        {/* プロフィールメニュー */}
         <div className="relative" ref={profileRef}>
           <button 
             onClick={() => { setIsProfileMenuOpen(!isProfileMenuOpen); setIsPresenceQuickEditOpen(false); setIsStateDropdownOpen(false); setIsLocationDropdownOpen(false); }} 
@@ -461,7 +457,6 @@ export default function Header({
                 </div>
               )}
             </div>
-            {/* ★ presenceアプリが有効なときだけステータスバッジを表示 */}
             {isPresenceEnabled && (
               <div className="absolute -bottom-0.5 -right-0.5 bg-white rounded-full p-[1px] shadow-sm">
                 <activeConfig.icon className={`w-3.5 h-3.5 ${activeConfig.fillClass}`} />
@@ -503,7 +498,6 @@ export default function Header({
                 </div>
               </div>
 
-              {/* ★ presenceアプリが有効な場合のみ「ステータス・勤務先を変更する」を表示 */}
               {isPresenceEnabled && (
                 !isPresenceQuickEditOpen ? (
                   <div className="py-2.5">

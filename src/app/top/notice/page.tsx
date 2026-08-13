@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useEffect, useState, useMemo, useRef } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { onAuthStateChanged } from "firebase/auth";
 import { doc, getDoc, getDocs, collection, query, where, onSnapshot, updateDoc, deleteDoc, writeBatch } from "firebase/firestore";
 import { auth, db } from "@/lib/firebase";
@@ -53,6 +53,9 @@ const NOTICE_COLORS: Record<string, { color: string, bg: string }> = {
 
 export default function NoticePage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const queryNoticeId = searchParams.get("id"); // ★ URLクエリからIDを取得
+
   const [userId, setUserId] = useState<string | null>(null);
   const [schoolId, setSchoolId] = useState<string | null>(null);
   
@@ -63,7 +66,6 @@ export default function NoticePage() {
 
   const { showAlert, showConfirm } = useDialog();
   
-  // すべての通知（未来の予約通知を含む）を保持するステート
   const [allNotifications, setAllNotifications] = useState<AppNotification[]>([]);
   const [selectedNoticeId, setSelectedNoticeId] = useState<string | null>(null);
   
@@ -71,13 +73,11 @@ export default function NoticePage() {
   const [searchQuery, setSearchQuery] = useState("");
   const [isProcessing, setIsProcessing] = useState(false);
 
-  // 時間管理とポップアップUI用
   const [currentTime, setCurrentTime] = useState(Date.now());
   const [macToasts, setMacToasts] = useState<AppNotification[]>([]);
   const initialLoadRef = useRef(true);
   const notifiedIdsRef = useRef<Set<string>>(new Set());
 
-  // 5秒に1回「現在時刻」を更新し、未来の通知が「今」になったかを監視する
   useEffect(() => {
     const timer = setInterval(() => setCurrentTime(Date.now()), 5000);
     return () => clearInterval(timer);
@@ -145,7 +145,19 @@ export default function NoticePage() {
     return () => unsubscribe();
   }, [userId, schoolId]);
 
-  // 現在時刻と照らし合わせ、「時間が来た通知」だけを抽出＆ポップアップ
+  // ★ 初期ロード時にURLクエリのIDを反映する
+  useEffect(() => {
+    if (!isLoading && queryNoticeId && allNotifications.some(n => n.id === queryNoticeId)) {
+       setSelectedNoticeId(queryNoticeId);
+       
+       // 未読なら既読化
+       const target = allNotifications.find(n => n.id === queryNoticeId);
+       if (target && !target.isRead) {
+          updateDoc(doc(db, "notifications", target.id), { isRead: true }).catch(console.error);
+       }
+    }
+  }, [isLoading, queryNoticeId, allNotifications]);
+
   useEffect(() => {
     if (isLoading) return;
 
@@ -154,13 +166,9 @@ export default function NoticePage() {
 
     allNotifications.forEach(n => {
       const time = new Date(n.createdAt).getTime();
-      // 通知の時間が「今」または「過去」になったら
       if (time <= now) {
         if (!notifiedIdsRef.current.has(n.id)) {
-          notifiedIdsRef.current.add(n.id); // 処理済みとして記録
-          
-          // 画面を開いた時の「初回読み込み分」はポップアップさせない。
-          // 画面を開いている最中に「新しく来た」または「時間が来た」ものだけポップアップ
+          notifiedIdsRef.current.add(n.id);
           if (!initialLoadRef.current) {
             newToasts.push(n);
           }
@@ -170,7 +178,6 @@ export default function NoticePage() {
 
     if (newToasts.length > 0) {
       setMacToasts(prev => [...prev, ...newToasts]);
-      // 5秒後にポップアップを自動で消す
       newToasts.forEach(t => {
         setTimeout(() => {
           setMacToasts(prev => prev.filter(toast => toast.id !== t.id));
@@ -183,7 +190,6 @@ export default function NoticePage() {
     }
   }, [allNotifications, currentTime, isLoading]);
 
-  // 実際に画面リストに表示する通知（時間が来ていない予約通知は除外する）
   const visibleNotifications = useMemo(() => {
     return allNotifications
       .filter(n => new Date(n.createdAt).getTime() <= currentTime)
@@ -235,6 +241,12 @@ export default function NoticePage() {
 
   const handleSelectNotice = async (notice: AppNotification) => {
     setSelectedNoticeId(notice.id);
+    
+    // URLを更新する
+    const params = new URLSearchParams(searchParams.toString());
+    params.set("id", notice.id);
+    router.replace(`/top/notice?${params.toString()}`);
+
     if (!notice.isRead) {
       try {
         await updateDoc(doc(db, "notifications", notice.id), { isRead: true });
@@ -252,18 +264,22 @@ export default function NoticePage() {
     try { await updateDoc(doc(db, "notifications", noticeId), { isRead: !currentRead }); } catch (error) {}
   };
 
-  // 削除の実行本体
   const executeDelete = async (noticeId: string) => {
     try {
       await deleteDoc(doc(db, "notifications", noticeId));
-      if (selectedNoticeId === noticeId) setSelectedNoticeId(null);
+      if (selectedNoticeId === noticeId) {
+        setSelectedNoticeId(null);
+        // URLのIDパラメータを削除
+        const params = new URLSearchParams(searchParams.toString());
+        params.delete("id");
+        router.replace(params.toString() ? `/top/notice?${params.toString()}` : "/top/notice");
+      }
       showAlert("通知を削除しました", "success");
     } catch (error) {
       showAlert("削除に失敗しました", "error");
     }
   };
 
-  // ★ showConfirm に置き換え
   const handleDelete = (noticeId: string, e?: React.MouseEvent) => {
     if (e) e.stopPropagation();
     showConfirm(
@@ -285,15 +301,34 @@ export default function NoticePage() {
     } catch (error) { showAlert("一括既読に失敗しました", "error"); } finally { setIsProcessing(false); }
   };
 
-  // 一括削除の実行本体
+  // ★ 表示中タブに応じた削除の実行
   const executeDeleteAll = async () => {
     setIsProcessing(true);
     try {
       const batch = writeBatch(db);
-      visibleNotifications.forEach(n => batch.delete(doc(db, "notifications", n.id)));
+      // filteredNotifications は現在表示されているタブと検索結果を反映している
+      let targetsToDelete = filteredNotifications;
+
+      // 「すべて」タブの場合は、フラグ付きを削除対象から除外
+      if (activeTab === "all") {
+        targetsToDelete = targetsToDelete.filter(n => !n.isFlagged);
+      }
+
+      if (targetsToDelete.length === 0) {
+        showAlert("削除できる通知がありません", "info");
+        setIsProcessing(false);
+        return;
+      }
+
+      targetsToDelete.forEach(n => batch.delete(doc(db, "notifications", n.id)));
       await batch.commit();
       setSelectedNoticeId(null);
-      showAlert("すべての通知を削除しました", "success");
+      
+      const params = new URLSearchParams(searchParams.toString());
+      params.delete("id");
+      router.replace(params.toString() ? `/top/notice?${params.toString()}` : "/top/notice");
+
+      showAlert("通知を削除しました", "success");
     } catch (error) { 
       showAlert("一括削除に失敗しました", "error"); 
     } finally { 
@@ -301,14 +336,12 @@ export default function NoticePage() {
     }
   };
 
-  // ★ showConfirm に置き換え
   const handleDeleteAll = () => {
-    showConfirm(
-      "すべての通知を削除しますか？\n（フラグが付いている通知も削除されます）",
-      executeDeleteAll,
-      "danger",
-      "全通知削除の確認"
-    );
+    let message = "表示中の通知をすべて削除しますか？";
+    if (activeTab === "all") {
+      message = "すべての通知を削除しますか？\n（フラグが付いている通知は削除されません）";
+    }
+    showConfirm(message, executeDeleteAll, "danger", "通知削除の確認");
   };
 
   const formatTime = (dateStr: string) => {
@@ -394,8 +427,8 @@ export default function NoticePage() {
             <button onClick={handleMarkAllAsRead} disabled={isProcessing || unreadCount === 0} className="px-3 py-1.5 bg-white border border-gray-200 text-gray-700 hover:bg-blue-50 hover:text-blue-600 hover:border-blue-200 rounded-md text-[11px] font-bold transition-colors shadow-sm disabled:opacity-50 flex items-center gap-1.5">
               <CheckCheck className="w-3.5 h-3.5" /> すべて既読
             </button>
-            <button onClick={handleDeleteAll} disabled={isProcessing || visibleNotifications.length === 0} className="px-3 py-1.5 bg-white border border-gray-200 text-red-600 hover:bg-red-50 hover:border-red-200 rounded-md text-[11px] font-bold transition-colors shadow-sm disabled:opacity-50 flex items-center gap-1.5">
-              <Trash2 className="w-3.5 h-3.5" /> すべて削除
+            <button onClick={handleDeleteAll} disabled={isProcessing || filteredNotifications.length === 0} className="px-3 py-1.5 bg-white border border-gray-200 text-red-600 hover:bg-red-50 hover:border-red-200 rounded-md text-[11px] font-bold transition-colors shadow-sm disabled:opacity-50 flex items-center gap-1.5">
+              <Trash2 className="w-3.5 h-3.5" /> {activeTab === "all" ? "すべて削除" : "表示中を削除"}
             </button>
           </div>
         </div>
@@ -457,11 +490,31 @@ export default function NoticePage() {
 
           {/* 右ペイン：詳細 */}
           <div className={`flex-1 flex flex-col min-w-0 bg-[#FAFAFA] relative ${!selectedNoticeId ? 'hidden sm:flex' : 'flex'}`}>
-            {selectedNoticeId && (
-              <div className="sm:hidden p-3 border-b border-gray-200 bg-white shrink-0 flex items-center">
-                <button onClick={() => setSelectedNoticeId(null)} className="flex items-center text-blue-600 text-xs font-bold">
-                  <ChevronLeft className="w-4 h-4 mr-0.5" /> インボックス
+            {/* ★ スマホ用ヘッダー（未読・フラグ・削除もここに配置） */}
+            {selectedNoticeId && selectedNotice && (
+              <div className="sm:hidden p-3 border-b border-gray-200 bg-white shrink-0 flex items-center justify-between">
+                <button 
+                  onClick={() => {
+                    setSelectedNoticeId(null);
+                    const params = new URLSearchParams(searchParams.toString());
+                    params.delete("id");
+                    router.replace(params.toString() ? `/top/notice?${params.toString()}` : "/top/notice");
+                  }} 
+                  className="flex items-center text-blue-600 text-xs font-bold"
+                >
+                  <ChevronLeft className="w-4 h-4 mr-0.5" /> 戻る
                 </button>
+                <div className="flex items-center gap-1.5">
+                  <button onClick={() => handleToggleRead(selectedNotice.id, selectedNotice.isRead)} className="p-1.5 text-gray-500 hover:bg-gray-100 hover:text-blue-600 rounded-lg transition-colors" title={selectedNotice.isRead ? "未読にする" : "既読にする"}>
+                    {selectedNotice.isRead ? <Mail className="w-4 h-4" /> : <MailOpen className="w-4 h-4" />}
+                  </button>
+                  <button onClick={() => handleToggleFlag(selectedNotice.id, selectedNotice.isFlagged)} className={`p-1.5 rounded-lg transition-colors ${selectedNotice.isFlagged ? 'text-amber-500 bg-amber-50' : 'text-gray-500 hover:bg-gray-100'}`}>
+                    <Flag className={`w-4 h-4 ${selectedNotice.isFlagged ? 'fill-amber-500' : ''}`} />
+                  </button>
+                  <button onClick={(e) => handleDelete(selectedNotice.id, e)} className="p-1.5 text-gray-500 hover:bg-red-50 hover:text-red-600 rounded-lg transition-colors">
+                    <Trash2 className="w-4 h-4" />
+                  </button>
+                </div>
               </div>
             )}
 
@@ -475,7 +528,8 @@ export default function NoticePage() {
               </div>
             ) : (
               <div className="flex-1 flex flex-col h-full overflow-hidden animate-fade-in">
-                <div className="px-5 py-3 border-b border-gray-200 bg-white flex justify-end gap-1.5 shrink-0">
+                {/* ★ PC用ヘッダー */}
+                <div className="hidden sm:flex px-5 py-3 border-b border-gray-200 bg-white justify-end gap-1.5 shrink-0">
                   <button onClick={() => handleToggleRead(selectedNotice.id, selectedNotice.isRead)} className="p-1.5 text-gray-500 hover:bg-gray-100 hover:text-blue-600 rounded-lg transition-colors tooltip" title={selectedNotice.isRead ? "未読にする" : "既読にする"}>
                     {selectedNotice.isRead ? <Mail className="w-4 h-4" /> : <MailOpen className="w-4 h-4" />}
                   </button>

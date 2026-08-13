@@ -18,7 +18,6 @@ import WeatherWidget from "./WeatherWidget";
 import PresenceWidget from "./PresenceWidget";
 import { UserPresence } from "../presence/types";
 
-// ★ 修正：appPermissionsの型を追加
 type ExtendedSchoolData = SchoolData & {
   availableModules?: string[];
   customAppNames?: Record<string, string>;
@@ -40,14 +39,30 @@ type Props = {
   handleLogout: () => void;
 };
 
+// ★ 完全網羅のカラーマッピング
 const APP_COLOR_MAPPINGS: Record<string, { lightBg: string, text: string, hoverBg: string, iconText: string, badgeBg: string, badgeText: string }> = {
-  indigo: { lightBg: "bg-indigo-50", text: "text-indigo-600", hoverBg: "hover:bg-indigo-100", iconText: "text-indigo-600", badgeBg: "bg-indigo-100", badgeText: "text-indigo-800" },
-  blue: { lightBg: "bg-blue-50", text: "text-blue-600", hoverBg: "hover:bg-blue-100", iconText: "text-blue-600", badgeBg: "bg-blue-100", badgeText: "text-blue-800" },
-  green: { lightBg: "bg-emerald-50", text: "text-emerald-600", hoverBg: "hover:bg-emerald-100", iconText: "text-emerald-600", badgeBg: "bg-emerald-100", badgeText: "text-emerald-800" },
-  purple: { lightBg: "bg-purple-50", text: "text-purple-600", hoverBg: "hover:bg-purple-100", iconText: "text-purple-600", badgeBg: "bg-purple-100", badgeText: "text-purple-800" },
+  slate: { lightBg: "bg-slate-50", text: "text-slate-600", hoverBg: "hover:bg-slate-100", iconText: "text-slate-600", badgeBg: "bg-slate-100", badgeText: "text-slate-800" },
+  gray: { lightBg: "bg-gray-50", text: "text-gray-600", hoverBg: "hover:bg-gray-100", iconText: "text-gray-600", badgeBg: "bg-gray-100", badgeText: "text-gray-800" },
+  zinc: { lightBg: "bg-zinc-50", text: "text-zinc-600", hoverBg: "hover:bg-zinc-100", iconText: "text-zinc-600", badgeBg: "bg-zinc-100", badgeText: "text-zinc-800" },
+  neutral: { lightBg: "bg-neutral-50", text: "text-neutral-600", hoverBg: "hover:bg-neutral-100", iconText: "text-neutral-600", badgeBg: "bg-neutral-100", badgeText: "text-neutral-800" },
+  stone: { lightBg: "bg-stone-50", text: "text-stone-600", hoverBg: "hover:bg-stone-100", iconText: "text-stone-600", badgeBg: "bg-stone-100", badgeText: "text-stone-800" },
+  red: { lightBg: "bg-red-50", text: "text-red-600", hoverBg: "hover:bg-red-100", iconText: "text-red-600", badgeBg: "bg-red-100", badgeText: "text-red-800" },
   orange: { lightBg: "bg-orange-50", text: "text-orange-600", hoverBg: "hover:bg-orange-100", iconText: "text-orange-600", badgeBg: "bg-orange-100", badgeText: "text-orange-800" },
-  rose: { lightBg: "bg-rose-50", text: "text-rose-600", hoverBg: "hover:bg-rose-100", iconText: "text-rose-600", badgeBg: "bg-rose-100", badgeText: "text-rose-800" },
   amber: { lightBg: "bg-amber-50", text: "text-amber-600", hoverBg: "hover:bg-amber-100", iconText: "text-amber-600", badgeBg: "bg-amber-100", badgeText: "text-amber-800" },
+  yellow: { lightBg: "bg-yellow-50", text: "text-yellow-600", hoverBg: "hover:bg-yellow-100", iconText: "text-yellow-600", badgeBg: "bg-yellow-100", badgeText: "text-yellow-800" },
+  lime: { lightBg: "bg-lime-50", text: "text-lime-600", hoverBg: "hover:bg-lime-100", iconText: "text-lime-600", badgeBg: "bg-lime-100", badgeText: "text-lime-800" },
+  green: { lightBg: "bg-green-50", text: "text-green-600", hoverBg: "hover:bg-green-100", iconText: "text-green-600", badgeBg: "bg-green-100", badgeText: "text-green-800" },
+  emerald: { lightBg: "bg-emerald-50", text: "text-emerald-600", hoverBg: "hover:bg-emerald-100", iconText: "text-emerald-600", badgeBg: "bg-emerald-100", badgeText: "text-emerald-800" },
+  teal: { lightBg: "bg-teal-50", text: "text-teal-600", hoverBg: "hover:bg-teal-100", iconText: "text-teal-600", badgeBg: "bg-teal-100", badgeText: "text-teal-800" },
+  cyan: { lightBg: "bg-cyan-50", text: "text-cyan-600", hoverBg: "hover:bg-cyan-100", iconText: "text-cyan-600", badgeBg: "bg-cyan-100", badgeText: "text-cyan-800" },
+  sky: { lightBg: "bg-sky-50", text: "text-sky-600", hoverBg: "hover:bg-sky-100", iconText: "text-sky-600", badgeBg: "bg-sky-100", badgeText: "text-sky-800" },
+  blue: { lightBg: "bg-blue-50", text: "text-blue-600", hoverBg: "hover:bg-blue-100", iconText: "text-blue-600", badgeBg: "bg-blue-100", badgeText: "text-blue-800" },
+  indigo: { lightBg: "bg-indigo-50", text: "text-indigo-600", hoverBg: "hover:bg-indigo-100", iconText: "text-indigo-600", badgeBg: "bg-indigo-100", badgeText: "text-indigo-800" },
+  violet: { lightBg: "bg-violet-50", text: "text-violet-600", hoverBg: "hover:bg-violet-100", iconText: "text-violet-600", badgeBg: "bg-violet-100", badgeText: "text-violet-800" },
+  purple: { lightBg: "bg-purple-50", text: "text-purple-600", hoverBg: "hover:bg-purple-100", iconText: "text-purple-600", badgeBg: "bg-purple-100", badgeText: "text-purple-800" },
+  fuchsia: { lightBg: "bg-fuchsia-50", text: "text-fuchsia-600", hoverBg: "hover:bg-fuchsia-100", iconText: "text-fuchsia-600", badgeBg: "bg-fuchsia-100", badgeText: "text-fuchsia-800" },
+  pink: { lightBg: "bg-pink-50", text: "text-pink-600", hoverBg: "hover:bg-pink-100", iconText: "text-pink-600", badgeBg: "bg-pink-100", badgeText: "text-pink-800" },
+  rose: { lightBg: "bg-rose-50", text: "text-rose-600", hoverBg: "hover:bg-rose-100", iconText: "text-rose-600", badgeBg: "bg-rose-100", badgeText: "text-rose-800" },
   default: { lightBg: "bg-indigo-50", text: "text-indigo-600", hoverBg: "hover:bg-indigo-100", iconText: "text-indigo-600", badgeBg: "bg-indigo-100", badgeText: "text-indigo-800" }
 };
 
@@ -227,7 +242,6 @@ export default function NormalTop({ userData, schoolData, messages, systemApps, 
   
   const activeRentalsCount = activeRentals.length;
 
-  // ★ 修正：「連絡可能(available)」のみを抽出するように変更
   const activePresences = presences.filter(p => p.currentState === "available");
 
   return (
