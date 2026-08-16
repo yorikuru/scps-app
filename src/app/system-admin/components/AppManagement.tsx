@@ -3,7 +3,7 @@
 import React, { useState, useEffect } from "react";
 import { collection, getDocs, addDoc, updateDoc, deleteDoc, doc, query, orderBy, writeBatch } from "firebase/firestore";
 import { db } from "@/lib/firebase";
-import { Plus, Edit2, Trash2, Save, X, Loader2, LayoutGrid, Globe, CheckSquare, Square, Search, ShieldCheck, ArrowUp, ArrowDown } from "lucide-react";
+import { Plus, Edit2, Trash2, Save, X, Loader2, LayoutGrid, Globe, CheckSquare, Square, Search, ShieldCheck, ArrowUp, ArrowDown, UserPlus } from "lucide-react";
 import * as LucideIcons from "lucide-react";
 import { useDialog } from "@/components/DialogContext";
 
@@ -15,6 +15,7 @@ export type RolePermissions = {
   guest: boolean;
 };
 
+// ★ 型に isExternalReady と externalPath を追加
 export type SystemApp = {
   id: string;
   appId: string; 
@@ -23,41 +24,19 @@ export type SystemApp = {
   icon: string;
   color: string;
   path: string;
+  isExternalReady?: boolean; 
+  externalPath?: string;     
   isActive: boolean;
   order: number;
   defaultRoles: RolePermissions; 
 };
 
-// Tailwindの標準カラーパレット
 const TAILWIND_COLORS = [
-  { name: "slate", hex: "#64748b" },
-  { name: "gray", hex: "#6b7280" },
-  { name: "zinc", hex: "#71717a" },
-  { name: "neutral", hex: "#737373" },
-  { name: "stone", hex: "#78716c" },
-  { name: "red", hex: "#ef4444" },
-  { name: "orange", hex: "#f97316" },
-  { name: "amber", hex: "#f59e0b" },
-  { name: "yellow", hex: "#eab308" },
-  { name: "lime", hex: "#84cc16" },
-  { name: "green", hex: "#22c55e" },
-  { name: "emerald", hex: "#10b981" },
-  { name: "teal", hex: "#14b8a6" },
-  { name: "cyan", hex: "#06b6d4" },
-  { name: "sky", hex: "#0ea5e9" },
-  { name: "blue", hex: "#3b82f6" },
-  { name: "indigo", hex: "#6366f1" },
-  { name: "violet", hex: "#8b5cf6" },
-  { name: "purple", hex: "#a855f7" },
-  { name: "fuchsia", hex: "#d946ef" },
-  { name: "pink", hex: "#ec4899" },
-  { name: "rose", hex: "#f43f5e" }
+  { name: "slate", hex: "#64748b" }, { name: "gray", hex: "#6b7280" }, { name: "zinc", hex: "#71717a" }, { name: "neutral", hex: "#737373" }, { name: "stone", hex: "#78716c" }, { name: "red", hex: "#ef4444" }, { name: "orange", hex: "#f97316" }, { name: "amber", hex: "#f59e0b" }, { name: "yellow", hex: "#eab308" }, { name: "lime", hex: "#84cc16" }, { name: "green", hex: "#22c55e" }, { name: "emerald", hex: "#10b981" }, { name: "teal", hex: "#14b8a6" }, { name: "cyan", hex: "#06b6d4" }, { name: "sky", hex: "#0ea5e9" }, { name: "blue", hex: "#3b82f6" }, { name: "indigo", hex: "#6366f1" }, { name: "violet", hex: "#8b5cf6" }, { name: "purple", hex: "#a855f7" }, { name: "fuchsia", hex: "#d946ef" }, { name: "pink", hex: "#ec4899" }, { name: "rose", hex: "#f43f5e" }
 ];
 
 const AVAILABLE_ICONS = [
-  // 既存のアイコン
   "Activity", "AlertCircle", "Archive", "Award", "BarChart2", "Bell", "BookOpen", "Bookmark", "Box", "Briefcase", "Calendar", "Camera", "CheckCircle", "CheckSquare", "Clipboard", "Clock", "Cloud", "Code", "CreditCard", "Database", "FileText", "Folder", "Globe", "Grid", "Home", "Image", "Inbox", "Info", "Key", "Layers", "LayoutDashboard", "Link", "List", "Lock", "Mail", "MapPin", "MessageSquare", "MessageSquareText", "Monitor", "Phone", "PieChart", "Save", "Search", "Send", "Settings", "ShieldCheck", "Smartphone", "Star", "Tablet", "Trash2", "Upload", "User", "Users", "Video", "Zap",
-  // 拡充されたアイコン群
   "Airplay", "AlignLeft", "Anchor", "Aperture", "AtSign", "Battery", "Bluetooth", "Book", "BookmarkPlus", "Compass", "Cpu", "Disc", "DollarSign", "Download", "Droplet", "Edit", "ExternalLink", "Eye", "EyeOff", "FastForward", "Feather", "File", "Film", "Filter", "Flag", "FolderPlus", "Gift", "GitBranch", "GitCommit", "GitMerge", "GitPullRequest", "Glasses", "HardDrive", "Hash", "Headphones", "HelpCircle", "LifeBuoy", "Map", "Maximize", "Mic", "MicOff", "Minimize", "Minus", "Moon", "Music", "Navigation", "Octagon", "Package", "Paperclip", "Percent", "Play", "Plus", "Power", "Printer", "Radio", "RefreshCw", "Repeat", "Rewind", "RotateCcw", "RotateCw", "Rss", "Scissors", "Server", "Share", "Shield", "ShoppingBag", "ShoppingCart", "Shuffle", "Sidebar", "SkipBack", "SkipForward", "Slack", "Sliders", "Speaker", "Square", "Sun", "Sunrise", "Sunset", "Table", "Tag", "Terminal", "ThumbsDown", "ThumbsUp", "ToggleLeft", "ToggleRight", "Tool", "TrendingDown", "TrendingUp", "Triangle", "Truck", "Tv", "Umbrella", "UserCheck", "UserMinus", "UserPlus", "UserX", "Volume", "Volume1", "Volume2", "VolumeX", "Watch", "Wifi", "WifiOff", "Wind", "Wrench"
 ];
 
@@ -94,7 +73,7 @@ export default function AppManagement() {
   const [isDeploying, setIsDeploying] = useState(false);
 
   const [formData, setFormData] = useState<Partial<SystemApp>>({
-    appId: "", name: "", description: "", icon: "Box", color: "indigo", path: "", isActive: true, order: 0, defaultRoles: DEFAULT_ROLES
+    appId: "", name: "", description: "", icon: "Box", color: "indigo", path: "/top/", isExternalReady: false, externalPath: "/ext-top/", isActive: true, order: 0, defaultRoles: DEFAULT_ROLES
   });
 
   useEffect(() => { fetchApps(); }, []);
@@ -113,7 +92,7 @@ export default function AppManagement() {
   };
 
   const openNewModal = () => {
-    setFormData({ appId: "", name: "", description: "", icon: "Box", color: "indigo", path: "", isActive: true, order: (apps.length + 1) * 10, defaultRoles: DEFAULT_ROLES });
+    setFormData({ appId: "", name: "", description: "", icon: "Box", color: "indigo", path: "/top/", isExternalReady: false, externalPath: "/ext-top/", isActive: true, order: (apps.length + 1) * 10, defaultRoles: DEFAULT_ROLES });
     setIsEditing(false); setIconSearch(""); setIsModalOpen(true);
   };
 
@@ -122,6 +101,10 @@ export default function AppManagement() {
     setIsSaving(true);
     try {
       const payload = { ...formData, order: Number(formData.order) };
+      if (!payload.isExternalReady) {
+        payload.externalPath = ""; 
+      }
+
       if (isEditing && formData.id) {
         await updateDoc(doc(db, "system_apps", formData.id), payload);
         showAlert("アプリを更新しました。", "success");
@@ -133,7 +116,6 @@ export default function AppManagement() {
     } catch (error) { showAlert("保存に失敗しました。", "error"); } finally { setIsSaving(false); }
   };
 
-  // 表示順をワンクリックで入れ替える機能
   const handleMoveOrder = async (index: number, direction: "up" | "down") => {
     const targetIndex = direction === "up" ? index - 1 : index + 1;
     if (targetIndex < 0 || targetIndex >= apps.length) return;
@@ -320,7 +302,12 @@ export default function AppManagement() {
 
                       <td className="px-4 sm:px-6 py-3 sm:py-4 hidden md:table-cell">
                         <div className="text-xs font-bold text-gray-700 bg-gray-100 inline-block px-2 py-1 rounded-md mb-1">{app.path}</div>
-                        <div className="text-[10px] font-bold text-gray-400">ID: {app.appId} | Order: {app.order}</div>
+                        {app.isExternalReady && (
+                          <div className="text-[10px] font-bold text-amber-600 bg-amber-50 inline-flex items-center px-1.5 py-0.5 rounded border border-amber-200 mt-1 ml-2">
+                            <Globe className="w-3 h-3 mr-1" /> 外部: {app.externalPath}
+                          </div>
+                        )}
+                        <div className="text-[10px] font-bold text-gray-400 mt-1">ID: {app.appId} | Order: {app.order}</div>
                       </td>
 
                       <td className="px-4 sm:px-6 py-3 sm:py-4 text-center">
@@ -369,27 +356,63 @@ export default function AppManagement() {
                   <div className="grid grid-cols-2 gap-4">
                     <div>
                       <label className="block text-[11px] font-black text-gray-500 mb-1.5 uppercase">アプリID <span className="text-red-500">*</span></label>
-                      <input type="text" required value={formData.appId} onChange={e => setFormData({...formData, appId: e.target.value})} className="w-full bg-gray-50 border border-gray-200 rounded-xl p-3 text-sm font-bold focus:bg-white outline-none focus:border-indigo-500" placeholder="例: board" disabled={isEditing} />
+                      <input type="text" required value={formData.appId || ""} onChange={e => setFormData({...formData, appId: e.target.value})} className="w-full bg-gray-50 border border-gray-200 rounded-xl p-3 text-sm font-bold focus:bg-white outline-none focus:border-indigo-500" placeholder="例: board" disabled={isEditing} />
                     </div>
                     <div>
                       <label className="block text-[11px] font-black text-gray-500 mb-1.5 uppercase">並び順序 (数値) <span className="text-red-500">*</span></label>
-                      <input type="number" required value={formData.order} onChange={e => setFormData({...formData, order: Number(e.target.value)})} className="w-full bg-gray-50 border border-gray-200 rounded-xl p-3 text-sm font-bold focus:bg-white outline-none focus:border-indigo-500" />
+                      <input type="number" required value={formData.order ?? 0} onChange={e => setFormData({...formData, order: Number(e.target.value)})} className="w-full bg-gray-50 border border-gray-200 rounded-xl p-3 text-sm font-bold focus:bg-white outline-none focus:border-indigo-500" />
                     </div>
                   </div>
 
                   <div>
                     <label className="block text-[11px] font-black text-gray-500 mb-1.5 uppercase">アプリ名 (デフォルト) <span className="text-red-500">*</span></label>
-                    <input type="text" required value={formData.name} onChange={e => setFormData({...formData, name: e.target.value})} className="w-full bg-gray-50 border border-gray-200 rounded-xl p-3 text-sm font-bold focus:bg-white outline-none focus:border-indigo-500" placeholder="例: お知らせボード" />
+                    <input type="text" required value={formData.name || ""} onChange={e => setFormData({...formData, name: e.target.value})} className="w-full bg-gray-50 border border-gray-200 rounded-xl p-3 text-sm font-bold focus:bg-white outline-none focus:border-indigo-500" placeholder="例: お知らせボード" />
                   </div>
 
                   <div>
                     <label className="block text-[11px] font-black text-gray-500 mb-1.5 uppercase">説明・概要</label>
-                    <textarea rows={2} value={formData.description} onChange={e => setFormData({...formData, description: e.target.value})} className="w-full bg-gray-50 border border-gray-200 rounded-xl p-3 text-sm font-bold focus:bg-white resize-none outline-none focus:border-indigo-500" />
+                    <textarea rows={2} value={formData.description || ""} onChange={e => setFormData({...formData, description: e.target.value})} className="w-full bg-gray-50 border border-gray-200 rounded-xl p-3 text-sm font-bold focus:bg-white resize-none outline-none focus:border-indigo-500" />
                   </div>
 
                   <div>
-                    <label className="block text-[11px] font-black text-gray-500 mb-1.5 uppercase">URLパス <span className="text-red-500">*</span></label>
-                    <input type="text" required value={formData.path} onChange={e => setFormData({...formData, path: e.target.value})} className="w-full bg-gray-50 border border-gray-200 rounded-xl p-3 text-sm font-bold focus:bg-white outline-none focus:border-indigo-500" placeholder="例: /app/board" />
+                    <label className="block text-[11px] font-black text-gray-500 mb-1.5 uppercase">通常用 URLパス <span className="text-red-500">*</span></label>
+                    <div className="flex items-center bg-gray-50 border border-gray-200 rounded-xl overflow-hidden focus-within:ring-2 focus-within:ring-indigo-500 transition-shadow">
+                      <span className="px-3 py-3 text-sm font-bold text-gray-400 border-r border-gray-200">/top/</span>
+                      <input 
+                        type="text" required 
+                        value={formData.path?.replace(/^\/top\//, "") || ""} 
+                        onChange={e => setFormData({...formData, path: `/top/${e.target.value}`})} 
+                        className="w-full bg-transparent p-3 text-sm font-bold outline-none" placeholder="app-name" 
+                      />
+                    </div>
+                  </div>
+
+                  {/* ★ 追加：外部ユーザー対応設定 */}
+                  <div className="bg-amber-50/50 border border-amber-200 rounded-2xl p-4">
+                    <label className="flex items-center cursor-pointer mb-3">
+                      <input type="checkbox" checked={formData.isExternalReady || false} onChange={e => setFormData({...formData, isExternalReady: e.target.checked})} className="w-4 h-4 text-amber-600 rounded mr-2 focus:ring-amber-500" />
+                      <span className="text-[11px] font-black text-amber-900 uppercase flex items-center">
+                        <UserPlus className="w-4 h-4 mr-1.5 text-amber-600" /> 外部ユーザー(ゲスト)への公開機能を利用する
+                      </span>
+                    </label>
+                    
+                    {formData.isExternalReady && (
+                      <div className="animate-fade-in pl-6 border-l-2 border-amber-200 ml-2 mt-2">
+                        <label className="block text-[10px] font-black text-amber-700 mb-1.5">外部ユーザー用 URLパス <span className="text-red-500">*</span></label>
+                        <div className="flex items-center bg-white border border-amber-200 rounded-lg overflow-hidden focus-within:ring-2 focus-within:ring-amber-500 transition-shadow">
+                          <span className="px-2 py-2 text-xs font-bold text-amber-600 border-r border-amber-100 bg-amber-50">/ext-top/</span>
+                          <input 
+                            type="text" required={formData.isExternalReady}
+                            value={formData.externalPath?.replace(/^\/ext-top\//, "") || ""} 
+                            onChange={e => setFormData({...formData, externalPath: `/ext-top/${e.target.value}`})} 
+                            className="w-full bg-transparent p-2 text-xs font-bold outline-none text-gray-900" placeholder="app-name" 
+                          />
+                        </div>
+                        <p className="text-[9px] font-bold text-amber-600/70 mt-1.5 leading-relaxed">
+                          ゲストユーザーがアクセスする専用のURLを設定します。<br/>各テナント管理者が「ON」に設定した学校のゲストのみがアクセスできます。
+                        </p>
+                      </div>
+                    )}
                   </div>
 
                   <div className="bg-indigo-50/50 border border-indigo-100 rounded-2xl p-4">
@@ -399,7 +422,7 @@ export default function AppManagement() {
                     <div className="grid grid-cols-2 gap-3">
                       {(Object.keys(ROLE_LABELS) as Array<keyof RolePermissions>).map(roleKey => (
                         <label key={roleKey} className="flex items-center gap-2.5 cursor-pointer bg-white p-2.5 rounded-xl border border-gray-200 hover:border-indigo-300 transition-colors shadow-2xs">
-                          <input type="checkbox" checked={formData.defaultRoles?.[roleKey]} onChange={() => handleRoleToggle(roleKey)} className="w-4 h-4 text-indigo-600 rounded" />
+                          <input type="checkbox" checked={formData.defaultRoles?.[roleKey] || false} onChange={() => handleRoleToggle(roleKey)} className="w-4 h-4 text-indigo-600 rounded" />
                           <span className="text-xs font-bold text-gray-800">{ROLE_LABELS[roleKey]}</span>
                         </label>
                       ))}
@@ -412,7 +435,7 @@ export default function AppManagement() {
                 <div className="space-y-6">
                   <div className="flex items-center justify-between p-4 bg-gray-50 rounded-2xl border border-gray-200">
                     <div className="flex items-center gap-3">
-                      <input type="checkbox" id="isActive" checked={formData.isActive} onChange={e => setFormData({...formData, isActive: e.target.checked})} className="w-4 h-4 text-indigo-600 rounded" />
+                      <input type="checkbox" id="isActive" checked={formData.isActive || false} onChange={e => setFormData({...formData, isActive: e.target.checked})} className="w-4 h-4 text-indigo-600 rounded" />
                       <div>
                         <label htmlFor="isActive" className="text-sm font-black text-gray-900 cursor-pointer">システム全体で稼働中</label>
                         <p className="text-[10px] text-gray-500 font-bold mt-0.5">OFFにすると特権管理者以外は全テナントで利用不可</p>

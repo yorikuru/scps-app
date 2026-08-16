@@ -6,7 +6,7 @@ import { onAuthStateChanged } from "firebase/auth";
 import { doc, getDoc, getDocs, collection, query, where, orderBy, onSnapshot, addDoc, updateDoc, serverTimestamp, deleteDoc, writeBatch } from "firebase/firestore";
 import { auth, db } from "@/lib/firebase";
 import * as LucideIcons from "lucide-react";
-import { Loader2, AlertTriangle, List, PlusCircle, Settings } from "lucide-react";
+import { Loader2, AlertTriangle, List, PlusCircle, Settings, Globe } from "lucide-react";
 
 import { UserData, Announcement, Category, AppConfig, AlertState, COLOR_MAPPINGS, Attachment } from "./types";
 import BoardForm from "./components/BoardForm";
@@ -114,6 +114,7 @@ export default function BoardPage() {
                 attachments: docData.attachments || [],
                 publishStartDate: docData.publishStartDate || null,
                 publishEndDate: docData.publishEndDate || null,
+                isExternal: docData.isExternal || false,
               });
             });
             setAnnouncements(fetched);
@@ -146,7 +147,7 @@ export default function BoardPage() {
     setTimeout(() => setUiAlert(prev => ({ ...prev, show: false })), 3000);
   };
 
-  const setTab = (tab: "list" | "form" | "categories", id?: string) => {
+  const setTab = (tab: "list" | "ext-list" | "form" | "categories", id?: string) => {
     if (id) {
       router.push(`/top/board?tab=form&editId=${id}`);
     } else {
@@ -154,7 +155,7 @@ export default function BoardPage() {
     }
   };
 
-  const handlePostSubmit = async (data: { title: string; content: string; categoryId: string; isUrgent: boolean; attachments: Attachment[]; publishStartDate: string; publishEndDate: string | null; }) => {
+  const handlePostSubmit = async (data: { title: string; content: string; categoryId: string; isUrgent: boolean; attachments: Attachment[]; publishStartDate: string; publishEndDate: string | null; isExternal: boolean; }) => {
     if (!userData) return;
     setIsSubmitting(true);
     try {
@@ -166,6 +167,7 @@ export default function BoardPage() {
         attachments: data.attachments,
         publishStartDate: data.publishStartDate,
         publishEndDate: data.publishEndDate,
+        isExternal: data.isExternal,
       };
 
       if (editingAnnouncement) {
@@ -233,7 +235,7 @@ export default function BoardPage() {
           await batch.commit();
         }
       }
-      setTab("list");
+      setTab(data.isExternal ? "ext-list" : "list");
     } catch (error) { 
       showToast("error", "保存に失敗しました。"); 
     } finally { 
@@ -299,11 +301,9 @@ export default function BoardPage() {
   }
 
   return (
-    // ★ h-full flex-1 w-full で親（TopLayout）にぴったり収まるようにし、スクロール崩れを防ぐ
     <div className="h-full flex-1 w-full flex flex-col min-h-0 font-sans text-gray-900 bg-[#F9FAFB] relative">
       <main className="flex-1 w-full max-w-7xl mx-auto p-2 sm:p-4 lg:p-6 flex flex-col min-h-0">
         
-        {/* ヘッダー部分は高さ固定 */}
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 sm:gap-4 mb-3 sm:mb-4 shrink-0">
           <div className="flex items-center gap-2 sm:gap-3">
             <div className={`p-2 sm:p-2.5 ${c.lightBg} ${c.text} rounded-xl shadow-sm`}>
@@ -320,7 +320,13 @@ export default function BoardPage() {
               onClick={() => setTab("list")} 
               className={`flex items-center whitespace-nowrap px-3 sm:px-4 py-1.5 sm:py-2 text-[11px] sm:text-xs font-bold rounded-lg transition-all ${currentTab === "list" && !editId ? "bg-white shadow-sm text-gray-900" : "text-gray-500 hover:text-gray-700"}`}
             >
-              <List className="w-3.5 h-3.5 mr-1.5" /> 連絡一覧
+              <List className="w-3.5 h-3.5 mr-1.5" /> 内部連絡一覧
+            </button>
+            <button 
+              onClick={() => setTab("ext-list")} 
+              className={`flex items-center whitespace-nowrap px-3 sm:px-4 py-1.5 sm:py-2 text-[11px] sm:text-xs font-bold rounded-lg transition-all ${currentTab === "ext-list" && !editId ? "bg-white shadow-sm text-blue-700" : "text-gray-500 hover:text-gray-700"}`}
+            >
+              <Globe className="w-3.5 h-3.5 mr-1.5 text-blue-500" /> 外部配信一覧
             </button>
             <button 
               onClick={() => setTab("form")} 
@@ -339,7 +345,6 @@ export default function BoardPage() {
           </div>
         </div>
 
-        {/* コンテンツエリア (flex-1 min-h-0 で箱の中にスクロールを封印) */}
         <div className="flex-1 flex flex-col min-h-0 relative bg-white rounded-2xl shadow-sm border border-gray-200 overflow-hidden">
           {currentTab === "list" && !editId && (
             <BoardList 
@@ -350,12 +355,26 @@ export default function BoardPage() {
               appConfig={appConfig} 
               onEdit={(a) => setTab("form", a.id)} 
               onDelete={handleDelete}
+              isExternalTab={false}
+            />
+          )}
+
+          {currentTab === "ext-list" && !editId && (
+            <BoardList 
+              announcements={announcements.filter(a => a.isExternal)} 
+              categories={categories} 
+              userData={userData}
+              tenantUsers={tenantUsers} 
+              appConfig={appConfig} 
+              onEdit={(a) => setTab("form", a.id)} 
+              onDelete={handleDelete}
+              isExternalTab={true}
             />
           )}
           
           {currentTab === "form" && (
             <div className="flex-1 overflow-y-auto custom-scrollbar p-2 sm:p-4 pb-20">
-              <div className="max-w-4xl w-full mx-auto">
+              <div className="max-w-4xl w-full mx-auto h-full">
                 <BoardForm 
                   appConfig={appConfig} categories={categories} editingAnnouncement={editingAnnouncement}
                   uiAlert={uiAlert} isSubmitting={isSubmitting} schoolId={userData?.schoolId || ""}

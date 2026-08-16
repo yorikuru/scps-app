@@ -2,7 +2,7 @@
 
 import React, { useState, useRef, useEffect } from "react";
 import * as LucideIcons from "lucide-react";
-import { Send, CheckCircle2, AlertCircle, Edit2, AlertOctagon, Bold, Italic, Underline, Link as LinkIcon, Loader2, Paperclip, X, FileIcon, UploadCloud, CalendarClock, AlertTriangle } from "lucide-react";
+import { Send, CheckCircle2, AlertCircle, Edit2, AlertOctagon, Bold, Italic, Underline, Link as LinkIcon, Loader2, Paperclip, X, FileIcon, UploadCloud, CalendarClock, AlertTriangle, Globe } from "lucide-react";
 import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
 import { storage } from "@/lib/firebase";
 import { Announcement, Category, AppConfig, AlertState, COLOR_MAPPINGS, Attachment } from "../types";
@@ -25,7 +25,7 @@ type Props = {
   uiAlert: AlertState;
   isSubmitting: boolean;
   schoolId: string;
-  onSubmit: (data: { title: string; content: string; categoryId: string; isUrgent: boolean; attachments: Attachment[]; publishStartDate: string; publishEndDate: string | null; }) => void;
+  onSubmit: (data: { title: string; content: string; categoryId: string; isUrgent: boolean; attachments: Attachment[]; publishStartDate: string; publishEndDate: string | null; isExternal: boolean; }) => void;
   onCancelEdit: () => void;
 };
 
@@ -34,6 +34,7 @@ export default function BoardForm({ appConfig, categories, editingAnnouncement, 
   const [content, setContent] = useState("");
   const [selectedCategory, setSelectedCategory] = useState("");
   const [isUrgent, setIsUrgent] = useState(false);
+  const [isExternal, setIsExternal] = useState(false);
   const [attachments, setAttachments] = useState<Attachment[]>([]);
   const [publishStartDate, setPublishStartDate] = useState("");
   const [publishEndDate, setPublishEndDate] = useState("");
@@ -41,7 +42,9 @@ export default function BoardForm({ appConfig, categories, editingAnnouncement, 
 
   const { showAlert } = useDialog();
   
+  // モーダル管理用ステート
   const [showCategoryWarning, setShowCategoryWarning] = useState(false);
+  const [showExternalWarning, setShowExternalWarning] = useState(false); // ★ 二重確定用
 
   const editorRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -54,12 +57,13 @@ export default function BoardForm({ appConfig, categories, editingAnnouncement, 
       setContent(editingAnnouncement.content);
       setSelectedCategory(editingAnnouncement.categoryId || "");
       setIsUrgent(editingAnnouncement.isUrgent || false);
+      setIsExternal(editingAnnouncement.isExternal || false);
       setAttachments(editingAnnouncement.attachments || []);
       setPublishStartDate(editingAnnouncement.publishStartDate || formatForInput(new Date(editingAnnouncement.createdAt)));
       setPublishEndDate(editingAnnouncement.publishEndDate || "");
       if (editorRef.current) editorRef.current.innerHTML = editingAnnouncement.content;
     } else {
-      setTitle(""); setContent(""); setSelectedCategory(""); setIsUrgent(false); setAttachments([]);
+      setTitle(""); setContent(""); setSelectedCategory(""); setIsUrgent(false); setIsExternal(false); setAttachments([]);
       setPublishStartDate(formatForInput(new Date())); setPublishEndDate("");
       if (editorRef.current) editorRef.current.innerHTML = "";
     }
@@ -101,36 +105,85 @@ export default function BoardForm({ appConfig, categories, editingAnnouncement, 
     if (fileInputRef.current) fileInputRef.current.value = "";
   };
 
+  // ★ 送信ボタン押下時のフロー制御
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!selectedCategory) {
       setShowCategoryWarning(true);
       return;
     }
-    confirmSubmit();
+    checkExternalAndSubmit();
+  };
+
+  const handleCategoryBypass = () => {
+    setShowCategoryWarning(false);
+    checkExternalAndSubmit();
+  };
+
+  const checkExternalAndSubmit = () => {
+    if (isExternal) {
+      setShowExternalWarning(true); // 外部公開の場合は二重確定のアラートを表示
+    } else {
+      confirmSubmit();
+    }
   };
 
   const confirmSubmit = () => {
     setShowCategoryWarning(false);
+    setShowExternalWarning(false);
     onSubmit({ 
       title, content, categoryId: selectedCategory, isUrgent, attachments,
-      publishStartDate, publishEndDate: publishEndDate || null 
+      publishStartDate, publishEndDate: publishEndDate || null, isExternal
     });
   };
 
   return (
     <>
-      {/* ★ スマホ画面内で縦に伸びるよう h-full と flex を指定し、スクロールを内側に閉じ込める */}
-      <div className="flex flex-col h-full bg-white rounded-2xl shadow-sm border border-gray-200 relative min-h-0">
+      <div className={`flex flex-col h-full rounded-2xl shadow-sm relative min-h-0 transition-all duration-300 ${
+        isExternal 
+          ? 'bg-blue-50/50 border-2 border-blue-500 shadow-[0_0_20px_rgba(59,130,246,0.3)]' 
+          : 'bg-white border border-gray-200'
+      }`}>
         
-        <div className={`px-4 sm:px-5 py-3 sm:py-4 border-b flex flex-wrap gap-2 items-center justify-between shrink-0 ${editingAnnouncement ? 'bg-amber-50/80 border-amber-200 rounded-t-2xl' : 'bg-gray-50/50 border-gray-100 rounded-t-2xl'}`}>
+        <div className={`px-4 sm:px-5 py-3 sm:py-4 border-b flex flex-col sm:flex-row gap-3 items-start sm:items-center justify-between shrink-0 transition-colors ${
+          isExternal 
+            ? 'bg-blue-600 border-blue-700 rounded-t-xl text-white shadow-md' 
+            : editingAnnouncement 
+              ? 'bg-amber-50/80 border-amber-200 rounded-t-2xl' 
+              : 'bg-gray-50/50 border-gray-100 rounded-t-2xl'
+        }`}>
           <div className="flex items-center gap-2">
-            {editingAnnouncement ? <Edit2 className="w-4 h-4 text-amber-600" /> : <DynamicIcon name={appConfig.icon} className={`w-4 h-4 ${c.text}`} />}
-            <h2 className={`text-sm font-black ${editingAnnouncement ? 'text-amber-900' : 'text-gray-900'}`}>{editingAnnouncement ? "連絡事項の編集" : "新しく連絡を配信"}</h2>
+            {editingAnnouncement ? <Edit2 className={`w-4 h-4 ${isExternal ? 'text-white' : 'text-amber-600'}`} /> : <DynamicIcon name={appConfig.icon} className={`w-4 h-4 ${isExternal ? 'text-white' : c.text}`} />}
+            <h2 className={`text-sm font-black ${isExternal ? 'text-white' : editingAnnouncement ? 'text-amber-900' : 'text-gray-900'}`}>
+              {editingAnnouncement ? "連絡事項の編集" : "新しく連絡を配信"}
+            </h2>
+            {isExternal && (
+              <span className="ml-2 px-2.5 py-0.5 bg-red-500 text-white text-[10px] font-black rounded border border-red-600 animate-pulse flex items-center shadow-inner">
+                <AlertTriangle className="w-3 h-3 mr-1" /> 外部公開モード
+              </span>
+            )}
           </div>
-          {editingAnnouncement && (
-            <button onClick={onCancelEdit} className="text-xs font-bold text-gray-500 hover:text-gray-700 bg-white px-2.5 py-1 rounded border border-gray-200 shadow-sm transition-colors">キャンセル</button>
-          )}
+          
+          <div className="flex items-center gap-2 w-full sm:w-auto">
+            <label className={`flex-1 sm:flex-none flex items-center justify-center gap-2 cursor-pointer px-3 py-2 rounded-xl border-2 transition-all shadow-md ${
+              isExternal 
+                ? 'bg-white text-blue-700 border-blue-300' 
+                : 'bg-white border-blue-200 text-blue-700 hover:bg-blue-50'
+            }`}>
+              <input type="checkbox" checked={isExternal} onChange={e => setIsExternal(e.target.checked)} className="hidden" />
+              <Globe className="w-4 h-4" />
+              <span className="text-[11px] sm:text-xs font-black">外部ユーザーにも公開する</span>
+            </label>
+            {editingAnnouncement && (
+              <button onClick={onCancelEdit} className={`text-xs font-bold px-3 py-2 rounded-xl border transition-colors shrink-0 ${
+                isExternal 
+                  ? 'bg-blue-700 text-white border-blue-800 hover:bg-blue-800' 
+                  : 'text-gray-500 hover:text-gray-700 bg-white border-gray-200 shadow-sm'
+              }`}>
+                キャンセル
+              </button>
+            )}
+          </div>
         </div>
         
         <form onSubmit={handleSubmit} className="p-3 sm:p-5 flex flex-col gap-3 sm:gap-4 flex-1 overflow-y-auto custom-scrollbar">
@@ -145,10 +198,9 @@ export default function BoardForm({ appConfig, categories, editingAnnouncement, 
           <div className="flex flex-col sm:flex-row gap-3 sm:gap-4 items-start sm:items-center shrink-0">
             <div className="flex-1 w-full">
               <label className="block text-[10px] sm:text-xs font-bold text-gray-500 mb-1">カテゴリ</label>
-              {/* ★ ズーム防止： text-[16px] sm:text-sm */}
               <select 
                 value={selectedCategory} onChange={(e) => setSelectedCategory(e.target.value)}
-                className={`w-full bg-gray-50 border border-gray-200 rounded-xl px-3 py-2 sm:py-2.5 text-[16px] sm:text-sm font-bold text-gray-900 focus:bg-white focus:outline-none focus:ring-2 ${c.ring}`}
+                className={`w-full bg-white border border-gray-200 rounded-xl px-3 py-2 sm:py-2.5 text-[16px] sm:text-sm font-bold text-gray-900 focus:outline-none focus:ring-2 ${isExternal ? 'focus:ring-blue-500' : c.ring}`}
               >
                 <option value="">(カテゴリなし)</option>
                 {categories.map(cat => <option key={cat.id} value={cat.id}>{cat.name}</option>)}
@@ -168,10 +220,9 @@ export default function BoardForm({ appConfig, categories, editingAnnouncement, 
               <label className="block text-[10px] sm:text-xs font-bold text-gray-500 mb-1">掲載開始日時 <span className="text-red-500">*</span></label>
               <div className="relative">
                 <CalendarClock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-                {/* ★ ズーム防止： text-[16px] sm:text-sm */}
                 <input
                   type="datetime-local" required value={publishStartDate} onChange={(e) => setPublishStartDate(e.target.value)}
-                  className={`w-full bg-gray-50 border border-gray-200 rounded-xl pl-9 pr-2 sm:pr-3 py-2 text-[16px] sm:text-sm font-bold text-gray-900 focus:bg-white focus:outline-none focus:ring-2 ${c.ring}`}
+                  className={`w-full bg-white border border-gray-200 rounded-xl pl-9 pr-2 sm:pr-3 py-2 text-[16px] sm:text-sm font-bold text-gray-900 focus:outline-none focus:ring-2 ${isExternal ? 'focus:ring-blue-500' : c.ring}`}
                 />
               </div>
             </div>
@@ -179,10 +230,9 @@ export default function BoardForm({ appConfig, categories, editingAnnouncement, 
               <label className="block text-[10px] sm:text-xs font-bold text-gray-500 mb-1">掲載終了日時 (任意)</label>
               <div className="relative">
                 <CalendarClock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-                {/* ★ ズーム防止： text-[16px] sm:text-sm */}
                 <input
                   type="datetime-local" value={publishEndDate} onChange={(e) => setPublishEndDate(e.target.value)}
-                  className={`w-full bg-gray-50 border border-gray-200 rounded-xl pl-9 pr-2 sm:pr-3 py-2 text-[16px] sm:text-sm font-bold text-gray-900 focus:bg-white focus:outline-none focus:ring-2 ${c.ring}`}
+                  className={`w-full bg-white border border-gray-200 rounded-xl pl-9 pr-2 sm:pr-3 py-2 text-[16px] sm:text-sm font-bold text-gray-900 focus:outline-none focus:ring-2 ${isExternal ? 'focus:ring-blue-500' : c.ring}`}
                 />
               </div>
             </div>
@@ -191,10 +241,9 @@ export default function BoardForm({ appConfig, categories, editingAnnouncement, 
           {/* タイトル */}
           <div className="shrink-0">
             <label className="block text-[10px] sm:text-xs font-bold text-gray-500 mb-1">タイトル <span className="text-red-500">*</span></label>
-            {/* ★ ズーム防止： text-[16px] sm:text-sm */}
             <input
               type="text" required value={title} onChange={(e) => setTitle(e.target.value)}
-              className={`w-full bg-white border border-gray-300 rounded-xl px-3 sm:px-3.5 py-2 sm:py-2.5 text-[16px] sm:text-sm font-bold text-gray-900 focus:outline-none focus:ring-2 ${c.ring} shadow-2xs`}
+              className={`w-full bg-white border border-gray-300 rounded-xl px-3 sm:px-3.5 py-2 sm:py-2.5 text-[16px] sm:text-sm font-bold text-gray-900 focus:outline-none focus:ring-2 ${isExternal ? 'focus:ring-blue-500' : c.ring} shadow-2xs`}
               placeholder="例: 次回の定例会議について"
             />
           </div>
@@ -203,7 +252,7 @@ export default function BoardForm({ appConfig, categories, editingAnnouncement, 
           <div className="flex-1 flex flex-col min-h-[250px] sm:min-h-[300px]">
             <label className="block text-[10px] sm:text-xs font-bold text-gray-500 mb-1">本文 <span className="text-red-500">*</span></label>
             
-            <div className="flex flex-wrap items-center gap-1 mb-1.5 p-1 bg-gray-50 border border-gray-200 rounded-xl shrink-0">
+            <div className="flex flex-wrap items-center gap-1 mb-1.5 p-1 bg-white border border-gray-200 rounded-xl shrink-0">
               <button type="button" onClick={() => applyFormat('foreColor', '#111827')} className="w-5 h-5 sm:w-6 sm:h-6 rounded-full bg-gray-900 border border-gray-300 hover:scale-110 transition-transform shadow-2xs" title="黒文字"></button>
               <button type="button" onClick={() => applyFormat('foreColor', '#ef4444')} className="w-5 h-5 sm:w-6 sm:h-6 rounded-full bg-red-500 border border-gray-300 hover:scale-110 transition-transform shadow-2xs" title="赤文字"></button>
               <button type="button" onClick={() => applyFormat('foreColor', '#3b82f6')} className="w-5 h-5 sm:w-6 sm:h-6 rounded-full bg-blue-500 border border-gray-300 hover:scale-110 transition-transform shadow-2xs" title="青文字"></button>
@@ -214,9 +263,9 @@ export default function BoardForm({ appConfig, categories, editingAnnouncement, 
               <button type="button" onClick={() => applyFormat('hiliteColor', '#bbf7d0')} className="w-5 h-5 sm:w-6 sm:h-6 rounded-full bg-green-200 border border-gray-300 hover:scale-110 transition-transform shadow-2xs" title="蛍光（緑）"></button>
               <div className="w-px h-5 bg-gray-300 mx-0.5 sm:mx-1"></div>
 
-              <button type="button" onClick={() => applyFormat('bold')} className="p-1.5 hover:bg-white hover:shadow-sm rounded-lg text-gray-700 transition-all" title="太字"><Bold className="w-4 h-4" /></button>
-              <button type="button" onClick={() => applyFormat('italic')} className="p-1.5 hover:bg-white hover:shadow-sm rounded-lg text-gray-700 transition-all" title="斜体"><Italic className="w-4 h-4" /></button>
-              <button type="button" onClick={() => applyFormat('underline')} className="p-1.5 hover:bg-white hover:shadow-sm rounded-lg text-gray-700 transition-all" title="下線"><Underline className="w-4 h-4" /></button>
+              <button type="button" onClick={() => applyFormat('bold')} className="p-1.5 hover:bg-gray-100 rounded-lg text-gray-700 transition-all" title="太字"><Bold className="w-4 h-4" /></button>
+              <button type="button" onClick={() => applyFormat('italic')} className="p-1.5 hover:bg-gray-100 rounded-lg text-gray-700 transition-all" title="斜体"><Italic className="w-4 h-4" /></button>
+              <button type="button" onClick={() => applyFormat('underline')} className="p-1.5 hover:bg-gray-100 rounded-lg text-gray-700 transition-all" title="下線"><Underline className="w-4 h-4" /></button>
               <div className="w-px h-5 bg-gray-300 mx-0.5 sm:mx-1"></div>
 
               <select 
@@ -232,21 +281,20 @@ export default function BoardForm({ appConfig, categories, editingAnnouncement, 
               </select>
               <div className="w-px h-5 bg-gray-300 mx-0.5 sm:mx-1"></div>
 
-              <button type="button" onClick={handleLink} className="p-1.5 hover:bg-white hover:shadow-sm rounded-lg text-gray-600 transition-all" title="リンク挿入"><LinkIcon className="w-4 h-4" /></button>
+              <button type="button" onClick={handleLink} className="p-1.5 hover:bg-gray-100 rounded-lg text-gray-600 transition-all" title="リンク挿入"><LinkIcon className="w-4 h-4" /></button>
             </div>
             
-            {/* ★ ズーム防止：スマホ時は text-[16px] (text-base相当) を指定 */}
             <div
               ref={editorRef} contentEditable onInput={(e) => setContent(e.currentTarget.innerHTML)}
-              className={`flex-1 bg-white border border-gray-300 rounded-xl p-3 sm:p-4 text-[16px] sm:text-sm text-gray-900 focus:outline-none focus:ring-2 ${c.ring} overflow-y-auto custom-scrollbar leading-relaxed shadow-inner [&_a]:text-blue-600 [&_a]:underline [&_b]:font-black [&_i]:italic [&_u]:underline [&_font[size="2"]]:text-xs [&_font[size="3"]]:text-sm [&_font[size="5"]]:text-xl [&_font[size="7"]]:text-3xl [&_span[style*="background-color"]]:px-1 [&_span[style*="background-color"]]:rounded-sm`}
+              className={`flex-1 bg-white border border-gray-300 rounded-xl p-3 sm:p-4 text-[16px] sm:text-sm text-gray-900 focus:outline-none focus:ring-2 ${isExternal ? 'focus:ring-blue-500' : c.ring} overflow-y-auto custom-scrollbar leading-relaxed shadow-inner [&_a]:text-blue-600 [&_a]:underline [&_b]:font-black [&_i]:italic [&_u]:underline [&_font[size="2"]]:text-xs [&_font[size="3"]]:text-sm [&_font[size="5"]]:text-xl [&_font[size="7"]]:text-3xl [&_span[style*="background-color"]]:px-1 [&_span[style*="background-color"]]:rounded-sm`}
             />
           </div>
 
-          <div className="bg-gray-50 border border-gray-200 rounded-xl p-2.5 sm:p-3 shrink-0">
+          <div className="bg-white border border-gray-200 rounded-xl p-2.5 sm:p-3 shrink-0 shadow-2xs">
             <div className="flex justify-between items-center mb-2">
               <span className="text-[10px] sm:text-xs font-bold text-gray-600 flex items-center"><Paperclip className="w-3.5 h-3.5 mr-1"/> 添付ファイル (最大2つ)</span>
               {attachments.length < 2 && (
-                <label className={`cursor-pointer px-2 sm:px-3 py-1 sm:py-1.5 bg-white border border-gray-300 rounded-lg text-[10px] sm:text-xs font-bold text-gray-700 hover:bg-gray-100 flex items-center transition-colors shadow-2xs ${isUploading ? 'opacity-50 pointer-events-none' : ''}`}>
+                <label className={`cursor-pointer px-2 sm:px-3 py-1 sm:py-1.5 bg-gray-50 border border-gray-200 rounded-lg text-[10px] sm:text-xs font-bold text-gray-700 hover:bg-gray-100 flex items-center transition-colors shadow-2xs ${isUploading ? 'opacity-50 pointer-events-none' : ''}`}>
                   {isUploading ? <Loader2 className="w-3.5 h-3.5 mr-1 animate-spin" /> : <UploadCloud className="w-3.5 h-3.5 mr-1" />} ファイルを追加
                   <input type="file" className="hidden" multiple onChange={handleFileUpload} ref={fileInputRef} />
                 </label>
@@ -255,7 +303,7 @@ export default function BoardForm({ appConfig, categories, editingAnnouncement, 
             {attachments.length > 0 && (
               <div className="flex flex-col gap-1.5 sm:gap-2">
                 {attachments.map((file, idx) => (
-                  <div key={idx} className="flex items-center justify-between bg-white border border-gray-200 p-1.5 sm:p-2 rounded-lg shadow-2xs">
+                  <div key={idx} className="flex items-center justify-between bg-gray-50 border border-gray-200 p-1.5 sm:p-2 rounded-lg shadow-2xs">
                     <div className="flex items-center gap-2 overflow-hidden">
                       <div className="p-1 sm:p-1.5 bg-blue-50 text-blue-600 rounded-md"><FileIcon className="w-3.5 h-3.5 sm:w-4 sm:h-4" /></div>
                       <span className="text-[10px] sm:text-xs font-bold text-gray-700 truncate">{file.name}</span>
@@ -270,15 +318,22 @@ export default function BoardForm({ appConfig, categories, editingAnnouncement, 
           <div className="pt-2 flex justify-end shrink-0">
             <button
               type="submit" disabled={isSubmitting || isUploading || !title.trim() || !content.trim() || !publishStartDate}
-              className={`w-full sm:w-auto justify-center px-6 py-2.5 sm:py-3 disabled:opacity-50 disabled:cursor-not-allowed text-white text-xs sm:text-sm font-bold rounded-xl shadow-md transition-all flex items-center ${editingAnnouncement ? 'bg-amber-600 hover:bg-amber-700' : `${c.bg} ${c.hover}`}`}
+              className={`w-full sm:w-auto justify-center px-6 py-2.5 sm:py-3 disabled:opacity-50 disabled:cursor-not-allowed text-white text-xs sm:text-sm font-bold rounded-xl shadow-md transition-all flex items-center ${
+                isExternal 
+                  ? 'bg-red-600 hover:bg-red-700 ring-2 ring-red-600 ring-offset-2' 
+                  : editingAnnouncement 
+                    ? 'bg-amber-600 hover:bg-amber-700' 
+                    : `${c.bg} ${c.hover}`
+              }`}
             >
-              {isSubmitting ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : (editingAnnouncement ? <Edit2 className="w-4 h-4 mr-2" /> : <Send className="w-4 h-4 mr-2" />)}
-              {editingAnnouncement ? "編集内容を保存" : "連絡事項を配信する"}
+              {isSubmitting ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : (isExternal ? <Globe className="w-4 h-4 mr-2" /> : editingAnnouncement ? <Edit2 className="w-4 h-4 mr-2" /> : <Send className="w-4 h-4 mr-2" />)}
+              {isExternal ? "外部へ公開して配信する" : editingAnnouncement ? "編集内容を保存" : "連絡事項を配信する"}
             </button>
           </div>
         </form>
       </div>
 
+      {/* カテゴリ未設定の警告モーダル */}
       {showCategoryWarning && (
         <div className="absolute inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4 animate-fade-in rounded-2xl">
           <div className="bg-white rounded-2xl shadow-xl w-full max-w-sm overflow-hidden p-6 text-center border border-gray-100">
@@ -296,10 +351,40 @@ export default function BoardForm({ appConfig, categories, editingAnnouncement, 
                 戻って設定する
               </button>
               <button 
-                onClick={confirmSubmit} 
+                onClick={handleCategoryBypass} 
                 className="flex-1 py-2.5 bg-amber-500 text-white text-xs font-bold rounded-xl hover:bg-amber-600 shadow-sm transition-colors"
               >
-                そのまま投稿
+                そのまま進む
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ★ 外部ユーザーへの公開に関する二重確定モーダル */}
+      {showExternalWarning && (
+        <div className="absolute inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-fade-in rounded-2xl">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm overflow-hidden p-6 text-center border border-red-200">
+            <div className="w-16 h-16 bg-red-100 text-red-600 rounded-full flex items-center justify-center mx-auto mb-4 border border-red-200 shadow-inner">
+              <Globe className="w-8 h-8" />
+            </div>
+            <h3 className="text-base font-black text-gray-900 mb-2">外部公開の最終確認</h3>
+            <p className="text-xs font-bold text-red-600 leading-relaxed mb-6 bg-red-50 p-3 rounded-xl border border-red-100">
+              この連絡事項は<br className="hidden sm:block"/>「外部ユーザー（ゲスト）」にも配信されます。<br/>
+              内部情報が漏洩する可能性はありませんか？
+            </p>
+            <div className="flex flex-col gap-2.5 mt-2">
+              <button 
+                onClick={confirmSubmit} 
+                className="w-full py-3 bg-red-600 text-white text-xs font-bold rounded-xl hover:bg-red-700 shadow-md transition-colors"
+              >
+                はい、外部に公開して配信します
+              </button>
+              <button 
+                onClick={() => setShowExternalWarning(false)} 
+                className="w-full py-3 bg-gray-100 border border-gray-200 text-gray-700 text-xs font-bold rounded-xl hover:bg-gray-200 transition-colors"
+              >
+                いいえ、戻って確認します
               </button>
             </div>
           </div>

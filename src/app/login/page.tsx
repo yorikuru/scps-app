@@ -1,3 +1,4 @@
+// src/app/login/page.tsx
 "use client";
 
 import React, { useState, useEffect, Suspense } from "react";
@@ -10,7 +11,7 @@ import {
 } from "firebase/auth";
 import { doc, getDoc, updateDoc, collection, query, where, getDocs } from "firebase/firestore";
 import { auth, db, googleProvider, microsoftProvider } from "@/lib/firebase";
-import { ArrowLeft, ScanLine, QrCode } from "lucide-react";
+import { ArrowLeft, ScanLine, QrCode, UserCheck } from "lucide-react";
 import { startAuthentication } from "@simplewebauthn/browser";
 
 import LoginForm from "./components/LoginForm";
@@ -38,10 +39,9 @@ function LoginPageContent() {
   const [mfaCode, setMfaCode] = useState("");
   const [isVerifyingPasskey, setIsVerifyingPasskey] = useState(false);
 
-  // ★ SCコードスキャンモーダルの開閉管理
+  // SCコードスキャンモーダルの開閉管理
   const [isScScannerOpen, setIsScScannerOpen] = useState(false);
 
-  // URLパラメータで初回スキャン要求（?scps_scan=true や ?scan=true など）があるかをチェック
   useEffect(() => {
     const isScanParam = searchParams.get("scps_scan") === "true" || searchParams.get("scan") === "true";
     if (isScanParam) {
@@ -87,106 +87,158 @@ function LoginPageContent() {
     }
   };
 
+  // 内部メンバー / 外部ユーザーの検証と判定処理
   const checkUserAndTenantSettings = async (uid: string, providerId: string) => {
+    // 1. まず内部ユーザー（usersコレクション）を検索
     const userDoc = await getDoc(doc(db, "users", uid));
-    if (!userDoc.exists()) throw new Error("ユーザー情報が見つかりません。");
-    const userData = userDoc.data();
-    
-    if (userData.accountStatus === "pending") {
-      throw new Error("このアカウントは管理者の承認待ちです。承認が完了するまでログインできません。詳しくはテナント管理者へお問い合わせください。");
-    }
-    if (userData.accountStatus === "rejected") {
-      throw new Error("このユーザーは管理者によってロック（利用停止）されています。詳しくはテナント管理者へお問い合わせください。");
-    }
-
-    if (userData.accountValidEndDate) {
-      const today = new Date().toISOString().split("T")[0];
-      if (userData.accountValidEndDate < today) {
-        throw new Error("このアカウントの利用有効期限が切れています。詳しくはテナント管理者へお問い合わせください。");
+    if (userDoc.exists()) {
+      const userData = userDoc.data();
+      
+      if (userData.accountStatus === "pending") {
+        throw new Error("このアカウントは管理者の承認待ちです。承認が完了するまでログインできません。詳しくはテナント管理者へお問い合わせください。");
       }
-    }
+      if (userData.accountStatus === "rejected") {
+        throw new Error("このユーザーは管理者によってロック（利用停止）されています。詳しくはテナント管理者へお問い合わせください。");
+      }
 
-    if (userData.accountStatus === "unaccessed") {
-      return { isSystemAdmin: false, userData, isMfaRequired: false, isSafeIpSkipped: true, isMfaSetupNeeded: false, allowedMfaMethods: [], isUnaccessed: true };
-    }
-
-    if (userData.role === "system_admin") {
-      return { isSystemAdmin: true, userData, isMfaRequired: false, isSafeIpSkipped: false, isMfaSetupNeeded: false, allowedMfaMethods: [], isUnaccessed: false };
-    }
-
-    if (!userData.schoolId) {
-      throw new Error("所属組織が設定されていません。詳しくはテナント管理者へお問い合わせください。");
-    }
-
-    const schoolDoc = await getDoc(doc(db, "schools", userData.schoolId));
-    if (!schoolDoc.exists()) throw new Error("所属する組織データが存在しません。");
-    const schoolData = schoolDoc.data();
-
-    if (schoolData.status === "suspended") {
-      throw new Error("現在、所属する組織（テナント）のシステム利用が停止されています。詳しくはテナント管理者へお問い合わせください。");
-    }
-
-    let isMfaRequired = false;
-    let isSafeIpSkipped = false;
-    let isMfaSetupNeeded = false;
-    let allowedMfaMethods: string[] = [];
-    
-    const tenantRequiresMfa = schoolData.requireMfa === true || schoolData.requireMfa === "true";
-    const userRequiresMfa = userData.requireMfa === true || userData.requireMfa === "true";
-
-    const activePolicies = userData.useCustomMfaPolicy && userData.mfaPolicies 
-      ? userData.mfaPolicies 
-      : (schoolData.mfaPolicies || {
-          email: { allowUsage: true },
-          totp: { allowUsage: false },
-          passkey: { allowUsage: false },
-        });
-
-    if ((activePolicies.email?.allowUsage === true || activePolicies.email?.allowUsage === "true") && userData.email) {
-      allowedMfaMethods.push("email");
-    }
-    if ((activePolicies.totp?.allowUsage === true || activePolicies.totp?.allowUsage === "true") && userData.totpSecret) {
-      allowedMfaMethods.push("totp");
-    }
-    if ((activePolicies.passkey?.allowUsage === true || activePolicies.passkey?.allowUsage === "true") && Array.isArray(userData.passkeys) && userData.passkeys.length > 0) {
-      allowedMfaMethods.push("passkey");
-    }
-
-    const rawClientIp = await getClientIp();
-    const clientIp = rawClientIp.trim().toLowerCase();
-    
-    const safeIps: string[] = schoolData.safeIps || [];
-    const safeNetworkIps = Array.isArray(schoolData.safeNetworks) ? schoolData.safeNetworks.map((n: any) => n.ip) : [];
-    
-    const allSafeIps = [...safeIps, ...safeNetworkIps].filter(Boolean).map(ip => ip.trim().toLowerCase());
-    const isSafeIp = clientIp !== "" && allSafeIps.includes(clientIp);
-
-    if (tenantRequiresMfa || userRequiresMfa) {
-      if (isSafeIp) {
-        isSafeIpSkipped = true; 
-      } else {
-        if (allowedMfaMethods.length === 0) {
-          isMfaSetupNeeded = true;
-          isMfaRequired = false;
-        } else {
-          isMfaRequired = true;
+      if (userData.accountValidEndDate) {
+        const today = new Date().toISOString().split("T")[0];
+        if (userData.accountValidEndDate < today) {
+          throw new Error("このアカウントの利用有効期限が切れています。詳しくはテナント管理者へお問い合わせください。");
         }
       }
+
+      if (userData.accountStatus === "unaccessed") {
+        return { isExternalUser: false, isSystemAdmin: false, userData, isMfaRequired: false, isSafeIpSkipped: true, isMfaSetupNeeded: false, allowedMfaMethods: [], isUnaccessed: true };
+      }
+
+      if (userData.role === "system_admin") {
+        return { isExternalUser: false, isSystemAdmin: true, userData, isMfaRequired: false, isSafeIpSkipped: false, isMfaSetupNeeded: false, allowedMfaMethods: [], isUnaccessed: false };
+      }
+
+      if (!userData.schoolId) {
+        throw new Error("所属組織が設定されていません。詳しくはテナント管理者へお問い合わせください。");
+      }
+
+      const schoolDoc = await getDoc(doc(db, "schools", userData.schoolId));
+      if (!schoolDoc.exists()) throw new Error("所属する組織データが存在しません。");
+      const schoolData = schoolDoc.data();
+
+      if (schoolData.status === "suspended") {
+        throw new Error("現在、所属する組織（テナント）のシステム利用が停止されています。詳しくはテナント管理者へお問い合わせください。");
+      }
+
+      let isMfaRequired = false;
+      let isSafeIpSkipped = false;
+      let isMfaSetupNeeded = false;
+      let allowedMfaMethods: string[] = [];
+      
+      const tenantRequiresMfa = schoolData.requireMfa === true || schoolData.requireMfa === "true";
+      const userRequiresMfa = userData.requireMfa === true || userData.requireMfa === "true";
+
+      const activePolicies = userData.useCustomMfaPolicy && userData.mfaPolicies 
+        ? userData.mfaPolicies 
+        : (schoolData.mfaPolicies || {
+            email: { allowUsage: true },
+            totp: { allowUsage: false },
+            passkey: { allowUsage: false },
+          });
+
+      if ((activePolicies.email?.allowUsage === true || activePolicies.email?.allowUsage === "true") && userData.email) {
+        allowedMfaMethods.push("email");
+      }
+      if ((activePolicies.totp?.allowUsage === true || activePolicies.totp?.allowUsage === "true") && userData.totpSecret) {
+        allowedMfaMethods.push("totp");
+      }
+      if ((activePolicies.passkey?.allowUsage === true || activePolicies.passkey?.allowUsage === "true") && Array.isArray(userData.passkeys) && userData.passkeys.length > 0) {
+        allowedMfaMethods.push("passkey");
+      }
+
+      const rawClientIp = await getClientIp();
+      const clientIp = rawClientIp.trim().toLowerCase();
+      
+      const safeIps: string[] = schoolData.safeIps || [];
+      const safeNetworkIps = Array.isArray(schoolData.safeNetworks) ? schoolData.safeNetworks.map((n: any) => n.ip) : [];
+      
+      const allSafeIps = [...safeIps, ...safeNetworkIps].filter(Boolean).map(ip => ip.trim().toLowerCase());
+      const isSafeIp = clientIp !== "" && allSafeIps.includes(clientIp);
+
+      if (tenantRequiresMfa || userRequiresMfa) {
+        if (isSafeIp) {
+          isSafeIpSkipped = true; 
+        } else {
+          if (allowedMfaMethods.length === 0) {
+            isMfaSetupNeeded = true;
+            isMfaRequired = false;
+          } else {
+            isMfaRequired = true;
+          }
+        }
+      }
+
+      return { isExternalUser: false, isSystemAdmin: false, userData, isMfaRequired, allowedMfaMethods, isSafeIpSkipped, isMfaSetupNeeded, isUnaccessed: false };
     }
 
-    return { isSystemAdmin: false, userData, isMfaRequired, allowedMfaMethods, isSafeIpSkipped, isMfaSetupNeeded, isUnaccessed: false };
+    // 2. 内部ユーザーに見つからなかった場合、外部ユーザー（external_usersコレクション）を検索
+    const qExt = query(collection(db, "external_users"), where("authUid", "==", uid));
+    const extSnap = await getDocs(qExt);
+
+    if (!extSnap.empty) {
+      const extDoc = extSnap.docs[0];
+      // ★ エラー修正： as any を追加して型の認識エラーを回避
+      const extUserData = { id: extDoc.id, ...extDoc.data() } as any;
+
+      if (extUserData.status === "suspended") {
+        throw new Error("このアカウントは現在停止されています。");
+      }
+
+      const now = Date.now();
+      if (extUserData.expiresAt) {
+        const expTime = typeof extUserData.expiresAt.toDate === "function"
+          ? extUserData.expiresAt.toDate().getTime()
+          : new Date(extUserData.expiresAt).getTime();
+        if (expTime < now) {
+          throw new Error("アカウントの有効期限が切れています。");
+        }
+      }
+
+      return {
+        isExternalUser: true,
+        isSystemAdmin: false,
+        userData: extUserData,
+        isMfaRequired: false,
+        allowedMfaMethods: [],
+        isSafeIpSkipped: true,
+        isMfaSetupNeeded: false,
+        isUnaccessed: false,
+      };
+    }
+
+    throw new Error("ユーザー情報が見つかりません。");
   };
 
-  const handlePostLogin = (uid: string, userData: any, isSystemAdmin: boolean) => {
+  const handlePostLogin = (uid: string, userData: any, isSystemAdmin: boolean, isExternalUser: boolean) => {
     setTimeout(() => {
-      router.push(isSystemAdmin ? "/system-admin" : "/top");
+      if (isExternalUser) {
+        router.push("/ext-top");
+      } else if (isSystemAdmin) {
+        router.push("/system-admin");
+      } else {
+        router.push("/top");
+      }
     }, 1000);
   };
 
   const processLoginFlow = async (userCredential: any, currentProviderType: string, userDataParam?: any) => {
     try {
-      const { isSystemAdmin, userData, isMfaRequired, allowedMfaMethods, isSafeIpSkipped, isMfaSetupNeeded, isUnaccessed } = await checkUserAndTenantSettings(userCredential.user.uid, currentProviderType);
+      const { isExternalUser, isSystemAdmin, userData, isMfaRequired, allowedMfaMethods, isSafeIpSkipped, isMfaSetupNeeded, isUnaccessed } = await checkUserAndTenantSettings(userCredential.user.uid, currentProviderType);
       const finalUserData = userDataParam || userData;
+
+      if (isExternalUser) {
+        showAlert("success", "ゲストログインに成功しました。外部ポータルへ移動します...");
+        handlePostLogin(userCredential.user.uid, finalUserData, false, true);
+        return;
+      }
 
       if (isUnaccessed) {
         showAlert("success", "初回ログインを確認しました。パスワード設定画面へ移動します...");
@@ -198,13 +250,13 @@ function LoginPageContent() {
 
       if (isMfaSetupNeeded) {
         showAlert("success", "2段階認証の初期設定が完了していません。セットアップ画面へ移動します...");
-        handlePostLogin(userCredential.user.uid, finalUserData, isSystemAdmin);
+        handlePostLogin(userCredential.user.uid, finalUserData, isSystemAdmin, false);
         return;
       }
 
       if (isSafeIpSkipped) {
         showAlert("success", "許可済みネットワークからのアクセスのため、2段階認証をスキップしました。");
-        handlePostLogin(userCredential.user.uid, finalUserData, isSystemAdmin);
+        handlePostLogin(userCredential.user.uid, finalUserData, isSystemAdmin, false);
         return;
       }
 
@@ -218,7 +270,7 @@ function LoginPageContent() {
       }
 
       showAlert("success", "ログインに成功しました。移動します...");
-      handlePostLogin(userCredential.user.uid, finalUserData, isSystemAdmin);
+      handlePostLogin(userCredential.user.uid, finalUserData, isSystemAdmin, false);
     } catch (e: any) {
       await signOut(auth);
       showAlert("error", e.message || "ログイン処理に失敗しました。");
@@ -246,33 +298,65 @@ function LoginPageContent() {
     e.preventDefault();
     setIsLoading(true);
     try {
+      // 1. まず内部ユーザーとして組織コード・利用番号を検索
       const schoolQ = query(collection(db, "schools"), where("schoolCode", "==", `SCPS-${tenantId}`));
       const schoolSnap = await getDocs(schoolQ);
-      if (schoolSnap.empty) throw new Error("入力された組織コード（テナントID）が存在しません。");
       
-      const schoolId = schoolSnap.docs[0].id;
-      const userQ = query(collection(db, "users"), where("schoolId", "==", schoolId), where("systemId", "==", systemId));
-      const userSnap = await getDocs(userQ);
-      if (userSnap.empty) throw new Error("利用番号またはパスワードが正しくありません。");
-      
-      const userDoc = userSnap.docs[0];
-      const userData = userDoc.data();
+      if (!schoolSnap.empty) {
+        const schoolId = schoolSnap.docs[0].id;
+        const userQ = query(collection(db, "users"), where("schoolId", "==", schoolId), where("systemId", "==", systemId));
+        const userSnap = await getDocs(userQ);
+        
+        if (!userSnap.empty) {
+          const userDoc = userSnap.docs[0];
+          const userData = userDoc.data();
 
-      if (!userData.email) {
-        throw new Error("このアカウントにはログイン用情報が同期されていません。管理者にCSVの再アップロードを依頼してください。");
+          if (!userData.email) {
+            throw new Error("このアカウントにはログイン用情報が同期されていません。管理者にCSVの再アップロードを依頼してください。");
+          }
+
+          if (userData.accountStatus === "unaccessed" && userData.initialPassword !== password) {
+            throw new Error("利用番号または初期パスワードが違います。");
+          }
+
+          const userCredential = await signInWithEmailAndPassword(auth, userData.email, password);
+          await processLoginFlow(userCredential, "password", userData);
+          return;
+        }
       }
 
-      if (userData.accountStatus === "unaccessed" && userData.initialPassword !== password) {
-        throw new Error("利用番号または初期パスワードが違います。");
+      // 2. 内部ユーザーに見つからなかった場合、外部ユーザー（loginId）の可能性を検索
+      const extUsersRef = collection(db, "external_users");
+      const qExt = query(extUsersRef, where("loginId", "==", systemId));
+      const extSnap = await getDocs(qExt);
+
+      if (!extSnap.empty) {
+        // ★ エラー修正： as any を追加
+        const extData = extSnap.docs[0].data() as any;
+        if (extData.status === "suspended") {
+          throw new Error("このアカウントは現在停止されています。");
+        }
+        if (extData.status === "pending" || extData.status === "verifying") {
+          if (extData.initialPassword !== password) throw new Error("パスワードが正しくありません。");
+          router.push(`/ext-login/setup?uid=${extSnap.docs[0].id}`);
+          return;
+        } else if (extData.status === "verified") {
+          if (extData.initialPassword !== password) throw new Error("パスワードが正しくありません。");
+          router.push(`/ext-login/verify?uid=${extSnap.docs[0].id}`);
+          return;
+        } else {
+          const userCredential = await signInWithEmailAndPassword(auth, extData.email, password);
+          await processLoginFlow(userCredential, "password", extData);
+          return;
+        }
       }
 
-      const userCredential = await signInWithEmailAndPassword(auth, userData.email, password);
-      await processLoginFlow(userCredential, "password", userData);
-      
+      throw new Error("組織コード、利用番号（ログインID）、またはパスワードが正しくありません。");
+
     } catch (err: any) {
       await signOut(auth);
       if (err.code === "auth/invalid-credential" || err.code === "auth/user-not-found" || err.code === "auth/invalid-email") {
-        showAlert("error", "アカウント情報が認証サーバーと同期されていません。管理者にCSVの再アップロードを依頼してください。");
+        showAlert("error", "ログイン情報が一致しないか、認証に失敗しました。");
       } else {
         showAlert("error", err.message || "ログインに失敗しました。");
       }
@@ -331,7 +415,7 @@ function LoginPageContent() {
       if (!verifyResp.ok) throw new Error();
 
       showAlert("success", "認証に成功しました。移動します...");
-      handlePostLogin(targetUid, mfaState.userData, mfaState.isSystemAdmin);
+      handlePostLogin(targetUid, mfaState.userData, mfaState.isSystemAdmin, false);
     } catch {
       showAlert("error", "生体認証（パスキー）がキャンセルされたか、検証に失敗しました。");
     } finally {
@@ -352,7 +436,7 @@ function LoginPageContent() {
         }
         await updateDoc(doc(db, "users", mfaState.uid), { mfaTempCode: null, mfaExpiresAt: null });
         showAlert("success", "認証に成功しました。移動します...");
-        handlePostLogin(mfaState.uid, mfaState.userData, mfaState.isSystemAdmin);
+        handlePostLogin(mfaState.uid, mfaState.userData, mfaState.isSystemAdmin, false);
         
       } else if (mfaState.selectedMethod === "totp") {
         if (!mfaState.userData.totpSecret) {
@@ -366,7 +450,7 @@ function LoginPageContent() {
         
         if (!res.ok) throw new Error("認証コードが一致しません。");
         showAlert("success", "認証に成功しました。移動します...");
-        handlePostLogin(mfaState.uid, mfaState.userData, mfaState.isSystemAdmin);
+        handlePostLogin(mfaState.uid, mfaState.userData, mfaState.isSystemAdmin, false);
       }
     } catch (err: any) {
       showAlert("error", err.message || "認証コードの検証に失敗しました。");
@@ -444,7 +528,6 @@ function LoginPageContent() {
           <div className="space-y-4">
             <LoginForm loginMode={loginMode} setLoginMode={setLoginMode} email={email} setEmail={setEmail} password={password} setPassword={setPassword} tenantId={tenantId} setTenantId={setTenantId} systemId={systemId} setSystemId={setSystemId} isLoading={isLoading} handleEmailLogin={handleEmailLogin} handleSystemLogin={handleSystemLogin} handleSocialLogin={handleSocialLogin} googleProvider={googleProvider} microsoftProvider={microsoftProvider} />
             
-            {/* ★ 目立ちすぎない小さめの「SCコードで初回ログイン」ボタン */}
             <div className="text-center pt-2">
               <button
                 type="button"

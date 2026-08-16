@@ -16,8 +16,9 @@ export type Announcement = {
   authorPhotoURL?: string; 
   createdAt: string; categoryId?: string | null; isUrgent?: boolean;
   attachments?: Attachment[];
-  publishStartDate?: string | null; // ★追加：掲載開始日時
-  publishEndDate?: string | null;   // ★追加：掲載終了日時
+  publishStartDate?: string | null; 
+  publishEndDate?: string | null;   
+  isExternal?: boolean; // ★追加：外部ユーザー向け配信フラグ
 };
 
 export type Category = { id: string; schoolId: string; name: string; color: string; };

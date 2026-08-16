@@ -4,31 +4,25 @@ import React, { useState, useMemo } from "react";
 import { doc, updateDoc, writeBatch, collection, addDoc, serverTimestamp } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 import { 
-  Search, Loader2, ShieldCheck, CheckSquare, Square, Settings2, User as UserIcon, 
-  MessageCircle, UserPlus, Eye, Edit3, Trash2, Users, Image as ImageIcon, Paperclip, X,
-  Sliders, Shield, FileText
+  Search, Loader2, CheckSquare, Square, Settings2, User as UserIcon, 
+  MessageCircle, Image as ImageIcon, Paperclip, X,
+  Sliders, FileText
 } from "lucide-react";
 import { UserData, Position, ChatPermissions, getDefaultChatPermissions } from "../types";
 import { useDialog } from "@/components/DialogContext";
 
-type SettingCategory = "general" | "external" | "media";
+// ★ "external" を削除
+type SettingCategory = "general" | "media";
 
 const CATEGORY_INFO: Record<SettingCategory, { title: string; desc: string }> = {
   general: { title: "チャット全般設定", desc: "チャット機能自体の利用や自由グループ作成の許可" },
-  external: { title: "外部ユーザー権限設定", desc: "外部アカウントの作成・参照・編集・削除の許可" },
   media: { title: "メディア・ファイル権限", desc: "画像や各種ファイルの送信許可" }
 };
 
 const PERMISSION_CONFIG: Record<SettingCategory, { id: keyof ChatPermissions; name: string; icon: any; desc: string }[]> = {
   general: [
     { id: "canUseChat", name: "チャット利用", icon: MessageCircle, desc: "チャット機能自体の利用" },
-    { id: "canCreateCustomGroup", name: "自由G作成", icon: Users, desc: "自由なグループトークの作成" },
-  ],
-  external: [
-    { id: "canCreateExternalUser", name: "外部作成", icon: UserPlus, desc: "外部ゲストの新規登録" },
-    { id: "canViewExternalUser", name: "外部参照", icon: Eye, desc: "外部ユーザー情報の閲覧" },
-    { id: "canEditExternalUser", name: "外部編集", icon: Edit3, desc: "外部ユーザー情報の変更" },
-    { id: "canDeleteExternalUser", name: "外部削除", icon: Trash2, desc: "外部ユーザーの削除" },
+    { id: "canCreateCustomGroup", name: "自由G作成", icon: MessageCircle, desc: "自由なグループトークの作成" },
   ],
   media: [
     { id: "canSendPhoto", name: "写真送信", icon: ImageIcon, desc: "画像ファイルの送信許可" },
@@ -60,12 +54,12 @@ export default function ChatSettings({ tenantUsers, positions, category, onClose
     let filtered = tenantUsers.filter(user => 
       searchQuery === "" || 
       user.name.toLowerCase().includes(searchQuery.toLowerCase()) || 
-      (user.attendanceNumber && user.attendanceNumber.includes(searchQuery))
+      ((user as any).systemId && String((user as any).systemId).includes(searchQuery))
     );
 
     filtered.sort((a, b) => {
-      const aVal = a.attendanceNumber ? String(a.attendanceNumber).padStart(6, '0') : "999999";
-      const bVal = b.attendanceNumber ? String(b.attendanceNumber).padStart(6, '0') : "999999";
+      const aVal = (a as any).systemId ? String((a as any).systemId).padStart(6, '0') : "999999";
+      const bVal = (b as any).systemId ? String((b as any).systemId).padStart(6, '0') : "999999";
       if (aVal < bVal) return -1;
       if (aVal > bVal) return 1;
       return a.name.localeCompare(b.name, "ja");
@@ -107,7 +101,7 @@ export default function ChatSettings({ tenantUsers, positions, category, onClose
         createdAt: serverTimestamp()
       });
     } catch (e) {
-      showAlert("権限の更新に失敗しました。");
+      showAlert("権限の更新に失敗しました。","error");
     } finally {
       setUpdatingUserId(null);
     }
@@ -135,7 +129,7 @@ export default function ChatSettings({ tenantUsers, positions, category, onClose
         createdAt: serverTimestamp()
       });
     } catch (e) {
-      showAlert("更新に失敗しました。");
+      showAlert("更新に失敗しました。","error");
     } finally {
       setUpdatingUserId(null);
     }
@@ -143,7 +137,7 @@ export default function ChatSettings({ tenantUsers, positions, category, onClose
 
   const handleBulkUpdate = async (isAllow: boolean) => {
     if (!bulkTarget) {
-      showAlert("一括操作の対象グループを選択してください。");
+      showAlert("一括操作の対象グループを選択してください。","warning");
       return;
     }
 
@@ -160,7 +154,7 @@ export default function ChatSettings({ tenantUsers, positions, category, onClose
       const validTargets = targetUsers.filter(u => !(u.role === "admin" || u.role === "system_admin" || u.isITManager));
 
       if (validTargets.length === 0) {
-        showAlert("変更可能な対象ユーザーがいません（管理者は変更できません）。");
+        showAlert("変更可能な対象ユーザーがいません（管理者は変更できません）。","warning", );
         setIsBulkUpdating(false);
         return;
       }
@@ -200,10 +194,10 @@ export default function ChatSettings({ tenantUsers, positions, category, onClose
       await Promise.all(notifyPromises);
 
       const targetItemName = bulkTargetItem === "all" ? "現在の全設定項目" : currentCategoryItems.find(m => m.id === bulkTargetItem)?.name || "指定項目";
-      showAlert(`${validTargets.length}名の「${targetItemName}」を一括${isAllow ? "許可" : "解除"}しました。`);
+      showAlert( `${validTargets.length}名の「${targetItemName}」を一括${isAllow ? "許可" : "解除"}しました。`,"success");
     } catch (error) {
       console.error(error);
-      showAlert("一括更新に失敗しました。");
+      showAlert( "一括更新に失敗しました。","error");
     } finally {
       setIsBulkUpdating(false);
     }
@@ -215,7 +209,7 @@ export default function ChatSettings({ tenantUsers, positions, category, onClose
       <div className="px-5 py-3 border-b border-gray-200 bg-gray-50/80 flex justify-between items-center shrink-0 backdrop-blur-sm z-20">
         <div className="flex items-center gap-3">
           <div className="p-2 bg-indigo-100 text-indigo-600 rounded-lg">
-            {category === "general" ? <Sliders className="w-5 h-5" /> : category === "external" ? <Shield className="w-5 h-5" /> : <FileText className="w-5 h-5" />}
+            {category === "general" ? <Sliders className="w-5 h-5" /> : <FileText className="w-5 h-5" />}
           </div>
           <div>
             <h2 className="text-sm font-black text-gray-900">{info.title}</h2>
@@ -302,7 +296,7 @@ export default function ChatSettings({ tenantUsers, positions, category, onClose
           <table className="min-w-full divide-y divide-gray-200 text-left whitespace-nowrap">
             <thead className="bg-gray-50 text-[10px] font-black text-gray-500 sticky top-0 z-10 shadow-2xs">
               <tr>
-                <th scope="col" className="px-3 py-2.5 w-20 border-r border-gray-200 bg-gray-50">No.</th>
+                <th scope="col" className="px-3 py-2.5 w-20 border-r border-gray-200 bg-gray-50">利用番号</th>
                 <th scope="col" className="px-3 py-2.5 border-r border-gray-200 min-w-[180px] bg-gray-50">ユーザー名 / 役職</th>
                 <th scope="col" className="px-3 py-2.5 text-center border-r border-gray-200 w-24 bg-gray-50">カテゴリ一括</th>
                 
@@ -330,7 +324,7 @@ export default function ChatSettings({ tenantUsers, positions, category, onClose
                   <tr key={user.id} className="hover:bg-gray-50/80 transition-colors">
                     
                     <td className="px-3 py-2 font-mono text-[11px] text-gray-600 border-r border-gray-200">
-                      {formatSixDigitNumber(user.attendanceNumber)}
+                      {formatSixDigitNumber((user as any).systemId)}
                     </td>
 
                     <td className="px-3 py-2 border-r border-gray-200">

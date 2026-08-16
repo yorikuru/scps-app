@@ -51,7 +51,7 @@ type Props = {
   onJoinOfficialRoom: (data: { type: ChatRoomType; targetId?: string; name: string }) => void;
   onTogglePin: (roomId: string, isPinned: boolean) => void;
   onOpenExternalUserManagement?: (mode: "create" | "edit" | "view", user?: ExternalUser | null) => void;
-  onOpenSettings?: (category?: "general" | "external" | "media") => void; 
+  onOpenSettings?: (category?: "general" | "media") => void; 
   appConfig: AppConfig;
   isExternalMode?: boolean; 
   schoolName?: string;
@@ -781,26 +781,13 @@ export default function ChatList({
                 <ChevronRight className="w-3.5 h-3.5 text-gray-300 group-hover:text-indigo-500 transition-colors shrink-0" />
               </div>
 
-              <div onClick={() => onOpenSettings("external")} className="p-2.5 bg-white border border-gray-200 hover:border-indigo-400 rounded-xl flex items-center justify-between cursor-pointer transition-all shadow-2xs group">
-                <div className="flex items-center gap-2 min-w-0">
-                  <div className="w-7 h-7 rounded-md bg-amber-50 flex items-center justify-center text-amber-600 shrink-0">
-                    <Globe className="w-3.5 h-3.5" />
-                  </div>
-                  <div className="min-w-0">
-                    <h4 className="text-[11px] font-black text-gray-900 truncate">2. 外部ユーザー権限設定</h4>
-                    <p className="text-[8px] text-gray-500 truncate">外部作成・参照・編集・削除の許可</p>
-                  </div>
-                </div>
-                <ChevronRight className="w-3.5 h-3.5 text-gray-300 group-hover:text-amber-500 transition-colors shrink-0" />
-              </div>
-
               <div onClick={() => onOpenSettings("media")} className="p-2.5 bg-white border border-gray-200 hover:border-indigo-400 rounded-xl flex items-center justify-between cursor-pointer transition-all shadow-2xs group">
                 <div className="flex items-center gap-2 min-w-0">
                   <div className="w-7 h-7 rounded-md bg-emerald-50 flex items-center justify-center text-emerald-600 shrink-0">
                     <Paperclip className="w-3.5 h-3.5" />
                   </div>
                   <div className="min-w-0">
-                    <h4 className="text-[11px] font-black text-gray-900 truncate">3. メディア・ファイル権限</h4>
+                    <h4 className="text-[11px] font-black text-gray-900 truncate">2. メディア・ファイル権限</h4>
                     <p className="text-[8px] text-gray-500 truncate">画像・各種ファイルの送信許可</p>
                   </div>
                 </div>

@@ -174,7 +174,7 @@ function VerifyContent() {
         <AlertCircle className="w-12 h-12 text-red-500 mb-4" />
         <h1 className="text-xl font-black text-gray-900 mb-2">リンクが無効です</h1>
         <p className="text-sm font-bold text-gray-500 mb-6 leading-relaxed max-w-md">{globalError}</p>
-        <button onClick={() => router.push("/chat-login")} className="px-6 py-2.5 bg-blue-600 text-white rounded-xl font-bold text-sm shadow-md hover:bg-blue-700 transition-colors">ログイン画面へ戻る</button>
+        <button onClick={() => router.push("/ext-login")} className="px-6 py-2.5 bg-blue-600 text-white rounded-xl font-bold text-sm shadow-md hover:bg-blue-700 transition-colors">ログイン画面へ戻る</button>
       </div>
     );
   }
@@ -270,10 +270,10 @@ function VerifyContent() {
             </div>
             <div className="p-5 bg-gray-50 border-t border-gray-100">
               <button
-                onClick={() => router.push("/ext-chat")}
+                onClick={() => router.push("/ext-top")}
                 className="w-full py-3.5 bg-blue-600 text-white font-bold text-sm rounded-xl shadow-md hover:bg-blue-700 hover:shadow-lg hover:-translate-y-0.5 transition-all"
               >
-                チャットを始める
+                利用を始める
               </button>
             </div>
           </div>

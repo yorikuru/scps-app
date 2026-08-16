@@ -1,13 +1,12 @@
 "use client";
 
 import React, { useState } from "react";
-import { Search, ScanLine, Printer, Trash2, User as UserIcon, MapPin, Undo2, Edit, X, Loader2, FileText } from "lucide-react";
+import { Search, ScanLine, Printer, Trash2, User as UserIcon, MapPin, Undo2, Edit, X, Loader2, FileText, Globe } from "lucide-react";
 import { Rental } from "../types";
 import { doc, updateDoc } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 import { useDialog } from "@/components/DialogContext";
 
-// ★ 既存のRental型にメモ(note)を拡張
 type ExtendedRental = Rental & { note?: string };
 
 type Props = {
@@ -26,7 +25,6 @@ export default function RentalsTab({ rentals, onOpenScanner, onOpenReturn, onPri
 
   const { showAlert, showConfirm } = useDialog();
 
-  // ★ 閲覧・編集モーダル用のステート
   const [editModal, setEditModal] = useState<{show: boolean, data: Partial<ExtendedRental> | null}>({ show: false, data: null });
   const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -50,7 +48,6 @@ export default function RentalsTab({ rentals, onOpenScanner, onOpenReturn, onPri
     return 0;
   });
 
-  // ★ 貸出情報の更新処理
   const handleUpdateRental = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!editModal.data?.id) return;
@@ -62,7 +59,7 @@ export default function RentalsTab({ rentals, onOpenScanner, onOpenReturn, onPri
         purpose: editModal.data.purpose,
         startDate: editModal.data.startDate,
         endDate: editModal.data.endDate,
-        note: editModal.data.note || "", // メモを保存
+        note: editModal.data.note || "",
       });
       setEditModal({ show: false, data: null });
       if (showToast) showToast("success", "貸出情報を更新しました");
@@ -128,11 +125,17 @@ export default function RentalsTab({ rentals, onOpenScanner, onOpenReturn, onPri
                         <p className="text-[10px] text-gray-500 truncate max-w-[150px]">{itemsNames || "（旧データ）"}</p>
                       </td>
                       <td className="p-3">
-                        <p className="text-[11px] font-bold text-gray-800 flex items-center gap-1"><UserIcon className="w-3 h-3 text-gray-400"/> {r.borrowerName}</p>
-                        <p className="text-[10px] font-bold text-gray-500 truncate max-w-[150px]"><MapPin className="w-3 h-3 inline text-gray-400"/> {r.purpose} / {r.location}</p>
-                        {/* ★ 追加: メモがある場合は一覧にも小さく表示 */}
+                        <div className="flex items-center gap-1.5 flex-wrap">
+                          <span className="text-[11px] font-black text-gray-900 flex items-center gap-1"><UserIcon className="w-3 h-3 text-gray-400"/> {r.borrowerName}</span>
+                          {r.borrowerType === "external" && (
+                            <span className="px-1.5 py-0.5 bg-blue-100 text-blue-700 rounded text-[9px] font-black flex items-center">
+                              <Globe className="w-2.5 h-2.5 mr-0.5" />ゲスト
+                            </span>
+                          )}
+                        </div>
+                        <p className="text-[10px] font-bold text-gray-500 truncate max-w-[180px] mt-0.5"><MapPin className="w-3 h-3 inline text-gray-400"/> {r.purpose} / {r.location}</p>
                         {r.note && (
-                          <p className="text-[9px] font-bold text-indigo-500 flex items-center gap-1 mt-1.5 truncate max-w-[150px]">
+                          <p className="text-[9px] font-bold text-indigo-500 flex items-center gap-1 mt-1.5 truncate max-w-[180px]">
                             <FileText className="w-2.5 h-2.5 flex-shrink-0"/> {r.note}
                           </p>
                         )}
@@ -147,7 +150,6 @@ export default function RentalsTab({ rentals, onOpenScanner, onOpenReturn, onPri
                       </td>
                       <td className="p-3 text-right">
                         <div className="flex items-center justify-end gap-2">
-                          {/* ★ 追加: 閲覧・編集ボタン */}
                           <button onClick={() => setEditModal({show: true, data: r})} className="p-1.5 text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors" title="詳細の確認・編集">
                             <Edit className="w-4 h-4" />
                           </button>
@@ -176,7 +178,7 @@ export default function RentalsTab({ rentals, onOpenScanner, onOpenReturn, onPri
         </div>
       </div>
 
-      {/* ★ 貸出情報の確認・編集モーダル */}
+      {/* 貸出情報の確認・編集モーダル */}
       {editModal.show && editModal.data && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-fade-in">
           <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg overflow-hidden flex flex-col">
@@ -191,7 +193,6 @@ export default function RentalsTab({ rentals, onOpenScanner, onOpenReturn, onPri
             
             <form onSubmit={handleUpdateRental} className="p-5 space-y-4 max-h-[75vh] overflow-y-auto bg-white custom-scrollbar">
               
-              {/* 貸出中の備品一覧 (閲覧専用) */}
               <div className="p-3 bg-gray-50 border border-gray-200 rounded-xl">
                 <span className="text-[10px] font-bold text-gray-500 block mb-1">貸出中の備品 ({editModal.data.items?.length || 0}点)</span>
                 <ul className="text-xs font-bold text-gray-800 list-disc list-inside pl-2">
@@ -206,7 +207,28 @@ export default function RentalsTab({ rentals, onOpenScanner, onOpenReturn, onPri
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <label className="block text-[10px] font-bold text-gray-500 mb-1">借受人名 (代表) <span className="text-red-500">*</span></label>
-                  <input type="text" required value={editModal.data.borrowerName || ""} onChange={e=>setEditModal(p=>({show:true, data:{...p.data!, borrowerName:e.target.value}}))} className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm font-bold focus:ring-2 focus:ring-indigo-500 outline-none transition-all"/>
+                  {/* ★ 外部ユーザー（ゲスト）の連携データの場合は編集不可にする */}
+                  {editModal.data.borrowerType === "external" ? (
+                    <div>
+                      <input 
+                        type="text" 
+                        disabled 
+                        value={editModal.data.borrowerName || ""} 
+                        className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm font-bold bg-gray-100 text-gray-500 cursor-not-allowed"
+                      />
+                      <p className="text-[9px] font-bold text-gray-400 mt-1 flex items-center gap-0.5">
+                        <Globe className="w-3 h-3 text-blue-500" /> ゲスト連携中のため変更不可
+                      </p>
+                    </div>
+                  ) : (
+                    <input 
+                      type="text" 
+                      required 
+                      value={editModal.data.borrowerName || ""} 
+                      onChange={e=>setEditModal(p=>({show:true, data:{...p.data!, borrowerName:e.target.value}}))} 
+                      className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm font-bold focus:ring-2 focus:ring-indigo-500 outline-none transition-all"
+                    />
+                  )}
                 </div>
                 <div>
                   <label className="block text-[10px] font-bold text-gray-500 mb-1">使用場所 <span className="text-red-500">*</span></label>

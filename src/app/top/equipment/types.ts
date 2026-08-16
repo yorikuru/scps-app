@@ -21,6 +21,12 @@ export type RentalItem = { equipmentId: string; equipmentName: string; managemen
 export type Rental = {
   id: string; items: RentalItem[]; borrowerName: string; purpose: string; location: string;
   startDate: string; endDate: string; status: "active" | "returned" | "partial"; schoolId: string; createdAt: string;
+  // ★ 外部ユーザー特定用フィールドを追加
+  borrowerType?: "text" | "external" | "internal";
+  borrowerId?: string;
+  borrowerEmail?: string;
+  borrowerAffiliation?: string;
+  note?: string;
 };
 
 export type Borrowing = {

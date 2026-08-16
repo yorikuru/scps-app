@@ -4,16 +4,18 @@ import React, { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { collection, query, where, getDocs, updateDoc, doc } from "firebase/firestore";
-import { signInWithEmailAndPassword } from "firebase/auth";
+import { signInWithEmailAndPassword, signOut } from "firebase/auth";
 import { auth, db } from "@/lib/firebase";
-import { Loader2, Lock, AlertCircle, MessageCircle, User, CheckCircle2, ShieldCheck, HelpCircle, X, Send } from "lucide-react";
+import { Loader2, Lock, AlertCircle, Globe, User, CheckCircle2, ShieldCheck, HelpCircle, X, Send, ArrowRight, Info } from "lucide-react";
 
-export default function ExternalChatLogin() {
+export default function ExternalLogin() {
   const router = useRouter();
   const [identifier, setIdentifier] = useState(""); 
   const [password, setPassword] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState("");
+
+  const [memberRedirectAlert, setMemberRedirectAlert] = useState(false);
 
   const [showForgotModal, setShowForgotModal] = useState(false);
   const [resetEmail, setResetEmail] = useState("");
@@ -24,9 +26,11 @@ export default function ExternalChatLogin() {
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setError("");
+    setMemberRedirectAlert(false);
     setIsLoading(true);
 
     try {
+      // 1. 外部ユーザー（external_users）コレクションを検索
       const extUsersRef = collection(db, "external_users");
       let qSearch = query(extUsersRef, where("loginId", "==", identifier));
       let querySnapshot = await getDocs(qSearch);
@@ -41,8 +45,25 @@ export default function ExternalChatLogin() {
         querySnapshot = await getDocs(qSearch);
       }
 
+      // 外部ユーザーとして登録がない場合：API経由で内部メンバー（users）に存在するかチェック
       if (querySnapshot.empty) {
-        throw new Error("ユーザーが見つかりません。ID、メールアドレス、または電話番号を確認してください。");
+        const res = await fetch("/api/check-internal-member", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ identifier })
+        });
+        
+        if (res.ok) {
+          const data = await res.json();
+          if (data.isMember) {
+            // 内部メンバーであることが判明した場合
+            setMemberRedirectAlert(true);
+            setIsLoading(false);
+            return;
+          }
+        }
+
+        throw new Error("ユーザーが見つかりません。ログインID、メールアドレス、または電話番号を確認してください。");
       }
 
       const userDoc = querySnapshot.docs[0];
@@ -54,13 +75,31 @@ export default function ExternalChatLogin() {
 
       if (userData.status === "pending" || userData.status === "verifying") {
         if (userData.initialPassword !== password) throw new Error("パスワードが正しくありません。");
-        router.push(`/chat-login/setup?uid=${userDoc.id}`);
+        router.push(`/ext-login/setup?uid=${userDoc.id}`);
       } else if (userData.status === "verified") {
         if (userData.initialPassword !== password) throw new Error("パスワードが正しくありません。");
-        router.push(`/chat-login/verify?uid=${userDoc.id}`);
+        router.push(`/ext-login/verify?uid=${userDoc.id}`);
       } else {
-        await signInWithEmailAndPassword(auth, userData.email, password);
-        router.push("/ext-chat");
+        const userCred = await signInWithEmailAndPassword(auth, userData.email, password);
+        
+        // 念のため認証UIDが内部ユーザーに紐づいていないかAPIで最終確認
+        const finalCheckRes = await fetch("/api/check-internal-member", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ identifier: userCred.user.email })
+        });
+
+        if (finalCheckRes.ok) {
+          const finalData = await finalCheckRes.json();
+          if (finalData.isMember) {
+            await signOut(auth);
+            setMemberRedirectAlert(true);
+            setIsLoading(false);
+            return;
+          }
+        }
+
+        router.push("/ext-top");
       }
 
     } catch (err: any) {
@@ -80,25 +119,23 @@ export default function ExternalChatLogin() {
       const querySnapshot = await getDocs(qEmail);
 
       if (querySnapshot.empty) {
-        throw new Error("このメールアドレスを持つアカウントが見つかりません。");
+        throw new Error("このメールアドレスを持つゲストアカウントが見つかりません。");
       }
       
       const userDoc = querySnapshot.docs[0];
       const userData = userDoc.data();
 
-      // ★ 自前のランダムな認証用トークンを生成してFirestoreに保存
       const resetToken = Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15);
       const expiresAt = new Date();
-      expiresAt.setHours(expiresAt.getHours() + 1); // 有効期限1時間
+      expiresAt.setHours(expiresAt.getHours() + 1);
 
       await updateDoc(doc(db, "external_users", userDoc.id), {
         resetToken: resetToken,
         resetTokenExpires: expiresAt.toISOString()
       });
 
-      const resetUrl = `${window.location.origin}/chat-login/reset-password?uid=${userDoc.id}&token=${resetToken}`;
+      const resetUrl = `${window.location.origin}/ext-login/reset-password?uid=${userDoc.id}&token=${resetToken}`;
 
-      // ★ 新しく作ったMicrosoft Graph APIを呼び出して確実にお届け
       const response = await fetch('/api/send-reset-email', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -133,10 +170,10 @@ export default function ExternalChatLogin() {
         <div className="relative z-10 max-w-lg mx-auto w-full">
           <div className="flex items-center gap-3 mb-8">
             <div className="p-3 bg-white/10 rounded-2xl backdrop-blur-sm border border-white/20">
-              <MessageCircle className="w-8 h-8 text-white" />
+              <Globe className="w-8 h-8 text-white" />
             </div>
             <div>
-              <h1 className="text-3xl font-black tracking-tight">SCPS ゲストチャット</h1>
+              <h1 className="text-3xl font-black tracking-tight">SCPS ゲストログイン</h1>
               <p className="text-sm font-bold text-blue-200 mt-1">生徒会ポータルシステム 外部連携用</p>
             </div>
           </div>
@@ -151,7 +188,7 @@ export default function ExternalChatLogin() {
               <div>
                 <h3 className="text-sm font-bold text-white mb-1">セキュアな通信環境</h3>
                 <p className="text-xs text-blue-200 leading-relaxed">
-                  やり取りされるメッセージやファイルは暗号化され、安全に保護されています。
+                  やり取りされるメッセージやデータは暗号化され、安全に保護されています。
                 </p>
               </div>
             </div>
@@ -173,15 +210,35 @@ export default function ExternalChatLogin() {
           
           <div className="md:hidden text-center mb-10">
             <div className="w-14 h-14 bg-blue-100 rounded-2xl flex items-center justify-center mx-auto mb-4 shadow-sm border border-blue-200">
-              <MessageCircle className="w-7 h-7 text-blue-600" />
+              <Globe className="w-7 h-7 text-blue-600" />
             </div>
-            <h1 className="text-2xl font-black text-gray-900 tracking-tight">生徒会ポータルシステム<br/>ゲストチャット</h1>
+            <h1 className="text-2xl font-black text-gray-900 tracking-tight">生徒会ポータルシステム<br/>ゲストポータル</h1>
             <p className="text-[11px] font-bold text-gray-500 mt-2">生徒会ポータルシステム 外部連携用</p>
           </div>
 
           <div className="bg-white rounded-3xl shadow-[0_8px_30px_rgb(0,0,0,0.04)] border border-gray-100 p-6 sm:p-10">
-            <h2 className="text-lg font-black text-gray-900 mb-6 text-center">ログイン</h2>
+            <h2 className="text-lg font-black text-gray-900 mb-6 text-center">ゲストログイン</h2>
             
+            {memberRedirectAlert && (
+              <div className="mb-6 p-4 bg-amber-50 border border-amber-200 rounded-2xl space-y-3 animate-fade-in">
+                <div className="flex items-start gap-2.5">
+                  <Info className="w-5 h-5 text-amber-600 shrink-0 mt-0.5" />
+                  <div>
+                    <h4 className="text-xs font-black text-amber-900">メンバーアカウントを検出しました</h4>
+                    <p className="text-[11px] font-bold text-amber-800/90 leading-relaxed mt-1">
+                      メンバーはメンバーログインページでログインしてください。
+                    </p>
+                  </div>
+                </div>
+                <Link 
+                  href="/login" 
+                  className="w-full py-2.5 px-3 bg-amber-500 hover:bg-amber-600 text-white rounded-xl text-xs font-bold transition-all shadow-sm flex items-center justify-center gap-1.5"
+                >
+                  メンバー用ログインページへ進む <ArrowRight className="w-3.5 h-3.5" />
+                </Link>
+              </div>
+            )}
+
             {error && (
               <div className="mb-6 p-4 bg-red-50 border border-red-100 rounded-xl flex items-start gap-2.5 animate-fade-in">
                 <AlertCircle className="w-4 h-4 text-red-600 shrink-0 mt-0.5" />
@@ -238,12 +295,18 @@ export default function ExternalChatLogin() {
                     : 'bg-blue-600 hover:bg-blue-700 hover:shadow-lg hover:-translate-y-0.5'
                 }`}
               >
-                {isLoading ? <Loader2 className="w-5 h-5 animate-spin" /> : "ログインして進む"}
+                {isLoading ? <Loader2 className="w-5 h-5 animate-spin" /> : "ゲストとしてログイン"}
               </button>
             </form>
           </div>
           
-          <div className="mt-10 text-center">
+          <div className="mt-6 text-center">
+            <Link href="/login" className="text-xs font-bold text-gray-500 hover:text-indigo-600 underline transition-colors">
+              学校の生徒・教職員（メンバー）用ログインはこちら
+            </Link>
+          </div>
+
+          <div className="mt-8 text-center">
             <p className="text-[9px] font-medium text-gray-400 leading-relaxed bg-gray-100/50 p-4 rounded-xl border text-red-600 border-gray-200/50">
               ※初回ログイン時の方は、仮登録時に発行された<br className="sm:hidden" />初期パスワードを入力してください。
             </p>
@@ -264,7 +327,7 @@ export default function ExternalChatLogin() {
         </div>
       </div>
 
-      {/* ＝＝ パスワード忘れ救済 モーダル ＝＝ */}
+      {/* パスワード忘れ救済 モーダル */}
       {showForgotModal && (
         <div className="absolute inset-0 z-50 bg-black/40 backdrop-blur-sm flex items-center justify-center p-4 animate-fade-in">
           <div className="bg-white rounded-3xl shadow-2xl w-full max-w-sm overflow-hidden animate-slide-up">
@@ -303,7 +366,8 @@ export default function ExternalChatLogin() {
                 <form onSubmit={handleResetPassword} className="space-y-4">
                   <p className="text-[11px] font-medium text-gray-500 leading-relaxed mb-4 bg-blue-50/50 p-3 rounded-xl border border-blue-100/50">
                     ご登録済みのメールアドレスを入力してください。<br/>
-                    本人確認のためのメール認証リンクをお送りします。リンクからパスワードの再設定を行えます。
+                    本人確認のためのメール認証リンクをお送りします。リンクからパスワードの再設定を行えます。<br/><br/>
+                    メンバーアカウントのパスワードリセットは管理者にお問い合わせください。
                   </p>
 
                   {resetError && (

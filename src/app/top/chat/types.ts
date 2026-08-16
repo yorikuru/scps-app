@@ -1,4 +1,11 @@
+// src/app/top/chat/types.ts
+
 import * as LucideIcons from "lucide-react";
+// ★ 新しく作成した外部ユーザーの型をインポート
+import { ExternalUser } from "@/app/types/external"; 
+
+// （再エクスポートしておくと、既存コンポーネントのインポートパス変更を最小限に抑えられます）
+export type { ExternalUser };
 
 export type Position = {
   id: string;
@@ -76,34 +83,6 @@ export type UserData = {
   chatPermissions?: ChatPermissions;
 };
 
-
-export type ExternalUser = {
-    id: string;
-    schoolId: string;
-    loginId: string;
-    name: string;
-    nameKana?: string;
-    email?: string;
-    phoneNumber?: string;
-    category: "student" | "teacher" | "other";
-    affiliation?: string;
-    validFrom: string;
-    validUntil?: string | null;
-    status: "pending" | "verifying" | "verified" | "active" | "suspended";
-    authUid?: string | null;
-    initialPassword?: string;
-    
-    // ★ 以下の行を追加してください
-    expiresAt?: string | null; 
-    
-    note?: string;
-    createdAt: string;
-    createdBy: string;
-    createdByName: string;
-    updatedAt?: string;
-    updatedBy?: string;
-  };
-
 export type ChatAttachment = {
   name: string;
   url: string;
@@ -134,7 +113,6 @@ export type ChatReaction = {
   users: string[]; 
 };
 
-// ★ replyTo （リプライ元の情報）を追加
 export type ChatMessage = {
   id: string;
   roomId: string;

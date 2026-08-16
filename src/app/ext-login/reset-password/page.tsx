@@ -4,7 +4,7 @@ import React, { useState, useEffect, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { doc, getDoc, updateDoc } from "firebase/firestore";
 import { db } from "@/lib/firebase";
-import { Loader2, Lock, AlertCircle, CheckCircle2, MessageCircle } from "lucide-react";
+import { Loader2, Lock, AlertCircle, CheckCircle2, Globe } from "lucide-react"; // ★ MessageCircle から Globe に変更
 
 function ResetPasswordForm() {
   const router = useRouter();
@@ -19,7 +19,6 @@ function ResetPasswordForm() {
   const [errorMessage, setErrorMessage] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  // APIに渡すための情報（アカウント新規作成用フォールバック）
   const [userEmail, setUserEmail] = useState("");
   const [userName, setUserName] = useState("");
 
@@ -44,10 +43,8 @@ function ResetPasswordForm() {
           throw new Error("リンクの有効期限が切れています。もう一度パスワードリセットをやり直してください。");
         }
 
-        // メールと名前を保持しておく
         setUserEmail(data.email || "");
         setUserName(data.name || "");
-
         setStatus("input");
       } catch (err: any) {
         setStatus("error");
@@ -93,7 +90,7 @@ function ResetPasswordForm() {
         throw new Error(errData.error || "パスワードの更新に失敗しました。");
       }
 
-      // 2. Firestoreのステータスを "active" にして完了とする（ループ防止）
+      // 2. Firestoreのステータスを "active" にして完了とする
       await updateDoc(doc(db, "external_users", uid), {
         status: "active",
         initialPassword: "", // 初期パスワードはクリアして無効化
@@ -117,9 +114,9 @@ function ResetPasswordForm() {
       
       <div className="w-full max-w-md text-center mb-8">
         <div className="w-14 h-14 bg-blue-100 rounded-2xl flex items-center justify-center mx-auto mb-4 shadow-sm border border-blue-200">
-          <MessageCircle className="w-7 h-7 text-blue-600" />
+          <Globe className="w-7 h-7 text-blue-600" />
         </div>
-        <h1 className="text-2xl font-black text-gray-900 tracking-tight">生徒会ポータルシステム <br/> ゲストチャット</h1>
+        <h1 className="text-2xl font-black text-gray-900 tracking-tight">生徒会ポータルシステム <br/> ゲストポータル</h1>
         <p className="text-[11px] font-bold text-gray-500 mt-2">パスワードの再設定</p>
       </div>
 
@@ -140,7 +137,7 @@ function ResetPasswordForm() {
             <h2 className="text-lg font-black text-gray-900 mb-2">認証に失敗しました</h2>
             <p className="text-xs font-bold text-gray-600 leading-relaxed mb-8">{errorMessage}</p>
             <button
-              onClick={() => router.push("/chat-login")}
+              onClick={() => router.push("/ext-login")}
               className="w-full py-3.5 bg-gray-900 text-white rounded-xl text-sm font-bold shadow-md hover:bg-black transition-all"
             >
               ログイン画面に戻る
@@ -158,7 +155,7 @@ function ResetPasswordForm() {
               新しいパスワードが設定されました。<br />今後はこのパスワードを使用してログインしてください。
             </p>
             <button
-              onClick={() => router.push("/chat-login")}
+              onClick={() => router.push("/ext-login")}
               className="w-full py-3.5 bg-blue-600 text-white rounded-xl text-sm font-bold shadow-md hover:bg-blue-700 transition-all"
             >
               ログイン画面へ進む

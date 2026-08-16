@@ -11,7 +11,6 @@ import { Loader2, AlertTriangle, MessageCircle, Lock } from "lucide-react";
 import { UserData, ExternalUser, ChatRoom, AppConfig, COLOR_MAPPINGS, Position, ChatRoomType, getDefaultChatPermissions } from "./types";
 import ChatList from "./components/ChatList";
 import ChatRoomWindow from "./components/ChatRoomWindow";
-import ExternalUserManagement from "./components/ExternalUserManagement"; 
 import UserProfileModal from "./components/UserProfileModal"; 
 import ChatSettings from "./components/ChatSettings"; 
 import { useDialog } from "@/components/DialogContext";
@@ -25,6 +24,7 @@ export default function ChatPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const roomQuery = searchParams.get("room");
+  const directUserQuery = searchParams.get("directUser");
 
   const { showAlert, showConfirm } = useDialog();
 
@@ -42,13 +42,7 @@ export default function ChatPage() {
   const [chatRooms, setChatRooms] = useState<ChatRoom[]>([]);
   const [activeRoomId, setActiveRoomId] = useState<string | null>(null);
 
-  const [extManageMode, setExtManageMode] = useState<{
-    show: boolean;
-    mode: "create" | "edit" | "view";
-    targetUser?: ExternalUser | null;
-  }>({ show: false, mode: "view", targetUser: null });
-
-  const [settingsState, setSettingsState] = useState<{ show: boolean; category: "general" | "external" | "media" }>({
+  const [settingsState, setSettingsState] = useState<{ show: boolean; category: "general" | "media" }>({
     show: false,
     category: "general"
   });
@@ -172,10 +166,41 @@ export default function ChatPage() {
   }, [router]);
 
   useEffect(() => {
-    if (roomQuery && chatRooms.some(r => r.id === roomQuery)) {
-      setActiveRoomId(roomQuery);
+    if (!isLoading && roomQuery) {
+      if (chatRooms.some(r => r.id === roomQuery)) {
+        setActiveRoomId(roomQuery);
+      } else {
+        const params = new URLSearchParams(searchParams.toString());
+        params.delete("room");
+        router.replace(params.toString() ? `${window.location.pathname}?${params.toString()}` : window.location.pathname);
+      }
     }
-  }, [roomQuery, chatRooms]);
+  }, [roomQuery, chatRooms, isLoading, router, searchParams]);
+
+  useEffect(() => {
+    if (!isLoading && directUserQuery && userData) {
+      const isExt = "category" in userData;
+      
+      if (isExt) {
+        showAlert("外部ユーザーはこの機能を利用できません。", "error");
+      } else {
+        const targetUser = tenantUsers.find(u => u.id === directUserQuery) || externalUsers.find(e => e.id === directUserQuery);
+        
+        if (targetUser) {
+          setSelectedProfileUser(targetUser);
+        } else if (userData.id === directUserQuery) {
+          setSelectedProfileUser(userData);
+        } else {
+          showAlert("指定されたユーザーが見つからないか、アクセスする権限がありません。", "error");
+        }
+      }
+
+      const params = new URLSearchParams(searchParams.toString());
+      params.delete("directUser");
+      router.replace(params.toString() ? `${window.location.pathname}?${params.toString()}` : window.location.pathname);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [directUserQuery, isLoading, tenantUsers, externalUsers, userData, router, searchParams]);
 
   useEffect(() => {
     const handleOpenProfile = (e: Event) => {
@@ -189,6 +214,17 @@ export default function ChatPage() {
   }, []);
 
   const c = COLOR_MAPPINGS[appConfig.color] || COLOR_MAPPINGS.default;
+
+  const updateRoomUrl = (roomId: string | null) => {
+    setActiveRoomId(roomId);
+    const params = new URLSearchParams(searchParams.toString());
+    if (roomId) {
+      params.set("room", roomId);
+    } else {
+      params.delete("room");
+    }
+    router.replace(params.toString() ? `${window.location.pathname}?${params.toString()}` : window.location.pathname);
+  };
 
   const handleCreatePrivateRoom = async (data: { type: "direct" | "custom_group"; name?: string; members: string[] }) => {
     if (!userData) return;
@@ -207,10 +243,11 @@ export default function ChatPage() {
         unreadCount: {}
       });
       await addDoc(collection(db, "chat_messages"), { roomId: roomRef.id, senderId: "system", text: sysMessageText, readBy: [userData.id], createdAt: serverTimestamp() });
-      setActiveRoomId(roomRef.id);
-      setExtManageMode({ show: false, mode: "view", targetUser: null }); 
+      updateRoomUrl(roomRef.id);
       setSettingsState({ show: false, category: "general" });
-    } catch (error) { showAlert("作成に失敗しました。", "error"); }
+    } catch (error) { 
+      showAlert("作成に失敗しました。", "error"); 
+    }
   };
 
   const handleJoinOfficialRoom = async (data: { type: ChatRoomType; targetId?: string; name: string }) => {
@@ -237,10 +274,11 @@ export default function ChatPage() {
         });
         await addDoc(collection(db, "chat_messages"), { roomId: roomId, senderId: "system", text: sysMessageText, readBy: [userData.id], createdAt: serverTimestamp() });
       }
-      setActiveRoomId(roomId);
-      setExtManageMode({ show: false, mode: "view", targetUser: null });
+      updateRoomUrl(roomId);
       setSettingsState({ show: false, category: "general" });
-    } catch (error) { showAlert("ルームへの移動に失敗しました。", "error"); }
+    } catch (error) { 
+      showAlert("ルームへの移動に失敗しました。", "error"); 
+    }
   };
 
   const handleTogglePin = async (roomId: string, isPinned: boolean) => {
@@ -257,15 +295,8 @@ export default function ChatPage() {
     }
   };
 
-  const handleOpenExternalUserManagement = (mode: "create" | "edit" | "view", user?: ExternalUser | null) => {
-    setActiveRoomId(null); 
-    setSettingsState({ show: false, category: "general" }); 
-    setExtManageMode({ show: true, mode, targetUser: user || null });
-  };
-
-  const handleOpenSettings = (category: "general" | "external" | "media" = "general") => {
-    setActiveRoomId(null);
-    setExtManageMode({ show: false, mode: "view", targetUser: null });
+  const handleOpenSettings = (category: "general" | "media" = "general") => {
+    updateRoomUrl(null);
     setSettingsState({ show: true, category });
   };
 
@@ -288,7 +319,7 @@ export default function ChatPage() {
   const activeRoom = chatRooms.find(r => r.id === activeRoomId);
 
   return (
-    <div className="h-full w-full flex flex-col min-h-0 font-sans text-gray-900 bg-[#F9FAFB] relative">
+    <div className="h-full w-full flex flex-col min-h-0 font-sans text-gray-900 bg-[#F9FAFB] relative overflow-hidden">
       <main className="flex-1 w-full max-w-7xl mx-auto p-2 sm:p-4 lg:p-6 flex flex-col min-h-0">
         
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 sm:gap-4 mb-2 sm:mb-4 flex-shrink-0">
@@ -305,7 +336,7 @@ export default function ChatPage() {
 
         <div className="flex-1 flex min-h-0 bg-white rounded-2xl shadow-sm border border-gray-200 relative overflow-hidden">
           
-          <div className={`w-full sm:w-72 md:w-80 lg:w-96 flex-shrink-0 h-full flex flex-col min-h-0 ${activeRoomId || extManageMode.show || settingsState.show ? 'hidden sm:flex' : 'flex'}`}>
+          <div className={`w-full sm:w-72 md:w-80 lg:w-96 flex-shrink-0 h-full flex flex-col min-h-0 ${activeRoomId || settingsState.show ? 'hidden sm:flex' : 'flex'}`}>
             <ChatList 
               userData={userData} 
               tenantUsers={tenantUsers} 
@@ -314,14 +345,12 @@ export default function ChatPage() {
               chatRooms={chatRooms} 
               activeRoomId={activeRoomId} 
               onSelectRoom={(id) => {
-                setActiveRoomId(id);
-                setExtManageMode({ show: false, mode: "view", targetUser: null });
+                updateRoomUrl(id);
                 setSettingsState({ show: false, category: "general" });
               }} 
               onCreatePrivateRoom={handleCreatePrivateRoom}
               onJoinOfficialRoom={handleJoinOfficialRoom}
               onTogglePin={handleTogglePin}
-              onOpenExternalUserManagement={handleOpenExternalUserManagement} 
               onOpenSettings={handleOpenSettings}
               appConfig={appConfig}
               schoolName={schoolData?.name}
@@ -330,7 +359,7 @@ export default function ChatPage() {
             />
           </div>
 
-          <div className={`flex-1 flex flex-col h-full min-w-0 min-h-0 bg-[#f4f7f6] border-l border-gray-200 relative ${!activeRoomId && !extManageMode.show && !settingsState.show ? 'hidden sm:flex' : 'flex'}`}>
+          <div className={`flex-1 flex flex-col h-full min-w-0 min-h-0 bg-[#f4f7f6] border-l border-gray-200 relative ${!activeRoomId && !settingsState.show ? 'hidden sm:flex' : 'flex'}`}>
             
             {settingsState.show ? (
               <ChatSettings 
@@ -339,14 +368,6 @@ export default function ChatPage() {
                 category={settingsState.category}
                 onClose={() => setSettingsState({ show: false, category: "general" })}
               />
-            ) : extManageMode.show ? (
-              <ExternalUserManagement 
-                userData={userData}
-                mode={extManageMode.mode}
-                targetUser={extManageMode.targetUser}
-                onClose={() => setExtManageMode({ show: false, mode: "view", targetUser: null })}
-                onSuccess={() => {}}
-              />
             ) : activeRoomId && activeRoom ? (
               <ChatRoomWindow 
                 userData={userData}
@@ -354,7 +375,7 @@ export default function ChatPage() {
                 externalUsers={externalUsers}
                 positions={positions} 
                 room={activeRoom}
-                onBack={() => setActiveRoomId(null)}
+                onBack={() => updateRoomUrl(null)}
                 appConfig={appConfig}
                 onOpenProfile={(u) => setSelectedProfileUser(u)} 
                 onTogglePin={handleTogglePin}
@@ -384,8 +405,7 @@ export default function ChatPage() {
           appConfig={appConfig} 
           onClose={() => setSelectedProfileUser(null)} 
           onSelectRoom={(id) => {
-            setActiveRoomId(id);
-            setExtManageMode({ show: false, mode: "view", targetUser: null });
+            updateRoomUrl(id);
             setSettingsState({ show: false, category: "general" });
           }} 
           onCreatePrivateRoom={handleCreatePrivateRoom} 

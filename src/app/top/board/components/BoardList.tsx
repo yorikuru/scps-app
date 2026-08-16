@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect } from "react";
 import * as LucideIcons from "lucide-react";
-import { Search, Edit2, Trash2, AlertOctagon, AlertCircle, Paperclip, Download, FileIcon, MessageSquareText, Calendar, ArrowDownUp, Clock, ChevronLeft } from "lucide-react";
+import { Search, Edit2, Trash2, AlertOctagon, AlertCircle, Paperclip, Download, FileIcon, MessageSquareText, Calendar, ArrowDownUp, Clock, ChevronLeft, Globe } from "lucide-react";
 import { Announcement, Category, UserData, AppConfig, COLOR_MAPPINGS } from "../types";
 
 const DynamicIcon = ({ name, className }: { name: string, className?: string }) => {
@@ -28,9 +28,10 @@ type Props = {
   appConfig: AppConfig;
   onEdit: (announcement: Announcement) => void;
   onDelete: (id: string) => Promise<void>;
+  isExternalTab: boolean; // ★ 追加
 };
 
-export default function BoardList({ announcements, categories, userData, tenantUsers, appConfig, onEdit, onDelete }: Props) {
+export default function BoardList({ announcements, categories, userData, tenantUsers, appConfig, onEdit, onDelete, isExternalTab }: Props) {
   const [searchQuery, setSearchQuery] = useState("");
   const [filterCategory, setFilterCategory] = useState<string>("all");
   const [filterUrgent, setFilterUrgent] = useState(false);
@@ -39,7 +40,6 @@ export default function BoardList({ announcements, categories, userData, tenantU
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
   
-  // ★ 追加：スマホ表示時に詳細画面をフルスクリーン表示するためのフラグ
   const [showMobileDetail, setShowMobileDetail] = useState(false);
 
   const c = COLOR_MAPPINGS[appConfig.color] || COLOR_MAPPINGS.default;
@@ -72,9 +72,17 @@ export default function BoardList({ announcements, categories, userData, tenantU
   const getStatusBadge = (a: Announcement) => {
     const start = a.publishStartDate ? new Date(a.publishStartDate).getTime() : new Date(a.createdAt).getTime();
     const end = a.publishEndDate ? new Date(a.publishEndDate).getTime() : null;
-    if (start > now) return <span className="px-1.5 py-0.5 rounded text-[8px] font-bold bg-amber-100 text-amber-700 flex items-center"><Clock className="w-2.5 h-2.5 mr-0.5" />予約中・待機中</span>;
-    if (end && end < now) return <span className="px-1.5 py-0.5 rounded text-[8px] font-bold bg-gray-100 text-gray-500">掲載終了</span>;
-    return null;
+    const badges = [];
+
+    // ★ 内部一覧のときのみ、外部公開バッジをつける（外部一覧では全部外部なので不要）
+    if (!isExternalTab && a.isExternal) {
+      badges.push(<span key="ext" className="px-1.5 py-0.5 rounded text-[8px] font-bold bg-blue-100 text-blue-700 flex items-center mr-1"><Globe className="w-2.5 h-2.5 mr-0.5" />外部公開</span>);
+    }
+
+    if (start > now) badges.push(<span key="wait" className="px-1.5 py-0.5 rounded text-[8px] font-bold bg-amber-100 text-amber-700 flex items-center mr-1"><Clock className="w-2.5 h-2.5 mr-0.5" />予約中・待機中</span>);
+    else if (end && end < now) badges.push(<span key="end" className="px-1.5 py-0.5 rounded text-[8px] font-bold bg-gray-100 text-gray-500 mr-1">掲載終了</span>);
+    
+    return badges.length > 0 ? <div className="flex items-center">{badges}</div> : null;
   };
 
   const filteredAndSorted = announcements
@@ -91,7 +99,6 @@ export default function BoardList({ announcements, categories, userData, tenantU
       return sortOrder === "desc" ? timeB - timeA : timeA - timeB;
     });
 
-  // PC時は最初の項目を自動選択するが、スマホ時は自動選択しない
   useEffect(() => {
     const isMobile = window.innerWidth < 1024;
     if (!isMobile && !selectedId && filteredAndSorted.length > 0) {
@@ -126,12 +133,11 @@ export default function BoardList({ announcements, categories, userData, tenantU
   const selectedAuthorUser = tenantUsers.find(u => u.id === selectedAnnouncement?.authorId);
   const selectedAvatarUrl = selectedAuthorUser?.photoURL;
 
-  // ★ プレビュー（詳細）部分のコンポーネント化（スマホとPCで使い回すため）
   const renderDetailView = () => {
     if (!selectedAnnouncement) {
       return (
-        <div className="flex-1 flex flex-col items-center justify-center bg-gray-50/30 text-gray-400 p-6 text-center h-full">
-          <div className={`p-4 ${c.lightBg} ${c.text} rounded-2xl mb-4 shadow-sm`}>
+        <div className={`flex-1 flex flex-col items-center justify-center bg-gray-50/30 text-gray-400 p-6 text-center h-full ${isExternalTab ? 'bg-blue-50/20' : ''}`}>
+          <div className={`p-4 rounded-2xl mb-4 shadow-sm ${isExternalTab ? 'bg-blue-100 text-blue-600' : `${c.lightBg} ${c.text}`}`}>
             <DynamicIcon name={appConfig.icon} className="w-10 h-10" />
           </div>
           <h3 className="text-sm font-black text-gray-700 mb-1">連絡事項が選択されていません</h3>
@@ -142,7 +148,6 @@ export default function BoardList({ announcements, categories, userData, tenantU
 
     return (
       <div className="flex-1 overflow-y-auto custom-scrollbar flex flex-col h-full bg-white relative">
-        {/* スマホ用「戻る」ボタン（ヘッダー） */}
         <div className="lg:hidden flex items-center px-4 py-3 border-b border-gray-100 bg-white sticky top-0 z-10 shrink-0">
           <button 
             onClick={() => setShowMobileDetail(false)} 
@@ -215,14 +220,25 @@ export default function BoardList({ announcements, categories, userData, tenantU
   return (
     <div className="flex flex-col lg:flex-row h-full w-full bg-white relative overflow-hidden">
       
-      {/* ＝＝＝ 左ペイン：コンパクトリスト (スマホで詳細表示中は隠す) ＝＝＝ */}
+      {/* 左ペイン：リスト */}
       <div className={`w-full lg:w-[420px] xl:w-[480px] border-r border-gray-200 flex flex-col flex-shrink-0 bg-white h-full ${showMobileDetail ? 'hidden lg:flex' : 'flex'}`}>
+        
+        {/* ★ 外部タブ専用メッセージ */}
+        {isExternalTab && (
+          <div className="bg-blue-50 p-3 border-b border-blue-100 shrink-0 flex items-center gap-2.5">
+            <Globe className="w-5 h-5 text-blue-600 shrink-0" />
+            <p className="text-[10px] font-bold text-blue-800 leading-relaxed">
+              ここは外部ユーザー（ゲスト）のダッシュボードに配信されている連絡事項の一覧です。
+            </p>
+          </div>
+        )}
+
         <div className="p-2 border-b border-gray-200 bg-gray-50/50 flex flex-col gap-2 shrink-0">
           <div className="relative w-full">
             <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-400" />
             <input 
               type="text" placeholder="検索..." value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)}
-              className={`w-full pl-8 pr-2 py-1.5 bg-white border border-gray-200 rounded-lg text-xs font-bold focus:outline-none focus:ring-2 ${c.ring} shadow-2xs`}
+              className={`w-full pl-8 pr-2 py-1.5 bg-white border border-gray-200 rounded-lg text-xs font-bold focus:outline-none focus:ring-2 ${isExternalTab ? 'focus:ring-blue-500' : c.ring} shadow-2xs`}
             />
           </div>
           <div className="flex items-center gap-1.5 text-[10px]">
@@ -260,7 +276,7 @@ export default function BoardList({ announcements, categories, userData, tenantU
               return (
                 <div 
                   key={a.id} onClick={() => handleSelectAnnouncement(a.id)}
-                  className={`px-3 py-2 cursor-pointer flex items-center gap-2.5 min-w-0 transition-colors group ${isSelected && window.innerWidth >= 1024 ? (isUr ? 'bg-red-600 text-white' : `${c.bg} text-white shadow-inner`) : (!isActive(a) ? 'bg-gray-50 opacity-70' : 'hover:bg-gray-50 text-gray-900')}`}
+                  className={`px-3 py-2 cursor-pointer flex items-center gap-2.5 min-w-0 transition-colors group ${isSelected && window.innerWidth >= 1024 ? (isUr ? 'bg-red-600 text-white' : (isExternalTab ? 'bg-blue-600 text-white shadow-inner' : `${c.bg} text-white shadow-inner`)) : (!isActive(a) ? 'bg-gray-50 opacity-70' : 'hover:bg-gray-50 text-gray-900')}`}
                 >
                   <div className="relative flex-shrink-0">
                     <UserAvatar name={a.authorName} url={avatarUrl} className={`w-7 h-7 text-[10px] ${!isActive(a) ? 'grayscale' : ''}`} />
@@ -289,7 +305,7 @@ export default function BoardList({ announcements, categories, userData, tenantU
         </div>
       </div>
 
-      {/* ＝＝＝ 右ペイン：プレビュー詳細 (PCでは常に表示、スマホでは選択時のみ全画面表示) ＝＝＝ */}
+      {/* 右ペイン：プレビュー詳細 */}
       <div className={`flex-1 w-full h-full min-w-0 bg-white ${showMobileDetail ? 'block absolute inset-0 z-20' : 'hidden lg:flex flex-col'}`}>
         {renderDetailView()}
       </div>

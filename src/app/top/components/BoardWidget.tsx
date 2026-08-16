@@ -4,7 +4,7 @@ import React, { useEffect, useState } from "react";
 import Link from "next/link";
 import { collection, query, where, onSnapshot, orderBy } from "firebase/firestore";
 import { db } from "@/lib/firebase";
-import { ChevronRight, X, Paperclip, FileIcon, Download, AlertOctagon } from "lucide-react";
+import { ChevronRight, X, Paperclip, FileIcon, Download, AlertOctagon, Globe } from "lucide-react";
 import * as LucideIcons from "lucide-react";
 import { SchoolData, UserData } from "../page";
 
@@ -110,9 +110,14 @@ export default function BoardWidget({ schoolData, boardApp, boardC, tenantUsers 
               return (
                 <div key={notice.id} onClick={() => setSelectedNotice(notice)} className="px-2.5 sm:px-3 py-2 sm:py-2.5 hover:bg-gray-50 cursor-pointer transition-colors flex items-center justify-between gap-2 sm:gap-3 group min-w-0">
                   <div className="flex items-center gap-1.5 sm:gap-2 min-w-0 flex-1">
-                    {/* ★ バッジをスマホ向けに縮小 */}
+                    {/* ★ バッジ */}
                     {notice.isUrgent && (
                       <span className="px-1 py-0.5 sm:px-1.5 rounded text-[7px] sm:text-[8px] font-black bg-red-100 text-red-700 flex-shrink-0">緊急</span>
+                    )}
+                    {notice.isExternal && (
+                      <span className="px-1 py-0.5 sm:px-1.5 rounded text-[7px] sm:text-[8px] font-black bg-blue-100 text-blue-700 flex items-center flex-shrink-0">
+                        <Globe className="w-2.5 h-2.5 mr-0.5" />外部
+                      </span>
                     )}
                     {cat && <span className={`px-1 py-0.5 sm:px-1.5 rounded text-[7px] sm:text-[8px] font-bold border flex-shrink-0 truncate max-w-[50px] sm:max-w-[70px] ${cat.color}`}>{cat.name}</span>}
                     
@@ -140,6 +145,7 @@ export default function BoardWidget({ schoolData, boardApp, boardC, tenantUsers 
             <div className="p-3 sm:p-4 border-b border-gray-100 flex justify-between items-center bg-gray-50/80">
               <div className="flex items-center gap-1.5 sm:gap-2 flex-wrap">
                 {selectedNotice.isUrgent && <span className="px-1.5 sm:px-2 py-0.5 rounded-lg text-[8px] sm:text-[9px] font-black bg-red-600 text-white flex items-center shadow-xs"><AlertOctagon className="w-2.5 h-2.5 mr-0.5" />緊急</span>}
+                {selectedNotice.isExternal && <span className="px-1.5 sm:px-2 py-0.5 rounded-lg text-[8px] sm:text-[9px] font-black bg-blue-100 text-blue-700 flex items-center shadow-xs"><Globe className="w-2.5 h-2.5 mr-0.5" />外部公開</span>}
                 <span className={`px-1.5 sm:px-2 py-0.5 rounded-lg text-[9px] sm:text-[10px] font-bold ${boardC.badgeBg} ${boardC.badgeText}`}>
                   {boardApp.displayName}
                 </span>

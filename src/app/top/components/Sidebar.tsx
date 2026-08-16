@@ -5,7 +5,7 @@ import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { collection, query, where, onSnapshot } from "firebase/firestore";
 import { db } from "@/lib/firebase"; 
-import { LayoutDashboard, Settings, Bell, ShieldCheck, Grid, ChevronLeft, ChevronRight, Megaphone, X } from "lucide-react";
+import { LayoutDashboard, Settings, Bell, ShieldCheck, Grid, ChevronLeft, ChevronRight, Megaphone, X, Globe } from "lucide-react";
 import * as LucideIcons from "lucide-react";
 import { SchoolData, UserData } from "../page";
 import MiniCalendar from "./MiniCalendar";
@@ -19,6 +19,13 @@ type ExtendedSchoolData = SchoolData & {
   customAppNames?: Record<string, string>;
   photoURL?: string;
   logoURL?: string;
+  isExternalUserEnabled?: boolean;
+  externalUserPermissions?: {
+    canView: string[];
+    canCreate: string[];
+    canEdit: string[];
+    canDelete: string[];
+  };
 };
 
 type Props = {
@@ -91,6 +98,15 @@ export default function Sidebar({
     userData?.role === "admin" || 
     (userData as any)?.isITManager === true || 
     ((userData as any)?.positionName && ((userData as any).positionName.includes("会長") || (userData as any).positionName.includes("顧問")))
+  );
+
+  // 外部ユーザー機能のアクセス権限判定
+  const canAccessExternalUsers = Boolean(
+    exSchoolData?.isExternalUserEnabled && 
+    (
+      (exSchoolData?.externalUserPermissions?.canView || ["admin", "system_admin", "it_manager", "teacher", "officer"]).includes(userData?.role || "guest") ||
+      (userData as any)?.isITManager === true
+    )
   );
 
   useEffect(() => {
@@ -402,7 +418,6 @@ export default function Sidebar({
         </div>
       )}
 
-      {/* ★ h-screen を h-[100dvh] に変更 */}
       <aside 
         className={`
           fixed md:relative top-0 left-0 h-[100dvh] bg-[#1C1C1E] text-gray-300 transition-all duration-300 ease-in-out z-50 flex flex-col border-r border-[#2C2C2E] overflow-hidden whitespace-nowrap
@@ -439,15 +454,16 @@ export default function Sidebar({
           
           <div className="flex-shrink-0">
             <p className="px-2 text-[10px] font-bold text-gray-500 mb-1.5 uppercase tracking-wider">Menu</p>
-            <div className="space-y-1">
+            {/* ★ 高さを抑えるために余白と文字サイズをコンパクト化 */}
+            <div className="space-y-0.5">
               <Link 
                 href="/top" 
                 onClick={handleMenuClick}
-                className={`relative flex items-center justify-between px-3 py-1.5 rounded-lg font-bold text-[13px] transition-all duration-200 overflow-hidden ${isActive("/top") && !isActive("/top/account") && !isActive("/top/admin") && !isActive("/top/notice") ? "bg-[#2C2C2E] text-white shadow-sm" : "text-gray-400 hover:bg-[#2C2C2E]/50 hover:text-gray-300"}`}
+                className={`relative flex items-center justify-between px-2.5 py-1.5 rounded-md font-bold text-xs transition-all duration-200 overflow-hidden ${isActive("/top") ? "bg-[#2C2C2E] text-white shadow-sm" : "text-gray-400 hover:bg-[#2C2C2E]/50 hover:text-gray-300"}`}
               >
-                <div className="flex items-center gap-3">
-                  <div className={`absolute left-0 top-0 bottom-0 w-1 bg-indigo-500 transition-transform duration-300 origin-left ${isActive("/top") && !isActive("/top/account") && !isActive("/top/admin") && !isActive("/top/notice") ? "scale-x-100" : "scale-x-0"}`}></div>
-                  <LayoutDashboard className={`w-4 h-4 transition-colors duration-200 ${isActive("/top") && !isActive("/top/account") && !isActive("/top/admin") && !isActive("/top/notice") ? "text-indigo-400" : "text-gray-500"}`} /> 
+                <div className="flex items-center gap-2.5">
+                  <div className={`absolute left-0 top-0 bottom-0 w-1 bg-indigo-500 transition-transform duration-300 origin-left ${isActive("/top") ? "scale-x-100" : "scale-x-0"}`}></div>
+                  <LayoutDashboard className={`w-3.5 h-3.5 transition-colors duration-200 ${isActive("/top") ? "text-indigo-400" : "text-gray-500"}`} /> 
                   ダッシュボード
                 </div>
               </Link>
@@ -455,25 +471,25 @@ export default function Sidebar({
               <Link 
                 href="/top/account" 
                 onClick={handleMenuClick}
-                className={`relative flex items-center gap-3 px-3 py-1.5 rounded-lg font-bold text-[13px] transition-all duration-200 overflow-hidden ${isActive("/top/account") ? "bg-[#2C2C2E] text-white shadow-sm" : "text-gray-400 hover:bg-[#2C2C2E]/50 hover:text-gray-300"}`}
+                className={`relative flex items-center gap-2.5 px-2.5 py-1.5 rounded-md font-bold text-xs transition-all duration-200 overflow-hidden ${isActive("/top/account") ? "bg-[#2C2C2E] text-white shadow-sm" : "text-gray-400 hover:bg-[#2C2C2E]/50 hover:text-gray-300"}`}
               >
-                <div className={`absolute left-0 top-0 bottom-0 w-1 bg-indigo-500 transition-transform duration-300 origin-left ${isActive("/top/account") ? "scale-x-100" : "scale-x-0"}`}></div>
-                <Settings className={`w-4 h-4 transition-colors duration-200 ${isActive("/top/account") ? "text-indigo-400" : "text-gray-500"}`} /> 
+                <div className={`absolute left-0 top-0 bottom-0 w-1 bg-gray-500 transition-transform duration-300 origin-left ${isActive("/top/account") ? "scale-x-100" : "scale-x-0"}`}></div>
+                <Settings className={`w-3.5 h-3.5 transition-colors duration-200 ${isActive("/top/account") ? "text-gray-300" : "text-gray-500"}`} /> 
                 マイアカウント
               </Link>
 
               <Link 
                 href="/top/notice" 
                 onClick={handleMenuClick}
-                className={`relative flex items-center justify-between px-3 py-1.5 rounded-lg font-bold text-[13px] transition-all duration-200 overflow-hidden ${isActive("/top/notice") ? "bg-[#2C2C2E] text-white shadow-sm" : "text-gray-400 hover:bg-[#2C2C2E]/50 hover:text-gray-300"}`}
+                className={`relative flex items-center justify-between px-2.5 py-1.5 rounded-md font-bold text-xs transition-all duration-200 overflow-hidden ${isActive("/top/notice") ? "bg-[#2C2C2E] text-white shadow-sm" : "text-gray-400 hover:bg-[#2C2C2E]/50 hover:text-gray-300"}`}
               >
-                <div className="flex items-center gap-3">
+                <div className="flex items-center gap-2.5">
                   <div className={`absolute left-0 top-0 bottom-0 w-1 bg-blue-500 transition-transform duration-300 origin-left ${isActive("/top/notice") ? "scale-x-100" : "scale-x-0"}`}></div>
-                  <Bell className={`w-4 h-4 transition-colors duration-200 ${isActive("/top/notice") ? "text-blue-400" : "text-gray-500"}`} /> 
+                  <Bell className={`w-3.5 h-3.5 transition-colors duration-200 ${isActive("/top/notice") ? "text-blue-400" : "text-gray-500"}`} /> 
                   インボックス
                 </div>
                 {totalUnread > 0 && (
-                  <span className="bg-red-500 text-white text-[10px] px-2 py-0.5 rounded-full font-black shadow-sm" title="未読の通知">
+                  <span className="bg-red-500 text-white text-[9px] px-1.5 py-0.5 rounded-full font-black shadow-sm" title="未読の通知">
                     {totalUnread > 99 ? '99+' : totalUnread}
                   </span>
                 )}
@@ -483,18 +499,33 @@ export default function Sidebar({
                 <Link 
                   href="/top/admin/messages" 
                   onClick={handleMenuClick}
-                  className={`relative flex items-center justify-between px-3 py-1.5 rounded-lg font-bold text-[13px] transition-all duration-200 overflow-hidden ${isActive("/top/admin/messages") ? "bg-[#2C2C2E] text-white shadow-sm" : "text-gray-400 hover:bg-[#2C2C2E]/50 hover:text-gray-300"}`}
+                  className={`relative flex items-center justify-between px-2.5 py-1.5 rounded-md font-bold text-xs transition-all duration-200 overflow-hidden ${isActive("/top/admin/messages") ? "bg-[#2C2C2E] text-white shadow-sm" : "text-gray-400 hover:bg-[#2C2C2E]/50 hover:text-gray-300"}`}
                 >
-                  <div className="flex items-center gap-3">
+                  <div className="flex items-center gap-2.5">
                     <div className={`absolute left-0 top-0 bottom-0 w-1 bg-cyan-500 transition-transform duration-300 origin-left ${isActive("/top/admin/messages") ? "scale-x-100" : "scale-x-0"}`}></div>
-                    <Megaphone className={`w-4 h-4 transition-colors duration-200 ${isActive("/top/admin/messages") ? "text-cyan-400" : "text-gray-500"}`} /> 
+                    <Megaphone className={`w-3.5 h-3.5 transition-colors duration-200 ${isActive("/top/admin/messages") ? "text-cyan-400" : "text-gray-500"}`} /> 
                     テナントお知らせ配信
                   </div>
                   {uncompletedMessagesCount > 0 && (
-                    <span className="bg-blue-500 text-white text-[10px] px-2 py-0.5 rounded-full font-black shadow-sm" title="未対応のメッセージ">
+                    <span className="bg-blue-500 text-white text-[9px] px-1.5 py-0.5 rounded-full font-black shadow-sm" title="未対応のメッセージ">
                       {uncompletedMessagesCount > 99 ? '99+' : uncompletedMessagesCount}
                     </span>
                   )}
+                </Link>
+              )}
+
+              {/* ★ 新規追加：外部ユーザー・ゲスト管理 */}
+              {canAccessExternalUsers && (
+                <Link 
+                  href="/top/external-users" 
+                  onClick={handleMenuClick}
+                  className={`relative flex items-center justify-between px-2.5 py-1.5 rounded-md font-bold text-xs transition-all duration-200 overflow-hidden ${isActive("/top/external-users") ? "bg-[#2C2C2E] text-white shadow-sm" : "text-gray-400 hover:bg-[#2C2C2E]/50 hover:text-gray-300"}`}
+                >
+                  <div className="flex items-center gap-2.5">
+                    <div className={`absolute left-0 top-0 bottom-0 w-1 bg-amber-500 transition-transform duration-300 origin-left ${isActive("/top/external-users") ? "scale-x-100" : "scale-x-0"}`}></div>
+                    <Globe className={`w-3.5 h-3.5 transition-colors duration-200 ${isActive("/top/external-users") ? "text-amber-400" : "text-gray-500"}`} /> 
+                    ゲスト・外部連携
+                  </div>
                 </Link>
               )}
 
@@ -502,10 +533,11 @@ export default function Sidebar({
                 <Link 
                   href="/top/admin" 
                   onClick={handleMenuClick}
-                  className={`relative flex items-center gap-3 px-3 py-1.5 rounded-lg font-bold text-[13px] transition-all duration-200 overflow-hidden ${isActive("/top/admin") && !isActive("/top/admin/messages") ? "bg-[#2C2C2E] text-white shadow-sm" : "text-gray-400 hover:bg-[#2C2C2E]/50 hover:text-gray-300"}`}
+                  className={`relative flex items-center gap-2.5 px-2.5 py-1.5 rounded-md font-bold text-xs transition-all duration-200 overflow-hidden ${isActive("/top/admin") && !isActive("/top/admin/messages") ? "bg-[#2C2C2E] text-white shadow-sm" : "text-gray-400 hover:bg-[#2C2C2E]/50 hover:text-gray-300"}`}
                 >
-                  <div className={`absolute left-0 top-0 bottom-0 w-1 bg-amber-500 transition-transform duration-300 origin-left ${isActive("/top/admin") && !isActive("/top/admin/messages") ? "scale-x-100" : "scale-x-0"}`}></div>
-                  <ShieldCheck className={`w-4 h-4 transition-colors duration-200 ${isActive("/top/admin") && !isActive("/top/admin/messages") ? "text-amber-400" : "text-gray-500"}`} /> 
+                  {/* ★ テナント設定の色を rose-500 に変更し、外部連携の amber と被らないように調整 */}
+                  <div className={`absolute left-0 top-0 bottom-0 w-1 bg-rose-500 transition-transform duration-300 origin-left ${isActive("/top/admin") && !isActive("/top/admin/messages") ? "scale-x-100" : "scale-x-0"}`}></div>
+                  <ShieldCheck className={`w-3.5 h-3.5 transition-colors duration-200 ${isActive("/top/admin") && !isActive("/top/admin/messages") ? "text-rose-400" : "text-gray-500"}`} /> 
                   テナント設定
                 </Link>
               )}
@@ -616,7 +648,6 @@ export default function Sidebar({
           </div>
         </div>
 
-        {/* ★ <br/>タグを削除し、親の padding (pb-8 md:pb-3) で余白を制御するように変更 */}
         <div className="flex-shrink-0 p-3 pb-8 md:pb-3 mt-1 border-t border-[#2C2C2E] bg-[#1C1C1E]">
           <div className="flex flex-col gap-1.5 text-[9px] font-bold text-gray-500 text-center">
             <div className="flex flex-wrap items-center justify-center gap-x-3 gap-y-1.5">

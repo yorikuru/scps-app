@@ -6,13 +6,15 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { onAuthStateChanged, signOut } from "firebase/auth";
 import { doc, getDoc, getDocs, collection, query, where, onSnapshot, orderBy, updateDoc, arrayUnion, arrayRemove, addDoc, serverTimestamp } from "firebase/firestore";
 import { auth, db } from "@/lib/firebase";
-import { Loader2, AlertTriangle, LogOut, MessageCircle, Building2 } from "lucide-react";
+import { Loader2, AlertTriangle, LogOut, MessageCircle } from "lucide-react";
 import { useDialog } from "@/components/DialogContext";
 
-import { UserData, ExternalUser, ChatRoom, AppConfig, COLOR_MAPPINGS, Position } from "../top/chat/types";
-import ChatList from "../top/chat/components/ChatList";
-import ChatRoomWindow from "../top/chat/components/ChatRoomWindow";
-import UserProfileModal from "../top/chat/components/UserProfileModal";
+import { UserData, ChatRoom, AppConfig, Position } from "@/app/top/chat/types";
+import { ExternalUser } from "@/app/types/external";
+import ChatList from "@/app/top/chat/components/ChatList";
+import ChatRoomWindow from "@/app/top/chat/components/ChatRoomWindow";
+import UserProfileModal from "@/app/top/chat/components/UserProfileModal";
+import ExtHeader from "@/app/ext-top/components/ExtHeader";
 
 function ExternalChatContent() {
   const router = useRouter();
@@ -34,8 +36,6 @@ function ExternalChatContent() {
   const [activeRoomId, setActiveRoomId] = useState<string | null>(null);
 
   const [selectedProfileUser, setSelectedProfileUser] = useState<UserData | ExternalUser | null>(null);
-
-  const appConfig: AppConfig = { name: "ゲストチャット", icon: "MessageCircle", color: "indigo" };
 
   const privateRoomsRef = useRef<ChatRoom[]>([]);
 
@@ -63,10 +63,10 @@ function ExternalChatContent() {
           const now = Date.now();
           let isExpired = false;
           
-          if ((currentUserData as any).expiresAt) {
-            const expTime = typeof ((currentUserData as any).expiresAt as any).toDate === 'function' 
-              ? ((currentUserData as any).expiresAt as any).toDate().getTime() 
-              : new Date((currentUserData as any).expiresAt).getTime();
+          if (currentUserData.expiresAt) {
+            const expTime = typeof (currentUserData.expiresAt as any).toDate === 'function' 
+              ? (currentUserData.expiresAt as any).toDate().getTime() 
+              : new Date(currentUserData.expiresAt).getTime();
             
             if (expTime < now) {
               isExpired = true;
@@ -75,6 +75,13 @@ function ExternalChatContent() {
 
           if (currentUserData.status !== "active" || isExpired) {
             setError(isExpired ? "アカウントの有効期限が切れています。" : "アカウントが有効化されていないか、停止されています。");
+            setIsLoading(false);
+            return;
+          }
+
+          const allowedModules = currentUserData.allowedModules || [];
+          if (!allowedModules.includes("chat")) {
+            setError("チャットアプリの利用権限が付与されていません。");
             setIsLoading(false);
             return;
           }
@@ -134,7 +141,7 @@ function ExternalChatContent() {
           setIsLoading(false);
         }
       } else {
-        router.push("/chat-login");
+        router.push("/ext-login");
       }
     });
 
@@ -148,10 +155,27 @@ function ExternalChatContent() {
   }, [router]);
 
   useEffect(() => {
-    if (roomQuery && chatRooms.some(r => r.id === roomQuery)) {
-      setActiveRoomId(roomQuery);
+    if (!isLoading && roomQuery) {
+      if (chatRooms.some(r => r.id === roomQuery)) {
+        setActiveRoomId(roomQuery);
+      } else {
+        const params = new URLSearchParams(searchParams.toString());
+        params.delete("room");
+        router.replace(params.toString() ? `${window.location.pathname}?${params.toString()}` : window.location.pathname);
+      }
     }
-  }, [roomQuery, chatRooms]);
+  }, [roomQuery, chatRooms, isLoading, router, searchParams]);
+
+  const updateRoomUrl = (roomId: string | null) => {
+    setActiveRoomId(roomId);
+    const params = new URLSearchParams(searchParams.toString());
+    if (roomId) {
+      params.set("room", roomId);
+    } else {
+      params.delete("room");
+    }
+    router.replace(params.toString() ? `${window.location.pathname}?${params.toString()}` : window.location.pathname);
+  };
 
   const handleTogglePin = async (roomId: string, isPinned: boolean) => {
     if (!extUser) return;
@@ -184,7 +208,7 @@ function ExternalChatContent() {
         unreadCount: {}
       });
       await addDoc(collection(db, "chat_messages"), { roomId: roomRef.id, senderId: "system", text: sysMessageText, readBy: [extUser.id], createdAt: serverTimestamp() });
-      setActiveRoomId(roomRef.id);
+      updateRoomUrl(roomRef.id);
     } catch (error) { 
       showAlert("作成に失敗しました。", "error"); 
     }
@@ -195,16 +219,19 @@ function ExternalChatContent() {
       "ログアウトしますか？",
       async () => {
         await signOut(auth);
-        router.push("/chat-login");
+        router.push("/ext-login");
       },
       "warning",
       "ログアウトの確認"
     );
   };
 
-  const handleErrorLogout = async () => {
-    await signOut(auth);
-    router.push("/chat-login");
+  const handleErrorReturn = () => {
+    if (error === "チャットアプリの利用権限が付与されていません。") {
+      router.push("/ext-top");
+    } else {
+      signOut(auth).then(() => router.push("/ext-login"));
+    }
   };
 
   if (isLoading) return <div className="h-[100dvh] flex justify-center items-center bg-gray-50"><Loader2 className="w-8 h-8 animate-spin text-indigo-500" /></div>;
@@ -215,46 +242,32 @@ function ExternalChatContent() {
         <AlertTriangle className="w-12 h-12 text-red-500 mb-4" />
         <h1 className="text-xl font-black text-gray-900 mb-2">アクセスできません</h1>
         <p className="text-sm font-bold text-gray-500 mb-6">{error}</p>
-        <button onClick={handleErrorLogout} className="px-5 py-2.5 bg-gray-900 text-white text-xs font-bold rounded-xl flex items-center gap-2">
-          <LogOut className="w-4 h-4"/> ログアウトして戻る
+        <button onClick={handleErrorReturn} className="px-5 py-2.5 bg-gray-900 text-white text-xs font-bold rounded-xl flex items-center gap-2 transition-transform hover:-translate-y-0.5 shadow-sm">
+          <LogOut className="w-4 h-4"/> 戻る
         </button>
       </div>
     );
   }
 
   const activeRoom = chatRooms.find(r => r.id === activeRoomId);
+  const appConfig: AppConfig = { 
+    name: schoolData?.customExternalAppNames?.chat || schoolData?.customAppNames?.chat || "ゲストチャット", 
+    icon: "MessageCircle", 
+    color: "indigo" 
+  };
 
   return (
-    // ★ h-[100dvh] を指定し、スマホのURLバー等に影響されず常に全画面に収める
     <div className="h-[100dvh] font-sans flex flex-col text-gray-900 bg-gray-50 relative overflow-hidden">
       
-      <header className="bg-indigo-600 text-white px-3 sm:px-4 py-2 sm:py-3 flex items-center justify-between shadow-md shrink-0">
-        <div className="flex items-center gap-2 sm:gap-2.5 min-w-0">
-          {schoolData?.logoURL ? (
-            <img src={schoolData.logoURL} alt={schoolData.name} className="w-8 h-8 sm:w-9 sm:h-9 rounded-full object-cover bg-white border border-indigo-400 shrink-0" />
-          ) : (
-            <div className="p-1.5 sm:p-2 bg-white/20 rounded-full shrink-0">
-              <Building2 className="w-4 h-4 sm:w-5 sm:h-5 text-white" />
-            </div>
-          )}
-          <div className="min-w-0 pr-2">
-            <h1 className="text-[11px] sm:text-sm font-black tracking-tight truncate">{schoolData?.name || "SCPS 利用校"}</h1>
-            <p className="text-[8px] sm:text-[9px] font-medium text-indigo-200 truncate">生徒会ポータルシステム ゲストチャットルーム</p>
-          </div>
-        </div>
-        <div className="flex items-center gap-3 sm:gap-4 shrink-0">
-          <div className="hidden sm:flex flex-col items-end">
-            <span className="text-[11px] sm:text-xs font-bold truncate max-w-[120px]">{extUser.name}</span>
-            <span className="text-[8px] sm:text-[9px] text-indigo-200 truncate max-w-[120px]">{extUser.affiliation || "ゲスト"}</span>
-          </div>
-          <button onClick={handleLogout} className="p-1.5 sm:p-2 bg-indigo-700 hover:bg-indigo-800 rounded-lg transition-colors" title="ログアウト">
-            <LogOut className="w-4 h-4" />
-          </button>
-        </div>
-      </header>
+      {/* 共通の外部用ヘッダー */}
+      <ExtHeader 
+        schoolData={schoolData} 
+        handleLogout={handleLogout} 
+        appMeta={appConfig} 
+        showBackButton={true} 
+      />
 
-      {/* メインのチャットUI (スクロール崩れを防ぐために min-h-0 を指定) */}
-      <main className="flex-1 w-full max-w-7xl mx-auto sm:p-4 flex flex-col min-h-0">
+      <main className="flex-1 w-full max-w-7xl mx-auto sm:p-4 flex flex-col min-h-0 bg-white sm:bg-transparent">
         <div className="flex-1 overflow-hidden flex bg-white sm:rounded-2xl sm:shadow-sm sm:border border-gray-200 relative min-h-0">
           
           <div className={`w-full sm:w-80 md:w-96 flex-shrink-0 flex flex-col min-h-0 ${activeRoomId ? 'hidden sm:flex' : 'flex'}`}>
@@ -265,7 +278,7 @@ function ExternalChatContent() {
               positions={positions} 
               chatRooms={chatRooms} 
               activeRoomId={activeRoomId} 
-              onSelectRoom={setActiveRoomId} 
+              onSelectRoom={updateRoomUrl} 
               onCreatePrivateRoom={() => {}} 
               onJoinOfficialRoom={() => {}}
               onTogglePin={handleTogglePin}
@@ -275,18 +288,6 @@ function ExternalChatContent() {
               schoolName={schoolData?.name}
               schoolLogoURL={schoolData?.logoURL}
             />
-
-            {/* フッターリンク (スマホのリスト画面およびPCのリスト下部に表示) */}
-            <div className="p-3 bg-gray-50/50 border-t border-gray-100 flex flex-col gap-1.5 text-[9px] font-bold text-gray-500 text-center shrink-0">
-              <div className="flex flex-wrap items-center justify-center gap-x-3 gap-y-1.5">
-                <Link href="/legal/terms" className="hover:text-gray-900 transition-colors">利用規約</Link>
-                <Link href="/legal/privacy" className="hover:text-gray-900 transition-colors">プライバシー</Link>
-                <Link href="/legal/commercial" className="hover:text-gray-900 transition-colors">特定商取引法</Link>
-              </div>
-              <div className="text-[8px] text-gray-400 mt-0.5">
-                &copy; {new Date().getFullYear()} YORIKURU
-              </div>
-            </div>
           </div>
 
           <div className={`flex-1 flex-col bg-[#f4f7f6] ${!activeRoomId ? 'hidden sm:flex' : 'flex'} sm:border-l border-gray-200 relative min-h-0`}>
@@ -296,7 +297,7 @@ function ExternalChatContent() {
                   <MessageCircle className="w-10 h-10" />
                 </div>
                 <h3 className="text-sm font-black text-gray-600 mb-1">トークルームを選択してください</h3>
-                <p className="text-[10px] text-gray-400">左側のリストからチャットを選んでください。</p>
+                <p className="text-[10px] text-gray-400 mt-1">左側のリストからチャットを選んでください。</p>
               </div>
             ) : (
               <ChatRoomWindow 
@@ -305,7 +306,7 @@ function ExternalChatContent() {
                 externalUsers={externalUsers}
                 positions={positions} 
                 room={activeRoom}
-                onBack={() => setActiveRoomId(null)}
+                onBack={() => updateRoomUrl(null)}
                 appConfig={appConfig}
                 onOpenProfile={(u) => setSelectedProfileUser(u)} 
                 onTogglePin={handleTogglePin}
@@ -318,6 +319,18 @@ function ExternalChatContent() {
         </div>
       </main>
 
+      {/* 外部ユーザー共通の固定フッター */}
+      <div className="flex flex-col gap-1.5 text-[9px] font-bold text-gray-500 text-center">
+          <div className="flex flex-wrap items-center justify-center gap-x-3 gap-y-1.5">
+            <Link href="/legal/terms" className="hover:text-gray-300 transition-colors">利用規約</Link>
+            <Link href="/legal/privacy" className="hover:text-gray-300 transition-colors">プライバシー</Link>
+            <Link href="/legal/commercial" className="hover:text-gray-300 transition-colors">特定商取引法</Link>
+          </div>
+          <div className="text-[8px] text-gray-600 mt-0.5">
+            &copy; {new Date().getFullYear()} YORIKURU / 生徒会ポータルシステム
+          </div>
+        </div>
+
       {selectedProfileUser && (
         <UserProfileModal 
           user={selectedProfileUser} 
@@ -326,7 +339,7 @@ function ExternalChatContent() {
           chatRooms={chatRooms} 
           appConfig={appConfig} 
           onClose={() => setSelectedProfileUser(null)} 
-          onSelectRoom={setActiveRoomId} 
+          onSelectRoom={updateRoomUrl} 
           onCreatePrivateRoom={handleCreatePrivateRoom} 
         />
       )}

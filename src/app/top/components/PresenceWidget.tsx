@@ -1,6 +1,6 @@
 "use client";
 
-import React from "react";
+import React, { useMemo } from "react";
 import { useRouter } from "next/navigation";
 import * as LucideIcons from "lucide-react";
 import { ChevronRight, Zap, Users, CheckCircle2 } from "lucide-react";
@@ -21,6 +21,30 @@ type Props = {
 export default function PresenceWidget({ presenceApp, presenceC, activePresences }: Props) {
   const router = useRouter();
 
+  // ★ 確実に数値としてシステム利用番号順にソートする処理
+  const sortedPresences = useMemo(() => {
+    return [...activePresences].sort((a: any, b: any) => {
+      // systemId または userSystemId を取得（無い場合は空文字）
+      const valA = a.systemId || a.userSystemId || "";
+      const valB = b.systemId || b.userSystemId || "";
+
+      // 確実に「数値」として比較する（10進数）
+      // ※番号が取得できない人はリストの一番後ろ（Infinity）に回す
+      const numA = valA !== "" && !isNaN(Number(valA)) ? parseInt(valA, 10) : Infinity;
+      const numB = valB !== "" && !isNaN(Number(valB)) ? parseInt(valB, 10) : Infinity;
+
+      // 数値で大小を比較
+      if (numA !== numB) {
+        return numA - numB;
+      }
+
+      // 万が一数値が同じ（または両方数値でない）場合は、名前順などにフォールバック
+      const nameA = String(a.userName || "");
+      const nameB = String(b.userName || "");
+      return nameA.localeCompare(nameB);
+    });
+  }, [activePresences]);
+
   return (
     <div className="bg-white border border-gray-200 rounded-2xl shadow-2xs overflow-hidden flex flex-col min-w-0">
       <div className="px-3.5 py-2.5 border-b border-gray-100 flex justify-between items-center bg-gray-50/50">
@@ -35,14 +59,14 @@ export default function PresenceWidget({ presenceApp, presenceC, activePresences
       <div className="p-2.5 sm:p-4 flex flex-col gap-2 min-w-0">
         <div className="flex items-center justify-between mb-1">
           <span className="text-[10px] font-bold text-gray-500 flex items-center gap-1"><Zap className="w-3 h-3 text-amber-500" /> 現在連絡可能なメンバー</span>
-          <span className="text-[9px] font-bold text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded border border-indigo-100">{activePresences.length} 名</span>
+          <span className="text-[9px] font-bold text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded border border-indigo-100">{sortedPresences.length} 名</span>
         </div>
         
-        {activePresences.length === 0 ? (
+        {sortedPresences.length === 0 ? (
           <div className="p-3 text-center border border-dashed border-gray-200 rounded-xl text-[10px] font-bold text-gray-400">現在連絡可能なメンバーはいません</div>
         ) : (
           <div className="flex flex-wrap gap-2">
-            {activePresences.map(p => {
+            {sortedPresences.map(p => {
               return (
                 <div key={p.id} className="flex items-center gap-1.5 pl-1.5 pr-2.5 py-1 rounded-full border shadow-2xs bg-white border-gray-200">
                   {p.userPhotoURL ? (

@@ -3,7 +3,7 @@
 import React, { useState, useEffect } from "react";
 import { doc, updateDoc, collection, query, where, getDocs } from "firebase/firestore";
 import { db } from "@/lib/firebase";
-import { Search, Settings, X, Save, Loader2, LayoutGrid, CheckCircle, ShieldCheck, Mail, MapPin, QrCode, Shield, Key, Lock, Globe, Database } from "lucide-react";
+import { Search, Settings, X, Save, Loader2, LayoutGrid, CheckCircle, ShieldCheck, Mail, MapPin, QrCode, Shield, Key, Lock, Globe, Database, UserPlus } from "lucide-react";
 import { TenantData } from "../page";
 import { SystemApp, RolePermissions } from "./AppManagement";
 import { useDialog } from "@/components/DialogContext";
@@ -32,6 +32,7 @@ export default function TenantManagement({ tenants, setTenants, systemApps }: Pr
   
   const [customAppNames, setCustomAppNames] = useState<Record<string, string>>({});
   const [customAppPerms, setCustomAppPerms] = useState<Record<string, RolePermissions>>({});
+  const [customExternalAppNames, setCustomExternalAppNames] = useState<Record<string, string>>({});
   
   const [tenantAdmins, setTenantAdmins] = useState<any[]>([]);
   const [isLoadingAdmins, setIsLoadingAdmins] = useState(false);
@@ -50,14 +51,12 @@ export default function TenantManagement({ tenants, setTenants, systemApps }: Pr
     setEditData({ ...tenant });
     setCustomAppNames((tenant as any).customAppNames || {});
     setCustomAppPerms((tenant as any).appPermissions || {});
+    setCustomExternalAppNames((tenant as any).customExternalAppNames || {});
     setActiveTab("basic");
 
     setIsLoadingAdmins(true);
     try {
-      const q = query(
-        collection(db, "users"),
-        where("schoolId", "==", tenant.id)
-      );
+      const q = query(collection(db, "users"), where("schoolId", "==", tenant.id));
       const snap = await getDocs(q);
       const admins: any[] = [];
       snap.forEach(d => {
@@ -80,6 +79,7 @@ export default function TenantManagement({ tenants, setTenants, systemApps }: Pr
     setEditData({}); 
     setCustomAppNames({}); 
     setCustomAppPerms({});
+    setCustomExternalAppNames({});
     setTenantAdmins([]);
   };
 
@@ -91,12 +91,24 @@ export default function TenantManagement({ tenants, setTenants, systemApps }: Pr
     setCustomAppNames(prev => ({ ...prev, [appId]: name }));
   };
 
+  const handleCustomExternalNameChange = (appId: string, name: string) => {
+    setCustomExternalAppNames(prev => ({ ...prev, [appId]: name }));
+  };
+
   const toggleModule = (appId: string) => {
     const currentModules = editData.availableModules || [];
     const newModules = currentModules.includes(appId)
       ? currentModules.filter(m => m !== appId)
       : [...currentModules, appId];
     handleEditChange("availableModules", newModules);
+  };
+
+  const toggleExternalModule = (appId: string) => {
+    const currentModules = (editData as any).externalAvailableModules || [];
+    const newModules = currentModules.includes(appId)
+      ? currentModules.filter((m: string) => m !== appId)
+      : [...currentModules, appId];
+    handleEditChange("externalAvailableModules" as any, newModules);
   };
 
   const handlePermChange = (appId: string, roleKey: keyof RolePermissions, defaultRoles: RolePermissions) => {
@@ -116,14 +128,21 @@ export default function TenantManagement({ tenants, setTenants, systemApps }: Pr
         if (!cleanCustomNames[key] || cleanCustomNames[key].trim() === "") delete cleanCustomNames[key];
       });
 
+      const cleanExternalNames = { ...customExternalAppNames };
+      Object.keys(cleanExternalNames).forEach(key => {
+        if (!cleanExternalNames[key] || cleanExternalNames[key].trim() === "") delete cleanExternalNames[key];
+      });
+
       const payload = { 
         ...editData,
         customAppNames: cleanCustomNames,
+        customExternalAppNames: cleanExternalNames,
         appPermissions: customAppPerms
       };
 
       await updateDoc(doc(db, "schools", editingTenant.id), payload);
       setTenants(tenants.map(t => t.id === editingTenant.id ? { ...t, ...payload } as TenantData : t));
+      
       showAlert("テナント設定を更新しました。", "success");
       closeEditModal();
     } catch (error) {
@@ -207,17 +226,10 @@ export default function TenantManagement({ tenants, setTenants, systemApps }: Pr
               <button onClick={closeEditModal} className="p-1.5 text-gray-400 hover:bg-gray-200 rounded-full transition-colors shrink-0"><X className="h-5 w-5" /></button>
             </div>
 
-            {/* タブ一覧 */}
             <div className="flex border-b border-gray-100 bg-gray-50 px-2 sm:px-6 pt-2 overflow-x-auto custom-scrollbar shrink-0">
-              <button onClick={() => setActiveTab("basic")} className={`pb-2 sm:pb-3 px-3 sm:px-4 text-[11px] sm:text-xs font-bold border-b-2 transition-colors whitespace-nowrap ${activeTab === "basic" ? "border-indigo-600 text-indigo-700" : "border-transparent text-gray-500 hover:text-gray-700"}`}>
-                基本設定・所在地
-              </button>
-              <button onClick={() => setActiveTab("admin")} className={`pb-2 sm:pb-3 px-3 sm:px-4 text-[11px] sm:text-xs font-bold border-b-2 transition-colors whitespace-nowrap ${activeTab === "admin" ? "border-indigo-600 text-indigo-700" : "border-transparent text-gray-500 hover:text-gray-700"}`}>
-                テナント管理者
-              </button>
-              <button onClick={() => setActiveTab("security")} className={`pb-2 sm:pb-3 px-3 sm:px-4 text-[11px] sm:text-xs font-bold border-b-2 transition-colors whitespace-nowrap ${activeTab === "security" ? "border-indigo-600 text-indigo-700" : "border-transparent text-gray-500 hover:text-gray-700"}`}>
-                認証・セキュリティ・LINE
-              </button>
+              <button onClick={() => setActiveTab("basic")} className={`pb-2 sm:pb-3 px-3 sm:px-4 text-[11px] sm:text-xs font-bold border-b-2 transition-colors whitespace-nowrap ${activeTab === "basic" ? "border-indigo-600 text-indigo-700" : "border-transparent text-gray-500 hover:text-gray-700"}`}>基本設定・所在地</button>
+              <button onClick={() => setActiveTab("admin")} className={`pb-2 sm:pb-3 px-3 sm:px-4 text-[11px] sm:text-xs font-bold border-b-2 transition-colors whitespace-nowrap ${activeTab === "admin" ? "border-indigo-600 text-indigo-700" : "border-transparent text-gray-500 hover:text-gray-700"}`}>テナント管理者</button>
+              <button onClick={() => setActiveTab("security")} className={`pb-2 sm:pb-3 px-3 sm:px-4 text-[11px] sm:text-xs font-bold border-b-2 transition-colors whitespace-nowrap ${activeTab === "security" ? "border-indigo-600 text-indigo-700" : "border-transparent text-gray-500 hover:text-gray-700"}`}>認証・セキュリティ・LINE</button>
               <button onClick={() => setActiveTab("apps")} className={`pb-2 sm:pb-3 px-3 sm:px-4 text-[11px] sm:text-xs font-bold border-b-2 transition-colors flex items-center gap-1.5 whitespace-nowrap ${activeTab === "apps" ? "border-indigo-600 text-indigo-700" : "border-transparent text-gray-500 hover:text-gray-700"}`}>
                 <LayoutGrid className="w-3.5 h-3.5" /> アプリ配信・権限
               </button>
@@ -239,21 +251,38 @@ export default function TenantManagement({ tenants, setTenants, systemApps }: Pr
                   <div>
                     <label className="block text-[10px] sm:text-[11px] font-black text-gray-500 mb-1 sm:mb-1.5 uppercase">学校種別 (schoolType)</label>
                     <select value={(editData as any).schoolType || "high_school"} onChange={(e) => handleEditChange("schoolType" as any, e.target.value)} className="w-full border border-gray-200 rounded-xl p-2.5 sm:p-3 text-[16px] sm:text-sm font-bold bg-white focus:ring-2 focus:ring-indigo-500 outline-none transition-all shadow-2xs">
-                      <option value="elementary">小学校</option>
-                      <option value="junior_high">中学校</option>
-                      <option value="high_school">高等学校</option>
-                      <option value="combined">中高一貫校</option>
-                      <option value="university">大学・短大</option>
-                      <option value="other">その他</option>
+                      <option value="elementary">小学校</option><option value="junior_high">中学校</option><option value="high_school">高等学校</option>
+                      <option value="combined">中高一貫校</option><option value="university">大学・短大</option><option value="other">その他</option>
                     </select>
                   </div>
                   <div>
                     <label className="block text-[10px] sm:text-[11px] font-black text-gray-500 mb-1 sm:mb-1.5 uppercase">ステータス</label>
                     <select value={editData.status || "active"} onChange={(e) => handleEditChange("status", e.target.value)} className={`w-full border rounded-xl p-2.5 sm:p-3 text-[16px] sm:text-sm font-black outline-none transition-all shadow-2xs ${editData.status === 'suspended' ? 'bg-red-50 text-red-700 border-red-300' : 'bg-white text-gray-900 border-gray-200'}`}>
-                      <option value="active">稼働中 (Active)</option>
-                      <option value="suspended">⚠️ 停止中 (Suspended)</option>
+                      <option value="active">稼働中 (Active)</option><option value="suspended">⚠️ 停止中 (Suspended)</option>
                     </select>
                   </div>
+
+                  <div className="md:col-span-2 bg-amber-50/50 border border-amber-200 rounded-xl p-4 shadow-2xs flex items-center justify-between mt-2">
+                    <div className="pr-4">
+                      <h4 className="text-xs sm:text-sm font-black text-amber-900 flex items-center gap-1.5">
+                        <Globe className="w-4 h-4 text-amber-600" />
+                        外部ユーザー連携 (ゲスト機能)
+                      </h4>
+                      <p className="text-[10px] font-bold text-amber-700/80 mt-1 leading-relaxed">
+                        このテナントでの外部ユーザー機能の利用をシステムとして許可します。OFFにすると、この学校は外部ユーザー機能の画面自体を利用できなくなります。
+                      </p>
+                    </div>
+                    <label className="relative inline-flex items-center cursor-pointer shrink-0">
+                      <input 
+                        type="checkbox" 
+                        className="sr-only peer" 
+                        checked={(editData as any).isExternalUserEnabled || false} 
+                        onChange={(e) => handleEditChange("isExternalUserEnabled" as any, e.target.checked)}
+                      />
+                      <div className="w-12 h-7 bg-gray-300 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-6 after:w-5 after:transition-all peer-checked:bg-amber-500"></div>
+                    </label>
+                  </div>
+
                   <div>
                     <label className="block text-[10px] sm:text-[11px] font-black text-gray-500 mb-1 sm:mb-1.5 uppercase">郵便番号</label>
                     <input type="text" value={(editData as any).postalCode || ""} onChange={(e) => handleEditChange("postalCode" as any, e.target.value)} className="w-full border border-gray-200 rounded-xl p-2.5 sm:p-3 text-[16px] sm:text-sm font-bold bg-white focus:ring-2 focus:ring-indigo-500 outline-none transition-all shadow-2xs" />
@@ -265,7 +294,7 @@ export default function TenantManagement({ tenants, setTenants, systemApps }: Pr
                 </div>
               )}
 
-              {/* テナント管理者タブ（学校のユーザー一覧から管理者/IT担当を抽出表示） */}
+              {/* テナント管理者タブ */}
               {activeTab === "admin" && (
                 <div className="space-y-4 max-w-2xl">
                   <div className="bg-blue-50 border border-blue-100 p-3 sm:p-4 rounded-xl flex items-start gap-3 shadow-2xs">
@@ -385,14 +414,14 @@ export default function TenantManagement({ tenants, setTenants, systemApps }: Pr
                 </div>
               )}
 
-              {/* アプリ配信タブ (コンパクトに再構築) */}
+              {/* アプリ配信タブ */}
               {activeTab === "apps" && (
                 <div className="space-y-4">
                   <div className="bg-indigo-50 border border-indigo-100 p-3 sm:p-4 rounded-xl flex items-start gap-2.5 sm:gap-3 shadow-2xs">
                     <CheckCircle className="w-4 h-4 sm:w-5 sm:h-5 text-indigo-600 flex-shrink-0 mt-0.5" />
                     <div>
                       <p className="text-[11px] sm:text-xs font-bold text-indigo-900 leading-tight">この学校（テナント）で利用するアプリとその権限を個別にカスタマイズできます。</p>
-                      <p className="text-[9px] sm:text-[10px] text-indigo-700 mt-1 leading-relaxed">「テナント専用名」を入力すると、この学校のサイドバーではその独自の名前で表示されます。</p>
+                      <p className="text-[9px] sm:text-[10px] text-indigo-700 mt-1 leading-relaxed">「テナント専用名」を設定すると、その独自の名前で表示されます。</p>
                     </div>
                   </div>
 
@@ -400,6 +429,7 @@ export default function TenantManagement({ tenants, setTenants, systemApps }: Pr
                     {systemApps.map(app => {
                       const isAllowed = editData.availableModules?.includes(app.appId) || false;
                       const customName = customAppNames[app.appId] || "";
+                      const customExtName = customExternalAppNames[app.appId] || "";
                       const appDefaults = app.defaultRoles || DEFAULT_ROLES;
                       const perms = customAppPerms[app.appId] || appDefaults;
 
@@ -426,40 +456,64 @@ export default function TenantManagement({ tenants, setTenants, systemApps }: Pr
                             </label>
                           </div>
 
-                          {/* 許可されている場合のみコンパクトに展開 */}
                           {isAllowed && (
-                            <div className="mt-3 pt-3 border-t border-gray-100 flex flex-col sm:flex-row gap-3 items-stretch sm:items-center animate-fade-in">
+                            <div className="mt-3 pt-3 border-t border-gray-100 flex flex-col gap-3 animate-fade-in">
                               
-                              <div className="flex-1">
-                                <label className="block text-[9px] font-black text-gray-500 mb-1">テナント専用名 (エイリアス)</label>
-                                <input 
-                                  type="text" 
-                                  value={customName} 
-                                  onChange={(e) => handleCustomNameChange(app.appId, e.target.value)}
-                                  placeholder={`標準: ${app.name}`}
-                                  className="w-full text-xs font-bold p-2 border border-gray-300 rounded-xl bg-gray-50 focus:bg-white focus:ring-2 focus:ring-indigo-500 outline-none transition-all shadow-2xs"
-                                />
-                              </div>
+                              <div className="flex flex-col sm:flex-row gap-3 items-stretch sm:items-start">
+                                <div className="flex-1 space-y-3">
+                                  <div>
+                                    <label className="block text-[9px] font-black text-gray-500 mb-1">テナント専用名 (エイリアス)</label>
+                                    <input 
+                                      type="text" value={customName} onChange={(e) => handleCustomNameChange(app.appId, e.target.value)} placeholder={`標準: ${app.name}`}
+                                      className="w-full text-xs font-bold p-2 border border-gray-300 rounded-xl bg-gray-50 focus:bg-white focus:ring-2 focus:ring-indigo-500 outline-none transition-all shadow-2xs"
+                                    />
+                                  </div>
 
-                              <div className="flex-1 bg-gray-50 border border-gray-200 rounded-xl p-2.5">
-                                <label className="block text-[9px] font-black text-gray-500 mb-1.5 flex items-center gap-1">
-                                  <ShieldCheck className="w-3 h-3 text-indigo-600" /> 学校個別権限オーバーライド
-                                </label>
-                                <div className="flex flex-wrap gap-1">
-                                  {(Object.keys(ROLE_LABELS) as Array<keyof RolePermissions>).map(roleKey => (
-                                    <label key={roleKey} className={`flex items-center gap-1 cursor-pointer px-2 py-1 rounded border text-[9px] font-bold transition-colors ${perms[roleKey] ? 'bg-white border-indigo-300 text-indigo-900 shadow-2xs' : 'bg-gray-100 border-gray-200 text-gray-400'}`}>
-                                      <input 
-                                        type="checkbox" 
-                                        checked={perms[roleKey]} 
-                                        onChange={() => handlePermChange(app.appId, roleKey, appDefaults)} 
-                                        className="w-3 h-3 text-indigo-600 rounded" 
-                                      />
-                                      {ROLE_LABELS[roleKey]}
-                                    </label>
-                                  ))}
+                                  {/* ★ 追加：テナント全体で外部連携ON、かつアプリが外部連携対応している場合 */}
+                                  {(editData as any).isExternalUserEnabled && app.isExternalReady && (() => {
+                                    const isExtAllowed = (editData as any).externalAvailableModules?.includes(app.appId) || false;
+                                    return (
+                                      <div className="p-2.5 bg-amber-50/50 border border-amber-200 rounded-xl space-y-2">
+                                        <label className="flex items-center cursor-pointer">
+                                          <input 
+                                            type="checkbox" 
+                                            checked={isExtAllowed}
+                                            onChange={() => toggleExternalModule(app.appId)}
+                                            className="w-3.5 h-3.5 text-amber-600 rounded mr-2 focus:ring-amber-500"
+                                          />
+                                          <span className="text-[9px] font-black text-amber-900 flex items-center gap-1">
+                                            <Globe className="w-3 h-3"/> このアプリを外部ユーザーに公開する
+                                          </span>
+                                        </label>
+                                        
+                                        {isExtAllowed && (
+                                          <div className="animate-fade-in pt-1 border-t border-amber-200/50 mt-1">
+                                            <label className="block text-[9px] font-black text-amber-700 mb-1 mt-1 flex items-center gap-1">外部ユーザー向け 表示名</label>
+                                            <input 
+                                              type="text" value={customExtName} onChange={(e) => handleCustomExternalNameChange(app.appId, e.target.value)} placeholder={`標準: ${app.name}`}
+                                              className="w-full text-xs font-bold p-2 border border-amber-300 rounded-lg bg-white focus:ring-2 focus:ring-amber-500 outline-none transition-all shadow-2xs"
+                                            />
+                                          </div>
+                                        )}
+                                      </div>
+                                    );
+                                  })()}
+                                </div>
+
+                                <div className="flex-1 bg-gray-50 border border-gray-200 rounded-xl p-2.5">
+                                  <label className="block text-[9px] font-black text-gray-500 mb-1.5 flex items-center gap-1">
+                                    <ShieldCheck className="w-3 h-3 text-indigo-600" /> 学校個別権限オーバーライド
+                                  </label>
+                                  <div className="flex flex-wrap gap-1">
+                                    {(Object.keys(ROLE_LABELS) as Array<keyof RolePermissions>).map(roleKey => (
+                                      <label key={roleKey} className={`flex items-center gap-1 cursor-pointer px-2 py-1 rounded border text-[9px] font-bold transition-colors ${perms[roleKey] ? 'bg-white border-indigo-300 text-indigo-900 shadow-2xs' : 'bg-gray-100 border-gray-200 text-gray-400'}`}>
+                                        <input type="checkbox" checked={perms[roleKey]} onChange={() => handlePermChange(app.appId, roleKey, appDefaults)} className="w-3 h-3 text-indigo-600 rounded" />
+                                        {ROLE_LABELS[roleKey]}
+                                      </label>
+                                    ))}
+                                  </div>
                                 </div>
                               </div>
-
                             </div>
                           )}
 
@@ -473,12 +527,9 @@ export default function TenantManagement({ tenants, setTenants, systemApps }: Pr
             </div>
 
             <div className="p-4 sm:p-5 border-t border-gray-100 bg-white flex flex-col sm:flex-row justify-end gap-2 sm:gap-3 rounded-b-3xl shrink-0 pb-6 sm:pb-5">
-              <button onClick={closeEditModal} className="w-full sm:w-auto px-5 py-3 sm:py-2.5 text-xs font-bold text-gray-600 bg-gray-100 border border-gray-200 hover:bg-gray-200 rounded-xl transition-colors text-center">
-                キャンセル
-              </button>
+              <button onClick={closeEditModal} className="w-full sm:w-auto px-5 py-3 sm:py-2.5 text-xs font-bold text-gray-600 bg-gray-100 border border-gray-200 hover:bg-gray-200 rounded-xl transition-colors text-center">キャンセル</button>
               <button onClick={saveTenantSettings} disabled={isSaving} className="w-full sm:w-auto px-8 py-3 sm:py-2.5 text-xs font-bold text-white bg-indigo-600 hover:bg-indigo-700 rounded-xl shadow-sm transition-all flex items-center justify-center disabled:opacity-50">
-                {isSaving ? <Loader2 className="animate-spin h-4 w-4 mr-2" /> : <Save className="h-4 w-4 mr-2" />}
-                設定を保存する
+                {isSaving ? <Loader2 className="animate-spin h-4 w-4 mr-2" /> : <Save className="h-4 w-4 mr-2" />}設定を保存する
               </button>
             </div>
           </div>
