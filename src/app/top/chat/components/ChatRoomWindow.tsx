@@ -23,6 +23,26 @@ const UserAvatar = ({ name, url, isExternal = false, className = "w-7 h-7 text-[
   );
 };
 
+// ★ Firebaseの長いURLを、綺麗な短いURL（/f/...）に変換する関数
+const getProxyUrl = (url: string) => {
+  try {
+    const urlObj = new URL(url);
+    if (urlObj.hostname !== "firebasestorage.googleapis.com") return url;
+    
+    const match = urlObj.pathname.match(/\/o\/(.+)/);
+    if (!match) return url;
+
+    // パスをデコードしてスラッシュ区切りにする
+    const filePath = decodeURIComponent(match[1]);
+    const token = urlObj.searchParams.get("token");
+
+    // tokenパラメータも "t" に短縮する
+    return `/f/${filePath}${token ? `?t=${token}` : ""}`;
+  } catch (e) {
+    return url;
+  }
+};
+
 type Props = {
   userData: UserData | ExternalUser;
   tenantUsers: UserData[];
@@ -35,9 +55,10 @@ type Props = {
   onTogglePin?: (roomId: string, isPinned: boolean) => void;
   schoolName?: string;
   schoolLogoURL?: string;
+  isExternalMode?: boolean;
 };
 
-export default function ChatRoomWindow({ userData, tenantUsers, externalUsers, positions, room, onBack, appConfig, onOpenProfile, onTogglePin, schoolName, schoolLogoURL }: Props) {
+export default function ChatRoomWindow({ userData, tenantUsers, externalUsers, positions, room, onBack, appConfig, onOpenProfile, onTogglePin, schoolName, schoolLogoURL, isExternalMode = false }: Props) {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [editorHtml, setEditorHtml] = useState("");
   const [attachments, setAttachments] = useState<File[]>([]);
@@ -65,7 +86,6 @@ export default function ChatRoomWindow({ userData, tenantUsers, externalUsers, p
 
   const [replyingTo, setReplyingTo] = useState<ChatMessage | null>(null);
 
-  // ★ 退会ユーザー検知＆削除パネル用ステート
   const [showDeletedUserPanel, setShowDeletedUserPanel] = useState(false);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -95,7 +115,7 @@ export default function ChatRoomWindow({ userData, tenantUsers, externalUsers, p
     canCreateCustomGroup: false, canSendPhoto: true, canSendFile: true,
   };
 
-  const getUserById = (id: string) => tenantUsers.find(u => u.id === id) || externalUsers.find(e => e.id === id);
+  const getUserById = useCallback((id: string) => tenantUsers.find(u => u.id === id) || externalUsers.find(e => e.id === id), [tenantUsers, externalUsers]);
 
   const displayedMessages = searchQuery ? messages.filter(m => m.text.replace(/<[^>]*>?/gm, '').toLowerCase().includes(searchQuery.toLowerCase())) : messages;
 
@@ -116,7 +136,6 @@ export default function ChatRoomWindow({ userData, tenantUsers, externalUsers, p
 
   const roomMembers = getRoomMembers();
 
-  // ★ 退会したユーザー（ダイレクトチャット等で相手が見つからない場合）の判定
   const isOtherUserDeleted = useCallback(() => {
     if (room.type === "direct") {
       const otherId = room.members.find(id => id !== userData.id);
@@ -127,7 +146,8 @@ export default function ChatRoomWindow({ userData, tenantUsers, externalUsers, p
     return false;
   }, [room, userData.id, getUserById]);
 
-  // ルーム変更時にパネル表示状態をリセット（＝再度このルームを表示したら同じメッセージが表示される）
+  const isDeletedUserRoom = isOtherUserDeleted();
+
   useEffect(() => {
     setShowSettings(false);
     setReplyingTo(null); 
@@ -138,7 +158,13 @@ export default function ChatRoomWindow({ userData, tenantUsers, externalUsers, p
     }
   }, [room.id, isOtherUserDeleted]);
 
-  // ★ 削除ハンドラー
+  useEffect(() => {
+    setEditorHtml("");
+    if (editorRef.current) {
+      editorRef.current.innerHTML = "";
+    }
+  }, [room.id]);
+
   const handleConfirmDeleteRoom = async () => {
     try {
       await deleteDoc(doc(db, "chat_rooms", room.id));
@@ -151,7 +177,7 @@ export default function ChatRoomWindow({ userData, tenantUsers, externalUsers, p
 
   const filteredMentionUsers = [
     { id: "all", name: "all", role: "" },
-    ...roomMembers.map(u => ({ id: u.id, name: u.name, role: "role" in u ? u.role : "外部" }))
+    ...roomMembers.map(u => ({ id: u.id, name: u.name, role: "role" in u ? (u as UserData).role : "外部" }))
   ].filter(u => u.name.toLowerCase().includes(mentionState.query.toLowerCase()));
 
   useEffect(() => {
@@ -230,10 +256,11 @@ export default function ChatRoomWindow({ userData, tenantUsers, externalUsers, p
       document.execCommand("insertHTML", false, `<span class="mention" contenteditable="false" data-mention="${user.id}">@${displayName}</span>&#8203; `);
     }
     setMentionState({ show: false, query: "" });
+    setEditorHtml(editorRef.current?.innerHTML || "");
   };
 
   const handleSendMessage = async () => {
-    if (isOtherUserDeleted()) return; // 相手が退会ユーザーの場合は送信不可
+    if (isDeletedUserRoom) return; 
     const textContent = editorRef.current?.textContent?.trim() || "";
     const hasImage = editorRef.current?.querySelector('img') !== null;
     if (!textContent && !hasImage && attachments.length === 0) return;
@@ -458,6 +485,11 @@ export default function ChatRoomWindow({ userData, tenantUsers, externalUsers, p
 
   const formatTime = (dateStr: string) => { const d = new Date(dateStr); return `${d.getHours()}:${String(d.getMinutes()).padStart(2, '0')}`; };
 
+  const formatMessageText = (text: string) => {
+    const urlRegex = /(https?:\/\/[^\s]+)/g;
+    return text.replace(urlRegex, url => `<a href="${url}" target="_blank" rel="noopener noreferrer" class="text-blue-600 hover:underline break-all">${url}</a>`);
+  };
+
   const RichTextToolbar = ({ targetRef }: { targetRef: React.RefObject<HTMLDivElement | null> }) => {
     const [colorPicker, setColorPicker] = useState<"text" | "bg" | null>(null);
     return (
@@ -491,8 +523,6 @@ export default function ChatRoomWindow({ userData, tenantUsers, externalUsers, p
       </div>
     );
   };
-
-  const isDeletedUserRoom = isOtherUserDeleted();
 
   return (
     <div className="flex flex-col h-full bg-[#eaf0ed] sm:bg-[#f3f4f6] relative font-sans" onClick={() => { setShowReactionMenuFor(null); setLongPressedMsgId(null); }}>
@@ -531,7 +561,6 @@ export default function ChatRoomWindow({ userData, tenantUsers, externalUsers, p
         isExternalMode={"category" in userData}
       />
 
-      {/* ★ 退会したユーザーとのチャットルーム場合の削除パネル */}
       {showDeletedUserPanel && isDeletedUserRoom && (
         <div className="bg-amber-50 border-b border-amber-200 p-3 sm:p-4 flex flex-col sm:flex-row items-center justify-between gap-3 shrink-0 shadow-sm animate-fade-in z-20">
           <div className="flex items-center gap-2.5 min-w-0">
@@ -560,7 +589,6 @@ export default function ChatRoomWindow({ userData, tenantUsers, externalUsers, p
         </div>
       )}
 
-      {/* メッセージ一覧 */}
       <div className="flex-1 overflow-y-auto p-2 sm:p-4 space-y-3 sm:space-y-4 custom-scrollbar">
         {displayedMessages.map((msg, idx) => {
           const isMe = msg.senderId === userData.id;
@@ -622,7 +650,7 @@ export default function ChatRoomWindow({ userData, tenantUsers, externalUsers, p
                       }}
                       className={`flex flex-col items-center shrink-0 ${!("category" in userData) && senderUser ? 'cursor-pointer hover:opacity-80 transition-opacity' : ''}`}
                     >
-                      <UserAvatar name={senderUser?.name || "退会ユーザー"} url={(senderUser as any)?.photoURL} isExternal={"category" in (senderUser || {})} />
+                      <UserAvatar name={senderUser?.name || "退会ユーザー"} url={(senderUser as any)?.photoURL} isExternal={"category" in (senderUser || {})} className="w-8 h-8 text-[10px]" />
                     </div>
                   )}
 
@@ -638,13 +666,16 @@ export default function ChatRoomWindow({ userData, tenantUsers, externalUsers, p
                           </div>
                         )}
 
+                        {/* ★ ここのURL出力時に getProxyUrl() を通す */}
                         {msg.attachments && msg.attachments.length > 0 && (
                           <div className={`flex flex-col gap-1 w-full ${isMe ? 'items-end' : 'items-start'}`}>
                             {msg.attachments.map((file, fIdx) => (
                               file.type.startsWith('image/') ? (
-                                <a key={fIdx} href={file.url} target="_blank" rel="noopener noreferrer" className="block max-w-[200px] sm:max-w-[260px] overflow-hidden rounded-xl shadow-sm hover:opacity-90 transition-opacity bg-white border border-gray-200 p-0.5"><img src={file.url} alt={file.name} className="w-full h-auto rounded-lg object-cover" /></a>
+                                <a key={fIdx} href={getProxyUrl(file.url)} target="_blank" rel="noopener noreferrer" className="block max-w-[200px] sm:max-w-[260px] overflow-hidden rounded-xl shadow-sm hover:opacity-90 transition-opacity bg-white border border-gray-200 p-0.5">
+                                  <img src={getProxyUrl(file.url)} alt={file.name} className="w-full h-auto rounded-lg object-cover" />
+                                </a>
                               ) : (
-                                <a key={fIdx} href={file.url} target="_blank" rel="noopener noreferrer" className="p-2 rounded-xl border flex items-center gap-2 max-w-[200px] hover:opacity-80 transition-opacity shadow-sm bg-white border-gray-200">
+                                <a key={fIdx} href={getProxyUrl(file.url)} target="_blank" rel="noopener noreferrer" className="p-2 rounded-xl border flex items-center gap-2 max-w-[200px] hover:opacity-80 transition-opacity shadow-sm bg-white border-gray-200">
                                   <div className={`p-1.5 rounded-lg ${isMe ? 'bg-indigo-50 text-indigo-600' : 'bg-gray-100 text-gray-600'}`}><FileIcon className="w-4 h-4"/></div>
                                   <div className="flex flex-col min-w-0"><span className="text-[10px] font-bold truncate text-gray-900">{file.name}</span><span className="text-[8px] text-gray-400">ファイル</span></div>
                                 </a>
@@ -695,10 +726,9 @@ export default function ChatRoomWindow({ userData, tenantUsers, externalUsers, p
           );
         })}
         {displayedMessages.length === 0 && searchQuery && <div className="flex justify-center my-10 text-xs font-bold text-gray-400">一致するメッセージは見つかりませんでした</div>}
-        <div ref={messagesEndRef} />
+        <div ref={messagesEndRef} className="h-1" />
       </div>
 
-      {/* 入力欄エリア（相手が退会ユーザーの場合は送信禁止） */}
       <div className="m-2 sm:m-4 bg-white border border-gray-300 rounded-xl shadow-sm shrink-0 flex flex-col focus-within:border-indigo-500 focus-within:ring-1 focus-within:ring-indigo-500 transition-all relative z-30">
         
         {isDeletedUserRoom ? (

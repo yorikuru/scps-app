@@ -197,6 +197,9 @@ export default function ChatRoomSettingsModal({ room, userData, roomMembers, ten
 
   return (
     <>
+      {/* ★ モーダルの外側（背景）をクリックした時に閉じる処理。 
+        内部のクリックイベントが伝播しないように、内部要素に onClick={e => e.stopPropagation()} を入れています。
+      */}
       <div className="absolute inset-0 z-[50] bg-black/40 backdrop-blur-sm flex items-center justify-center p-4 animate-fade-in" onClick={onClose}>
         <div className="bg-white rounded-3xl shadow-2xl w-full max-w-sm overflow-hidden flex flex-col max-h-[80vh] animate-slide-up" onClick={e => e.stopPropagation()}>
           
@@ -339,9 +342,10 @@ export default function ChatRoomSettingsModal({ room, userData, roomMembers, ten
         </div>
       </div>
 
+      {/* 確認ダイアログ用 */}
       {confirmAlert && (
-        <div className="absolute inset-0 z-[60] bg-black/40 flex items-center justify-center p-4 animate-fade-in">
-          <div className="bg-white rounded-2xl p-6 max-w-sm w-full text-center animate-slide-up shadow-2xl">
+        <div className="absolute inset-0 z-[60] bg-black/40 flex items-center justify-center p-4 animate-fade-in" onClick={() => setConfirmAlert(null)}>
+          <div className="bg-white rounded-2xl p-6 max-w-sm w-full text-center animate-slide-up shadow-2xl" onClick={e => e.stopPropagation()}>
             <AlertCircle className="w-12 h-12 text-amber-500 mx-auto mb-4" />
             <p className="text-sm font-bold text-gray-800 mb-6 leading-relaxed">{confirmAlert.message}</p>
             <div className="flex justify-center gap-3">

@@ -18,7 +18,8 @@ export type Announcement = {
   attachments?: Attachment[];
   publishStartDate?: string | null; 
   publishEndDate?: string | null;   
-  isExternal?: boolean; // ★追加：外部ユーザー向け配信フラグ
+  isExternal?: boolean; 
+  readByExternal?: string[]; // ★追加：外部ユーザーの既読者IDリスト
 };
 
 export type Category = { id: string; schoolId: string; name: string; color: string; };

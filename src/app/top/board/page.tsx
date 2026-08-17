@@ -13,6 +13,7 @@ import BoardForm from "./components/BoardForm";
 import BoardList from "./components/BoardList";
 import CategoryManager from "./components/CategoryManager"; 
 import { useDialog } from "@/components/DialogContext"; 
+import { ExternalUser } from "@/app/types/external"; // ★ ExternalUser型をインポート
 
 const DynamicIcon = ({ name, className }: { name: string, className?: string }) => {
   const IconComponent = (LucideIcons as any)[name] || LucideIcons.Box;
@@ -29,6 +30,9 @@ export default function BoardPage() {
 
   const [userData, setUserData] = useState<UserData | null>(null);
   const [tenantUsers, setTenantUsers] = useState<UserData[]>([]);
+  // ★ 外部ユーザーデータを保持するステート
+  const [externalUsers, setExternalUsers] = useState<ExternalUser[]>([]);
+
   const [appConfig, setAppConfig] = useState<AppConfig>({ name: "連絡事項", icon: "MessageSquareText", color: "indigo" });
   const [hasPermission, setHasPermission] = useState(true);
   const [isLoading, setIsLoading] = useState(true);
@@ -46,6 +50,7 @@ export default function BoardPage() {
     let unsubAnnouncements: () => void;
     let unsubCategories: () => void;
     let unsubUsers: () => void;
+    let unsubExternalUsers: () => void; // ★ 追加
 
     const unsubscribeAuth = onAuthStateChanged(auth, async (user) => {
       if (user) {
@@ -96,6 +101,21 @@ export default function BoardPage() {
             setTenantUsers(fetchedUsers);
           });
 
+          // ★ 外部ユーザー（ゲスト）の情報を取得して監視
+          const qExtUsers = query(collection(db, "external_users"), where("schoolId", "==", data.schoolId));
+          unsubExternalUsers = onSnapshot(qExtUsers, (snapshot) => {
+            const fetchedExtUsers: ExternalUser[] = [];
+            snapshot.forEach(d => {
+              const extData = { id: d.id, ...d.data() } as ExternalUser;
+              // Boardアプリが許可されていて、アカウントが有効なゲストのみを抽出
+              const isExpired = extData.expiresAt && (new Date(extData.expiresAt as string).getTime() < Date.now());
+              if (extData.status === "active" && !isExpired && extData.allowedModules?.includes("board")) {
+                fetchedExtUsers.push(extData);
+              }
+            });
+            setExternalUsers(fetchedExtUsers);
+          });
+
           const qAnnouncements = query(collection(db, "announcements"), where("schoolId", "==", data.schoolId), orderBy("createdAt", "desc"));
           unsubAnnouncements = onSnapshot(qAnnouncements, (snapshot) => {
             const fetched: Announcement[] = [];
@@ -115,6 +135,7 @@ export default function BoardPage() {
                 publishStartDate: docData.publishStartDate || null,
                 publishEndDate: docData.publishEndDate || null,
                 isExternal: docData.isExternal || false,
+                readByExternal: docData.readByExternal || [], // ★ 既読者リストを取得
               });
             });
             setAnnouncements(fetched);
@@ -137,6 +158,7 @@ export default function BoardPage() {
       if (unsubAnnouncements) unsubAnnouncements();
       if (unsubCategories) unsubCategories();
       if (unsubUsers) unsubUsers();
+      if (unsubExternalUsers) unsubExternalUsers(); // ★ クリーンアップ追加
     };
   }, [router]);
 
@@ -206,6 +228,7 @@ export default function BoardPage() {
           authorId: userData.id, 
           authorPhotoURL: userData.photoURL || null, 
           createdAt: serverTimestamp(),
+          readByExternal: [], // ★ 初期化
         });
         showToast("success", "新しい連絡事項を配信しました。");
 
@@ -369,6 +392,8 @@ export default function BoardPage() {
               onEdit={(a) => setTab("form", a.id)} 
               onDelete={handleDelete}
               isExternalTab={true}
+              // ★ 外部ユーザー（ゲスト）のリストを渡す
+              externalUsers={externalUsers}
             />
           )}
           

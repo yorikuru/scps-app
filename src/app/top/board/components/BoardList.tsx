@@ -2,8 +2,9 @@
 
 import React, { useState, useEffect } from "react";
 import * as LucideIcons from "lucide-react";
-import { Search, Edit2, Trash2, AlertOctagon, AlertCircle, Paperclip, Download, FileIcon, MessageSquareText, Calendar, ArrowDownUp, Clock, ChevronLeft, Globe } from "lucide-react";
+import { Search, Edit2, Trash2, AlertOctagon, AlertCircle, Paperclip, Download, FileIcon, MessageSquareText, Calendar, ArrowDownUp, Clock, ChevronLeft, Globe, Eye, Check, X } from "lucide-react";
 import { Announcement, Category, UserData, AppConfig, COLOR_MAPPINGS } from "../types";
+import { ExternalUser } from "@/app/types/external";
 
 const DynamicIcon = ({ name, className }: { name: string, className?: string }) => {
   const IconComponent = (LucideIcons as any)[name] || LucideIcons.Box;
@@ -28,10 +29,12 @@ type Props = {
   appConfig: AppConfig;
   onEdit: (announcement: Announcement) => void;
   onDelete: (id: string) => Promise<void>;
-  isExternalTab: boolean; // ★ 追加
+  isExternalTab: boolean; 
+  // ★ 親から外部ユーザーデータ全体を受け取る（既読率計算・一覧表示のため）
+  externalUsers?: ExternalUser[];
 };
 
-export default function BoardList({ announcements, categories, userData, tenantUsers, appConfig, onEdit, onDelete, isExternalTab }: Props) {
+export default function BoardList({ announcements, categories, userData, tenantUsers, appConfig, onEdit, onDelete, isExternalTab, externalUsers = [] }: Props) {
   const [searchQuery, setSearchQuery] = useState("");
   const [filterCategory, setFilterCategory] = useState<string>("all");
   const [filterUrgent, setFilterUrgent] = useState(false);
@@ -41,6 +44,9 @@ export default function BoardList({ announcements, categories, userData, tenantU
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
   
   const [showMobileDetail, setShowMobileDetail] = useState(false);
+  
+  // ★ 既読者・未読者一覧のポップアップ表示用ステート
+  const [showReadStatusModal, setShowReadStatusModal] = useState<string | null>(null);
 
   const c = COLOR_MAPPINGS[appConfig.color] || COLOR_MAPPINGS.default;
 
@@ -74,7 +80,6 @@ export default function BoardList({ announcements, categories, userData, tenantU
     const end = a.publishEndDate ? new Date(a.publishEndDate).getTime() : null;
     const badges = [];
 
-    // ★ 内部一覧のときのみ、外部公開バッジをつける（外部一覧では全部外部なので不要）
     if (!isExternalTab && a.isExternal) {
       badges.push(<span key="ext" className="px-1.5 py-0.5 rounded text-[8px] font-bold bg-blue-100 text-blue-700 flex items-center mr-1"><Globe className="w-2.5 h-2.5 mr-0.5" />外部公開</span>);
     }
@@ -133,6 +138,19 @@ export default function BoardList({ announcements, categories, userData, tenantU
   const selectedAuthorUser = tenantUsers.find(u => u.id === selectedAnnouncement?.authorId);
   const selectedAvatarUrl = selectedAuthorUser?.photoURL;
 
+  // ★ 既読者・未読者を判定する関数
+  const getReadStatusData = (a: Announcement) => {
+    const readIds = a.readByExternal || [];
+    const readUsers = externalUsers.filter(u => readIds.includes(u.id));
+    const unreadUsers = externalUsers.filter(u => !readIds.includes(u.id));
+    return {
+      readCount: readUsers.length,
+      totalCount: externalUsers.length,
+      readUsers,
+      unreadUsers
+    };
+  };
+
   const renderDetailView = () => {
     if (!selectedAnnouncement) {
       return (
@@ -145,6 +163,8 @@ export default function BoardList({ announcements, categories, userData, tenantU
         </div>
       );
     }
+
+    const { readCount, totalCount } = getReadStatusData(selectedAnnouncement);
 
     return (
       <div className="flex-1 overflow-y-auto custom-scrollbar flex flex-col h-full bg-white relative">
@@ -172,18 +192,37 @@ export default function BoardList({ announcements, categories, userData, tenantU
             )}
           </div>
 
-          <div className="flex items-center gap-3">
-            <UserAvatar name={selectedAnnouncement.authorName} url={selectedAvatarUrl} className="w-10 h-10 text-sm" />
-            <div>
-              <div className="flex items-center gap-2">
-                <span className="text-sm font-black text-gray-900">{selectedAnnouncement.authorName}</span>
-                {selectedCategory && <span className={`px-1.5 py-0.5 rounded text-[9px] font-bold border ${selectedCategory.color}`}>{selectedCategory.name}</span>}
-              </div>
-              <div className="flex items-center gap-1.5 text-[10px] font-bold text-gray-400 mt-0.5">
-                <Calendar className="w-3 h-3" /> 掲載: {new Date(selectedAnnouncement.publishStartDate || selectedAnnouncement.createdAt).toLocaleString('ja-JP')}
-                {selectedAnnouncement.publishEndDate && ` 〜 ${new Date(selectedAnnouncement.publishEndDate).toLocaleString('ja-JP')}`}
+          <div className="flex items-center justify-between flex-wrap gap-4">
+            <div className="flex items-center gap-3">
+              <UserAvatar name={selectedAnnouncement.authorName} url={selectedAvatarUrl} className="w-10 h-10 text-sm" />
+              <div>
+                <div className="flex items-center gap-2">
+                  <span className="text-sm font-black text-gray-900">{selectedAnnouncement.authorName}</span>
+                  {selectedCategory && <span className={`px-1.5 py-0.5 rounded text-[9px] font-bold border ${selectedCategory.color}`}>{selectedCategory.name}</span>}
+                </div>
+                <div className="flex items-center gap-1.5 text-[10px] font-bold text-gray-400 mt-0.5">
+                  <Calendar className="w-3 h-3" /> 掲載: {new Date(selectedAnnouncement.publishStartDate || selectedAnnouncement.createdAt).toLocaleString('ja-JP')}
+                  {selectedAnnouncement.publishEndDate && ` 〜 ${new Date(selectedAnnouncement.publishEndDate).toLocaleString('ja-JP')}`}
+                </div>
               </div>
             </div>
+
+            {/* ★ 外部ユーザー（ゲスト）の既読状況をコンパクトに表示 */}
+            {selectedAnnouncement.isExternal && (
+              <button 
+                onClick={() => setShowReadStatusModal(selectedAnnouncement.id)}
+                className="flex items-center gap-2 bg-blue-50/50 hover:bg-blue-100 transition-colors border border-blue-100 rounded-xl px-3 py-1.5 group"
+                title="既読状況の詳細を見る"
+              >
+                <Eye className="w-4 h-4 text-blue-500 group-hover:text-blue-600" />
+                <div className="flex flex-col text-left">
+                  <span className="text-[9px] font-black text-blue-800 leading-tight">外部公開（ゲスト対象）</span>
+                  <span className="text-xs font-bold text-blue-600 font-mono leading-none mt-0.5">
+                    {readCount} <span className="text-[10px] text-gray-400">/ {totalCount > 0 ? totalCount : "全員"} 既読</span>
+                  </span>
+                </div>
+              </button>
+            )}
           </div>
         </div>
 
@@ -220,10 +259,8 @@ export default function BoardList({ announcements, categories, userData, tenantU
   return (
     <div className="flex flex-col lg:flex-row h-full w-full bg-white relative overflow-hidden">
       
-      {/* 左ペイン：リスト */}
       <div className={`w-full lg:w-[420px] xl:w-[480px] border-r border-gray-200 flex flex-col flex-shrink-0 bg-white h-full ${showMobileDetail ? 'hidden lg:flex' : 'flex'}`}>
         
-        {/* ★ 外部タブ専用メッセージ */}
         {isExternalTab && (
           <div className="bg-blue-50 p-3 border-b border-blue-100 shrink-0 flex items-center gap-2.5">
             <Globe className="w-5 h-5 text-blue-600 shrink-0" />
@@ -305,11 +342,11 @@ export default function BoardList({ announcements, categories, userData, tenantU
         </div>
       </div>
 
-      {/* 右ペイン：プレビュー詳細 */}
       <div className={`flex-1 w-full h-full min-w-0 bg-white ${showMobileDetail ? 'block absolute inset-0 z-20' : 'hidden lg:flex flex-col'}`}>
         {renderDetailView()}
       </div>
 
+      {/* 削除確認モーダル */}
       {deleteConfirmId && (
         <div className="absolute inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4 animate-fade-in">
           <div className="bg-white border border-gray-200 rounded-2xl shadow-2xl w-full max-w-sm flex flex-col overflow-hidden">
@@ -327,6 +364,63 @@ export default function BoardList({ announcements, categories, userData, tenantU
           </div>
         </div>
       )}
+
+      {/* ★ 既読者・未読者一覧のポップアップモーダル */}
+      {showReadStatusModal && (
+        <div className="absolute inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4 animate-fade-in" onClick={() => setShowReadStatusModal(null)}>
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm flex flex-col overflow-hidden max-h-[80vh]" onClick={e => e.stopPropagation()}>
+            <div className="p-3 border-b border-gray-100 flex justify-between items-center bg-gray-50">
+              <h3 className="text-xs font-black text-gray-900 flex items-center gap-1.5"><Eye className="w-4 h-4 text-blue-500" /> 外部ユーザーの既読状況</h3>
+              <button onClick={() => setShowReadStatusModal(null)} className="p-1.5 hover:bg-gray-200 rounded-md text-gray-500"><X className="w-3.5 h-3.5"/></button>
+            </div>
+            <div className="p-4 overflow-y-auto space-y-5 custom-scrollbar bg-white">
+              {(() => {
+                const targetAnnounce = announcements.find(a => a.id === showReadStatusModal);
+                if (!targetAnnounce) return null;
+                const { readCount, totalCount, readUsers, unreadUsers } = getReadStatusData(targetAnnounce);
+
+                return (
+                  <>
+                    <div className="bg-blue-50 rounded-xl p-3 border border-blue-100 flex items-center justify-between">
+                      <span className="text-xs font-black text-blue-900">配信対象のゲスト総数</span>
+                      <span className="text-sm font-black text-blue-700">{totalCount} 名</span>
+                    </div>
+
+                    <div>
+                      <h4 className="text-[10px] font-black text-emerald-700 mb-2 border-b border-emerald-100 pb-1 flex items-center gap-1">
+                        <Check className="w-3.5 h-3.5" /> 既読 <span className="bg-emerald-100 text-emerald-800 px-1.5 py-0.5 rounded-full text-[8px]">{readCount}</span>
+                      </h4>
+                      <div className="flex flex-wrap gap-1.5">
+                        {readUsers.length > 0 ? readUsers.map(u => (
+                          <div key={u.id} className="flex items-center gap-1.5 bg-emerald-50/50 px-2.5 py-1.5 rounded-lg border border-emerald-100 shadow-sm">
+                            <span className="text-[10px] font-bold text-gray-800">{u.name}</span>
+                            <span className="text-[8px] text-gray-400 font-mono truncate max-w-[50px]">{u.affiliation}</span>
+                          </div>
+                        )) : <span className="text-[9px] text-gray-400">まだ既読にしたゲストはいません</span>}
+                      </div>
+                    </div>
+
+                    <div>
+                      <h4 className="text-[10px] font-black text-red-700 mb-2 border-b border-red-100 pb-1 flex items-center gap-1">
+                        <AlertCircle className="w-3.5 h-3.5" /> 未読 <span className="bg-red-100 text-red-800 px-1.5 py-0.5 rounded-full text-[8px]">{unreadUsers.length}</span>
+                      </h4>
+                      <div className="flex flex-wrap gap-1.5">
+                        {unreadUsers.length > 0 ? unreadUsers.map(u => (
+                          <div key={u.id} className="flex items-center gap-1.5 bg-gray-50 px-2.5 py-1.5 rounded-lg border border-gray-200 shadow-sm opacity-75">
+                            <span className="text-[10px] font-bold text-gray-600">{u.name}</span>
+                            <span className="text-[8px] text-gray-400 font-mono truncate max-w-[50px]">{u.affiliation}</span>
+                          </div>
+                        )) : <span className="text-[9px] text-gray-400">全員既読です</span>}
+                      </div>
+                    </div>
+                  </>
+                );
+              })()}
+            </div>
+          </div>
+        </div>
+      )}
+
     </div>
   );
 }

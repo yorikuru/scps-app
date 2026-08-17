@@ -37,6 +37,13 @@ function ExternalChatContent() {
 
   const [selectedProfileUser, setSelectedProfileUser] = useState<UserData | ExternalUser | null>(null);
 
+  // ★ 各アプリの通知バッジ管理用ステート
+  const [chatUnreadCount, setChatUnreadCount] = useState(0);
+  const [hasMention, setHasMention] = useState(false);
+  const [rentalsActiveCount, setRentalsActiveCount] = useState(0);
+  const [hasOverdueRental, setHasOverdueRental] = useState(false);
+  const [boardUnreadCount, setBoardUnreadCount] = useState(0);
+
   const privateRoomsRef = useRef<ChatRoom[]>([]);
 
   useEffect(() => {
@@ -44,6 +51,9 @@ function ExternalChatContent() {
     let unsubExternal: (() => void) | undefined;
     let unsubPositions: (() => void) | undefined;
     let unsubPrivateRooms: (() => void) | undefined;
+    // ★ 連携アプリ用の監視解除関数
+    let unsubRentals: (() => void) | undefined;
+    let unsubBoard: (() => void) | undefined;
 
     const unsubscribeAuth = onAuthStateChanged(auth, async (user) => {
       if (user) {
@@ -60,7 +70,7 @@ function ExternalChatContent() {
           const extDoc = querySnapshot.docs[0];
           const currentUserData = { id: extDoc.id, ...extDoc.data() } as ExternalUser;
           
-          const now = Date.now();
+          const nowTimeMs = Date.now();
           let isExpired = false;
           
           if (currentUserData.expiresAt) {
@@ -68,7 +78,7 @@ function ExternalChatContent() {
               ? (currentUserData.expiresAt as any).toDate().getTime() 
               : new Date(currentUserData.expiresAt).getTime();
             
-            if (expTime < now) {
+            if (expTime < nowTimeMs) {
               isExpired = true;
             }
           }
@@ -127,13 +137,85 @@ function ExternalChatContent() {
 
           unsubPrivateRooms = onSnapshot(query(collection(db, "chat_rooms"), where("schoolId", "==", currentUserData.schoolId), where("members", "array-contains", currentUserData.id)), (snapshot) => {
             const fetched: ChatRoom[] = [];
+            let unreadTotal = 0;
+            let mentionDetected = false;
+
             snapshot.forEach(d => {
               const data = d.data();
               fetched.push({ id: d.id, ...data, updatedAt: data.updatedAt?.toDate().toISOString() || new Date().toISOString(), createdAt: data.createdAt?.toDate().toISOString() || new Date().toISOString() } as ChatRoom);
+              
+              // ★ チャットの未読・メンション計算
+              const myUnread = data.unreadCount?.[currentUserData.id] || 0;
+              if (myUnread > 0) {
+                unreadTotal += myUnread;
+                if (data.lastMessage && data.lastMessage.includes(`@${currentUserData.name}`)) {
+                  mentionDetected = true;
+                }
+              }
             });
             privateRoomsRef.current = fetched;
             mergeAndFilterRooms();
+            setChatUnreadCount(unreadTotal);
+            setHasMention(mentionDetected);
           });
+
+          // ==========================================
+          // ★ 各アプリごとのリアルタイム通知監視リスナー
+          // ==========================================
+
+          // 2. Equipmentのレンタル中＆期限超過監視
+          if (allowedModules.includes("equipment")) {
+            const qRentals = query(
+              collection(db, "rentals"),
+              where("schoolId", "==", currentUserData.schoolId),
+              where("borrowerId", "==", currentUserData.id)
+            );
+            unsubRentals = onSnapshot(qRentals, (snapshot) => {
+              let activeCount = 0;
+              let overdueDetected = false;
+              const now = new Date();
+
+              snapshot.forEach(d => {
+                const rData = d.data();
+                if (rData.status === "active" || rData.status === "partial") {
+                  activeCount++;
+                  if (rData.endDate && new Date(`${rData.endDate}T23:59:59`) < now) {
+                    overdueDetected = true;
+                  }
+                }
+              });
+              setRentalsActiveCount(activeCount);
+              setHasOverdueRental(overdueDetected);
+            });
+          }
+
+          // 3. Boardの新着連絡事項監視（外部向け公開 かつ 自分が未読のもの）
+          if (allowedModules.includes("board")) {
+            const qBoard = query(
+              collection(db, "announcements"),
+              where("schoolId", "==", currentUserData.schoolId),
+              where("isExternal", "==", true)
+            );
+            unsubBoard = onSnapshot(qBoard, (snapshot) => {
+              let unreadCount = 0;
+              const nowTime = new Date().getTime();
+              
+              snapshot.forEach(d => {
+                const bData = d.data();
+                const start = bData.publishStartDate ? new Date(bData.publishStartDate).getTime() : new Date(bData.createdAt).getTime();
+                const end = bData.publishEndDate ? new Date(bData.publishEndDate).getTime() : null;
+                
+                // 公開期間内か判定
+                if (start <= nowTime && (!end || end >= nowTime)) {
+                  const readByExternal: string[] = bData.readByExternal || [];
+                  if (!readByExternal.includes(currentUserData.id)) {
+                    unreadCount++;
+                  }
+                }
+              });
+              setBoardUnreadCount(unreadCount);
+            });
+          }
 
           setIsLoading(false);
         } catch (error) {
@@ -151,6 +233,8 @@ function ExternalChatContent() {
       if (unsubExternal) unsubExternal();
       if (unsubPositions) unsubPositions();
       if (unsubPrivateRooms) unsubPrivateRooms();
+      if (unsubRentals) unsubRentals();
+      if (unsubBoard) unsubBoard();
     };
   }, [router]);
 
@@ -259,12 +343,17 @@ function ExternalChatContent() {
   return (
     <div className="h-[100dvh] font-sans flex flex-col text-gray-900 bg-gray-50 relative overflow-hidden">
       
-      {/* 共通の外部用ヘッダー */}
+      {/* 共通の外部用ヘッダー (通知バッジデータを渡す) */}
       <ExtHeader 
         schoolData={schoolData} 
         handleLogout={handleLogout} 
         appMeta={appConfig} 
         showBackButton={true} 
+        appBadges={{
+          chat: { unread: chatUnreadCount, mention: hasMention },
+          equipment: { active: rentalsActiveCount, overdue: hasOverdueRental },
+          board: { unread: boardUnreadCount }
+        }}
       />
 
       <main className="flex-1 w-full max-w-7xl mx-auto sm:p-4 flex flex-col min-h-0 bg-white sm:bg-transparent">
@@ -320,7 +409,7 @@ function ExternalChatContent() {
       </main>
 
       {/* 外部ユーザー共通の固定フッター */}
-      <div className="flex flex-col gap-1.5 text-[9px] font-bold text-gray-500 text-center">
+      <div className="flex flex-col gap-1.5 text-[9px] font-bold text-gray-500 text-center pb-8 pt-4">
           <div className="flex flex-wrap items-center justify-center gap-x-3 gap-y-1.5">
             <Link href="/legal/terms" className="hover:text-gray-300 transition-colors">利用規約</Link>
             <Link href="/legal/privacy" className="hover:text-gray-300 transition-colors">プライバシー</Link>

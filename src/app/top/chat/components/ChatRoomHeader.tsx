@@ -1,7 +1,7 @@
 "use client";
 
-import React from "react";
-import { ChevronLeft, Search, X, Sparkles, Users, Pin, User, MoreVertical, Building2, Shield, GraduationCap, Briefcase, Star } from "lucide-react";
+import React, { useState, useRef, useEffect } from "react";
+import { ChevronLeft, Search, X, Sparkles, Users, Pin, User, MoreVertical, Building2, Shield, GraduationCap, Briefcase, Star, Settings } from "lucide-react";
 import { UserData, ExternalUser, ChatRoom, Position, AppConfig, COLOR_MAPPINGS } from "../types";
 
 const UserAvatar = ({ name, url, isExternal = false, className = "w-8 h-8 text-xs" }: { name: string, url?: string | null, isExternal?: boolean, className?: string }) => {
@@ -41,6 +41,19 @@ export default function ChatRoomHeader({
   
   const c = COLOR_MAPPINGS[appConfig.color] || COLOR_MAPPINGS.default;
   const isPinned = room.pinnedBy?.includes(userData.id) || false;
+
+  const [isMenuOpen, setIsMenuOpen] = useState(false);
+  const menuRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
+        setIsMenuOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
 
   const roomInfo = (() => {
     if (room.isOfficial || room.type === "custom_group") return { name: room.name || "グループ", isGroup: true };
@@ -94,7 +107,7 @@ export default function ChatRoomHeader({
   const roomConfig = getRoomIconAndColor();
 
   return (
-    <div className="px-4 py-3 bg-white border-b border-gray-200 flex flex-col shadow-sm z-20 shrink-0">
+    <div className="px-4 py-3 bg-white border-b border-gray-200 flex flex-col shadow-sm z-20 shrink-0 relative">
       <div className="flex items-center justify-between w-full">
         <div className="flex items-center gap-3 min-w-0">
           <button onClick={onBack} className="p-1.5 -ml-2 sm:hidden text-gray-500 hover:bg-gray-100 rounded-md shrink-0 transition-colors">
@@ -124,7 +137,6 @@ export default function ChatRoomHeader({
         </div>
         
         <div className="flex items-center gap-1 shrink-0">
-          {/* ★ プロフィールを開くボタンを確実に相手を渡すように修正 */}
           {room.type === "direct" && onOpenProfile && !isExternalMode && (
             <button 
               onClick={() => {
@@ -153,10 +165,29 @@ export default function ChatRoomHeader({
             <Search className="w-4 h-4" />
           </button>
 
+          {/* ★ 三点リーダーとドロップダウンメニュー */}
           {room.type !== "direct" && (
-            <button onClick={onOpenSettings} className="p-2 text-gray-400 hover:bg-gray-100 hover:text-gray-600 rounded-lg transition-colors" title="チャット設定">
-              <MoreVertical className="w-4 h-4" />
-            </button>
+            <div className="relative" ref={menuRef}>
+              <button 
+                onClick={() => setIsMenuOpen(!isMenuOpen)} 
+                className={`p-2 rounded-lg transition-colors focus:outline-none ${isMenuOpen ? 'bg-gray-100 text-gray-800' : 'text-gray-400 hover:bg-gray-100 hover:text-gray-600'}`} 
+                title="メニュー"
+              >
+                <MoreVertical className="w-4 h-4" />
+              </button>
+              
+              {isMenuOpen && (
+                <div className="absolute right-0 mt-2 w-56 bg-white border border-gray-100 rounded-xl shadow-xl py-1.5 z-50 animate-fade-in origin-top-right">
+                  <button 
+                    onClick={() => { setIsMenuOpen(false); onOpenSettings(); }} 
+                    className="w-full text-left px-4 py-2.5 text-xs font-bold text-gray-700 hover:bg-gray-50 flex items-center gap-2.5 transition-colors"
+                  >
+                    <Settings className="w-4 h-4 text-gray-400" />
+                    チャット設定・メンバー管理
+                  </button>
+                </div>
+              )}
+            </div>
           )}
 
           <button onClick={onBack} title="Escキーで閉じる" className="hidden sm:flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-gray-500 hover:bg-gray-100 rounded-md transition-colors border border-transparent hover:border-gray-200 ml-1">
@@ -166,15 +197,15 @@ export default function ChatRoomHeader({
       </div>
 
       {showSearch && (
-        <div className="mt-3 relative animate-slide-up px-4">
-          <Search className="absolute left-7 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-400" />
+        <div className="mt-3 relative animate-slide-up px-0 sm:px-4">
+          <Search className="absolute left-3 sm:left-7 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-400" />
           <input 
             type="text" autoFocus placeholder="このトークルーム内を検索..." 
             value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)}
             className="w-full pl-9 pr-8 py-2 bg-gray-50 border border-gray-200 rounded-lg text-xs focus:ring-2 focus:ring-indigo-500 outline-none"
           />
           {searchQuery && (
-            <button onClick={() => setSearchQuery("")} className="absolute right-6 top-1/2 -translate-y-1/2 p-1 text-gray-400 hover:text-gray-600 rounded-md">
+            <button onClick={() => setSearchQuery("")} className="absolute right-2 sm:right-6 top-1/2 -translate-y-1/2 p-1 text-gray-400 hover:text-gray-600 rounded-md">
               <X className="w-3.5 h-3.5" />
             </button>
           )}

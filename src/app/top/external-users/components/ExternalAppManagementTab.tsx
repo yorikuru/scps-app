@@ -1,336 +1,272 @@
-// src/app/top/external-users/components/ExternalAppManagementTab.tsx
 "use client";
 
-import React, { useState, useEffect, useMemo } from "react";
+import React, { useState } from "react";
 import { doc, updateDoc } from "firebase/firestore";
 import { db } from "@/lib/firebase";
-import { 
-  LayoutGrid, Save, Loader2, Users, BarChart2, ExternalLink, Eye, Search, X, ChevronRight 
-} from "lucide-react";
+import { Check, Edit2, Globe, LayoutGrid, Loader2, Smartphone, X, ChevronRight, Users, ChevronDown, ChevronUp, User } from "lucide-react";
 import * as LucideIcons from "lucide-react";
 
 import { useDialog } from "@/components/DialogContext";
 import { ExternalUser } from "@/app/types/external";
-
-type SystemApp = any;
-
-type Props = {
-  systemApps: SystemApp[];
-  schoolData: any;
-  setSchoolData: React.Dispatch<React.SetStateAction<any>>;
-  externalUsers: ExternalUser[];
-  setManageMode: React.Dispatch<React.SetStateAction<{
-    show: boolean;
-    mode: "create" | "edit" | "view";
-    targetUser?: ExternalUser | null;
-  }>>;
-};
 
 const DynamicIcon = ({ name, className }: { name: string, className?: string }) => {
   const IconComponent = (LucideIcons as any)[name] || LucideIcons.Box;
   return <IconComponent className={className} />;
 };
 
-export default function ExternalAppManagementTab({ 
-  systemApps, schoolData, setSchoolData, externalUsers, setManageMode 
-}: Props) {
+type Props = {
+  systemApps: any[];
+  schoolData: any;
+  setSchoolData: (data: any) => void;
+  externalUsers: ExternalUser[];
+  setManageMode: (mode: { show: boolean, mode: "create"|"edit"|"view", targetUser?: ExternalUser|null }) => void;
+};
+
+export default function ExternalAppManagementTab({ systemApps, schoolData, setSchoolData, externalUsers, setManageMode }: Props) {
   const { showAlert } = useDialog();
 
-  const [customExtAppNames, setCustomExtAppNames] = useState<Record<string, string>>({});
-  const [isSavingAppNames, setIsSavingAppNames] = useState(false);
-  const [inspectingApp, setInspectingApp] = useState<SystemApp | null>(null);
-  const [appUserSearchQuery, setAppUserSearchQuery] = useState("");
+  const [editingAppId, setEditingAppId] = useState<string | null>(null);
+  const [editName, setEditName] = useState("");
+  const [editDescription, setEditDescription] = useState("");
+  const [isSavingApp, setIsSavingApp] = useState(false);
 
-  // 初期データのセット
-  useEffect(() => {
-    if (schoolData?.customExternalAppNames) {
-      setCustomExtAppNames(schoolData.customExternalAppNames);
-    }
-  }, [schoolData]);
+  // 許可ユーザー一覧の展開ステート
+  const [showUsersAppId, setShowUsersAppId] = useState<string | null>(null);
 
-  // 外部連携対応アプリの抽出
-  const externalReadyApps = useMemo(() => {
-    return systemApps.filter(app => app.isExternalReady);
-  }, [systemApps]);
+  // 外部公開対象のアプリ（externalPath を持つもの）をフィルタし、order順に並べる
+  const externalApps = systemApps
+    .filter(app => app.externalPath)
+    .sort((a, b) => (a.order ?? 999) - (b.order ?? 999));
 
-  // 表示名の保存処理
-  const handleSaveExtAppNames = async () => {
-    if (!schoolData?.id) return;
-    setIsSavingAppNames(true);
+  const handleEditApp = (app: any) => {
+    setEditingAppId(app.appId);
+    setEditName(schoolData?.customExternalAppNames?.[app.appId] || schoolData?.customAppNames?.[app.appId] || app.name);
+    setEditDescription(schoolData?.customAppDescriptions?.[app.appId] || app.description || "");
+  };
+
+  const saveAppCustomization = async () => {
+    if (!editingAppId || !schoolData?.id) return;
+    setIsSavingApp(true);
     try {
-      const cleanNames = { ...customExtAppNames };
-      Object.keys(cleanNames).forEach(key => {
-        if (!cleanNames[key] || cleanNames[key].trim() === "") delete cleanNames[key];
+      const currentExternalNames = schoolData.customExternalAppNames || {};
+      const currentDescriptions = schoolData.customAppDescriptions || {};
+
+      const newExternalNames = { ...currentExternalNames, [editingAppId]: editName.trim() };
+      const newDescriptions = { ...currentDescriptions, [editingAppId]: editDescription.trim() };
+
+      await updateDoc(doc(db, "schools", schoolData.id), { 
+        customExternalAppNames: newExternalNames,
+        customAppDescriptions: newDescriptions 
       });
 
-      await updateDoc(doc(db, "schools", schoolData.id), {
-        customExternalAppNames: cleanNames
+      setSchoolData({ 
+        ...schoolData, 
+        customExternalAppNames: newExternalNames,
+        customAppDescriptions: newDescriptions 
       });
 
-      setSchoolData((prev: any) => ({ ...prev, customExternalAppNames: cleanNames }));
-      showAlert("外部連携アプリの表示名を保存しました。", "success");
-    } catch (error) {
-      console.error(error);
-      showAlert("表示名の保存に失敗しました。", "error");
+      showAlert("外部向けのアプリ表示名と説明文を更新しました。", "success");
+      setEditingAppId(null);
+    } catch (e) {
+      console.error(e);
+      showAlert("保存に失敗しました。", "error");
     } finally {
-      setIsSavingAppNames(false);
+      setIsSavingApp(false);
     }
   };
 
-  // 特定アプリを使用できる外部ユーザーの一覧取得
-  const inspectingAppUsers = useMemo(() => {
-    if (!inspectingApp) return [];
-    const appId = inspectingApp.appId || inspectingApp.id;
-    return externalUsers.filter(user => {
-      const hasAccess = user.allowedModules?.includes(appId);
-      const matchSearch = appUserSearchQuery === "" || 
-        user.name.toLowerCase().includes(appUserSearchQuery.toLowerCase()) ||
-        (user.affiliation || "").toLowerCase().includes(appUserSearchQuery.toLowerCase()) ||
-        (user.loginId || "").toLowerCase().includes(appUserSearchQuery.toLowerCase());
-      return hasAccess && matchSearch;
-    });
-  }, [inspectingApp, externalUsers, appUserSearchQuery]);
-
   return (
-    <>
-      <div className="flex-1 flex flex-col min-h-0 space-y-3 sm:space-y-4 overflow-y-auto custom-scrollbar pr-1">
-        
-        {/* サマリーカードダッシュボード */}
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5 sm:gap-4 shrink-0">
-          <div className="bg-white p-3.5 sm:p-4 rounded-2xl border border-gray-200 shadow-sm flex items-center justify-between">
-            <div>
-              <span className="text-[10px] font-bold text-gray-500 uppercase block mb-0.5">対応システムアプリ数</span>
-              <span className="text-lg sm:text-2xl font-black text-gray-900">{externalReadyApps.length} <span className="text-xs font-bold text-gray-400">アプリ</span></span>
-            </div>
-            <div className="p-2.5 bg-emerald-50 text-emerald-600 rounded-xl">
-              <LayoutGrid className="w-5 h-5" />
-            </div>
-          </div>
-
-          <div className="bg-white p-3.5 sm:p-4 rounded-2xl border border-gray-200 shadow-sm flex items-center justify-between">
-            <div>
-              <span className="text-[10px] font-bold text-gray-500 uppercase block mb-0.5">登録済みゲスト総数</span>
-              <span className="text-lg sm:text-2xl font-black text-gray-900">{externalUsers.length} <span className="text-xs font-bold text-gray-400">名</span></span>
-            </div>
-            <div className="p-2.5 bg-amber-50 text-amber-600 rounded-xl">
-              <Users className="w-5 h-5" />
-            </div>
-          </div>
-
-          <div className="bg-white p-3.5 sm:p-4 rounded-2xl border border-gray-200 shadow-sm flex items-center justify-between">
-            <div>
-              <span className="text-[10px] font-bold text-gray-500 uppercase block mb-0.5">有効稼働中のゲスト数</span>
-              <span className="text-lg sm:text-2xl font-black text-emerald-600">
-                {externalUsers.filter(u => u.status === "active").length} <span className="text-xs font-bold text-gray-400">名</span>
-              </span>
-            </div>
-            <div className="p-2.5 bg-indigo-50 text-indigo-600 rounded-xl">
-              <BarChart2 className="w-5 h-5" />
-            </div>
-          </div>
+    // ★ md未満のスマホUI時には全体で縦スクロールするように変更
+    <div className="flex-1 flex flex-col md:flex-row min-h-0 bg-white border border-gray-200 rounded-2xl shadow-sm overflow-y-auto md:overflow-hidden animate-fade-in custom-scrollbar">
+      
+      {/* 左ペイン：アプリ一覧 */}
+      <div className="w-full md:w-1/2 border-b md:border-b-0 md:border-r border-gray-200 flex flex-col bg-gray-50/30 shrink-0 md:shrink md:overflow-hidden">
+        <div className="p-4 sm:p-5 border-b border-gray-200 bg-white shrink-0">
+          <h2 className="text-sm font-black text-gray-900 flex items-center gap-2">
+            <LayoutGrid className="w-4 h-4 text-emerald-600" /> 外部連携アプリの設定
+          </h2>
+          <p className="text-[11px] font-bold text-gray-500 mt-1.5 leading-relaxed">
+            ゲストのマイページに表示される各アプリの名前と説明文をカスタマイズできます。<br/>
+            説明文がない場合はデフォルトメッセージが表示されます。
+          </p>
         </div>
 
-        {/* アプリ個別管理 & ダッシュボード */}
-        <div className="bg-white rounded-2xl border border-gray-200 shadow-sm p-3.5 sm:p-5 flex-1 flex flex-col min-h-0 space-y-3 sm:space-y-4">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-gray-100 pb-3 shrink-0">
-            <div>
-              <h3 className="text-xs sm:text-sm font-black text-gray-900 flex items-center gap-2">
-                <LayoutGrid className="w-4 h-4 text-emerald-600" /> 外部連携アプリ一覧 & 利用者マネジメント
-              </h3>
-              <p className="text-[10px] font-bold text-gray-500 mt-0.5">
-                システム管理者から許可されたアプリのテナント独自名を設定し、現在の利用状況を確認できます。
-              </p>
+        <div className="flex-1 overflow-y-auto custom-scrollbar p-3 sm:p-4 space-y-3">
+          {externalApps.length === 0 ? (
+            <div className="text-center py-10 text-gray-400">
+              <Globe className="w-8 h-8 mx-auto mb-2 opacity-50" />
+              <p className="text-xs font-bold">外部連携可能なアプリがありません</p>
             </div>
-            <button 
-              onClick={handleSaveExtAppNames}
-              disabled={isSavingAppNames}
-              className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold shadow-sm transition-all flex items-center justify-center gap-1.5 disabled:opacity-50 w-full sm:w-auto"
-            >
-              {isSavingAppNames ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Save className="w-3.5 h-3.5" />}
-              表示設定を保存
-            </button>
-          </div>
+          ) : (
+            externalApps.map(app => {
+              const isEditing = editingAppId === app.appId;
+              const displayName = schoolData?.customExternalAppNames?.[app.appId] || schoolData?.customAppNames?.[app.appId] || app.name;
+              const displayDesc = schoolData?.customAppDescriptions?.[app.appId] || app.description;
+              const allowedUsers = externalUsers.filter(u => u.allowedModules?.includes(app.appId));
 
-          <div className="space-y-3 flex-1 overflow-y-auto custom-scrollbar pr-1">
-            {externalReadyApps.length === 0 ? (
-              <div className="text-center py-12 text-xs font-bold text-gray-400">
-                現在、外部連携に対応しているシステムアプリはありません。
-              </div>
-            ) : (
-              externalReadyApps.map(app => {
-                const appId = app.appId || app.id;
-                const isTenantEnabled = schoolData?.externalAvailableModules?.includes(appId);
-                const assignedUsers = externalUsers.filter(u => u.allowedModules?.includes(appId));
-                const activeAssignedCount = assignedUsers.filter(u => u.status === "active").length;
-                const customName = customExtAppNames[appId] || "";
-
-                return (
-                  <div key={appId} className="bg-gray-50/70 border border-gray-200 rounded-2xl p-3 sm:p-4 transition-all hover:border-gray-300 space-y-3">
-                    <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3">
-                      
-                      {/* アプリ基本情報 */}
-                      <div className="flex items-center gap-3 min-w-0">
-                        <div className="w-10 h-10 rounded-xl bg-white border border-gray-200 flex items-center justify-center shrink-0 shadow-2xs">
-                          <DynamicIcon name={app.icon} className="w-5 h-5 text-indigo-600" />
-                        </div>
-                        <div className="min-w-0">
-                          <div className="flex items-center gap-2 flex-wrap">
-                            <h4 className="text-sm font-black text-gray-900 truncate">{app.name}</h4>
-                            <span className="text-[9px] font-mono text-gray-400 bg-gray-200 px-1.5 py-0.5 rounded">ID: {appId}</span>
-                            {isTenantEnabled ? (
-                              <span className="px-2 py-0.5 rounded text-[9px] font-black bg-emerald-100 text-emerald-700 border border-emerald-200">学校公開中</span>
-                            ) : (
-                              <span className="px-2 py-0.5 rounded text-[9px] font-black bg-gray-200 text-gray-600">学校未公開</span>
-                            )}
-                          </div>
-                          <div className="flex items-center gap-1 text-[10px] text-gray-500 mt-0.5 font-mono">
-                            <ExternalLink className="w-3 h-3 text-amber-500 shrink-0" />
-                            <span>パス: {app.externalPath || `/ext-top/${appId}`}</span>
-                          </div>
-                        </div>
+              return (
+                <div key={app.id} className={`p-4 rounded-xl border transition-all ${isEditing ? 'border-emerald-500 bg-emerald-50/30 shadow-md ring-1 ring-emerald-500' : 'border-gray-200 bg-white hover:border-emerald-300 shadow-sm'}`}>
+                  {isEditing ? (
+                    <div className="space-y-3 animate-fade-in">
+                      <div>
+                        <label className="block text-[10px] font-bold text-gray-500 mb-1">ゲスト画面での表示名 <span className="text-red-500">*</span></label>
+                        <input 
+                          type="text" value={editName} onChange={e => setEditName(e.target.value)} required
+                          className="w-full bg-white border border-gray-300 rounded-lg px-3 py-2 text-xs font-bold focus:ring-2 focus:ring-emerald-500 outline-none"
+                          placeholder={app.name}
+                        />
                       </div>
-
-                      {/* カスタム名変更 ＆ アクション */}
-                      <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 lg:w-1/2">
-                        <div className="flex-1">
-                          <label className="block text-[9px] font-black text-gray-500 mb-1">ゲスト表示用アプリ名 (独自名)</label>
-                          <input 
-                            type="text"
-                            value={customName}
-                            onChange={(e) => setCustomExtAppNames(prev => ({ ...prev, [appId]: e.target.value }))}
-                            placeholder={`デフォルト: ${app.name}`}
-                            className="w-full px-3 py-1.5 bg-white border border-gray-300 rounded-xl text-xs font-bold focus:ring-2 focus:ring-emerald-500 outline-none transition-all shadow-2xs"
-                          />
-                        </div>
-                        <button 
-                          onClick={() => { setInspectingApp(app); setAppUserSearchQuery(""); }}
-                          className="px-3 py-2 sm:mt-4 bg-white hover:bg-gray-100 text-indigo-700 border border-indigo-200 rounded-xl text-xs font-bold transition-colors flex items-center justify-center gap-1.5 shrink-0 shadow-2xs"
-                        >
-                          <Eye className="w-3.5 h-3.5 text-indigo-600" />
-                          利用者 ({assignedUsers.length}名)
+                      <div>
+                        <label className="block text-[10px] font-bold text-gray-500 mb-1">アプリの説明文 (2〜3行推奨)</label>
+                        <textarea 
+                          rows={2} value={editDescription} onChange={e => setEditDescription(e.target.value)}
+                          className="w-full bg-white border border-gray-300 rounded-lg px-3 py-2 text-[11px] font-bold focus:ring-2 focus:ring-emerald-500 outline-none resize-none custom-scrollbar"
+                          placeholder="ゲストがこのアプリで何ができるかの説明を入力"
+                        />
+                      </div>
+                      <div className="flex gap-2 pt-2 border-t border-emerald-100">
+                        <button onClick={() => setEditingAppId(null)} className="flex-1 py-2 text-[11px] font-bold bg-white text-gray-600 border border-gray-300 rounded-lg hover:bg-gray-50">キャンセル</button>
+                        <button onClick={saveAppCustomization} disabled={isSavingApp || !editName.trim()} className="flex-1 py-2 text-[11px] font-bold bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 flex justify-center items-center gap-1 shadow-sm disabled:opacity-50">
+                          {isSavingApp ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Check className="w-3.5 h-3.5" />} 保存する
                         </button>
                       </div>
-
                     </div>
+                  ) : (
+                    <div className="flex items-start gap-3">
+                      <div className={`w-10 h-10 rounded-lg flex items-center justify-center shrink-0 bg-${app.color}-50 text-${app.color}-600`}>
+                        <DynamicIcon name={app.icon} className="w-5 h-5" />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <div className="flex justify-between items-start">
+                          <h4 className="text-sm font-black text-gray-900 truncate pr-2">{displayName}</h4>
+                          <button onClick={() => handleEditApp(app)} className="text-gray-400 hover:text-emerald-600 hover:bg-emerald-50 p-1 rounded transition-colors shrink-0">
+                            <Edit2 className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+                        <p className="text-[10px] font-bold text-gray-500 mt-1 line-clamp-2 leading-relaxed break-all">
+                          {displayDesc}
+                        </p>
+                        
+                        {/* ★ 許可ユーザー一覧の展開機能 */}
+                        <div className="mt-3 pt-3 border-t border-gray-100">
+                          <button 
+                            onClick={() => setShowUsersAppId(prev => prev === app.appId ? null : app.appId)}
+                            className="flex items-center w-full gap-1.5 text-[10px] font-bold text-gray-500 hover:text-emerald-600 transition-colors"
+                          >
+                            <Users className="w-3.5 h-3.5" /> 許可されているゲスト ({allowedUsers.length}名)
+                            {showUsersAppId === app.appId ? <ChevronUp className="w-3.5 h-3.5 ml-auto" /> : <ChevronDown className="w-3.5 h-3.5 ml-auto" />}
+                          </button>
 
-                    {/* 利用状況指標 */}
-                    <div className="pt-2.5 border-t border-gray-200/60 grid grid-cols-2 sm:grid-cols-4 gap-2 text-[10px] font-bold text-gray-600">
-                      <div className="bg-white p-2 rounded-xl border border-gray-200/60">
-                        <span className="text-gray-400 block text-[9px] mb-0.5">割り当てゲスト数</span>
-                        <span className="text-xs font-black text-gray-800">{assignedUsers.length} 名</span>
-                      </div>
-                      <div className="bg-white p-2 rounded-xl border border-gray-200/60">
-                        <span className="text-gray-400 block text-[9px] mb-0.5">アクティブ稼働数</span>
-                        <span className="text-xs font-black text-emerald-600">{activeAssignedCount} 名</span>
-                      </div>
-                      <div className="bg-white p-2 rounded-xl border border-gray-200/60 col-span-2">
-                        <span className="text-gray-400 block text-[9px] mb-0.5">ゲスト普及率</span>
-                        <div className="flex items-center gap-2">
-                          <div className="flex-1 h-2 bg-gray-200 rounded-full overflow-hidden">
-                            <div 
-                              className="h-full bg-emerald-500 rounded-full transition-all" 
-                              style={{ width: `${externalUsers.length > 0 ? (assignedUsers.length / externalUsers.length) * 100 : 0}%` }}
-                            />
-                          </div>
-                          <span className="text-xs font-mono font-black text-gray-700 shrink-0">
-                            {externalUsers.length > 0 ? Math.round((assignedUsers.length / externalUsers.length) * 100) : 0}%
-                          </span>
+                          {showUsersAppId === app.appId && (
+                            <div className="mt-2 max-h-32 overflow-y-auto custom-scrollbar bg-gray-50 border border-gray-200 rounded-lg p-1.5 space-y-1 animate-fade-in">
+                              {allowedUsers.length === 0 ? (
+                                <p className="text-[10px] text-gray-400 text-center py-2 font-bold">許可されているゲストはいません</p>
+                              ) : (
+                                allowedUsers.map(u => (
+                                  <div key={u.id} className="flex items-center justify-between text-[10px] font-bold p-1.5 hover:bg-white rounded border border-transparent hover:border-gray-200 transition-colors">
+                                    <span className="truncate text-gray-700">{u.name}</span>
+                                    <span className="text-gray-400 shrink-0 ml-2 truncate max-w-[80px] text-[9px]">{u.affiliation || "所属なし"}</span>
+                                  </div>
+                                ))
+                              )}
+                            </div>
+                          )}
                         </div>
                       </div>
                     </div>
-
-                  </div>
-                );
-              })
-            )}
-          </div>
+                  )}
+                </div>
+              );
+            })
+          )}
         </div>
-
       </div>
 
-      {/* アプリ利用メンバー内訳モーダル */}
-      {inspectingApp && (
-        <div className="fixed inset-0 z-50 flex justify-center items-end sm:items-center bg-black/40 backdrop-blur-sm p-0 sm:p-4">
-          <div className="w-full max-w-3xl h-[85vh] sm:h-[80vh] bg-white rounded-t-3xl sm:rounded-3xl shadow-2xl overflow-hidden animate-slide-up sm:animate-fade-in flex flex-col">
+      {/* 右ペイン：プレビュー＆ヒント */}
+      <div className="w-full md:w-1/2 py-8 px-4 sm:p-6 bg-gray-50 flex flex-col items-center justify-center relative md:overflow-y-auto custom-scrollbar shrink-0 md:shrink">
+        
+        {/* スマホ画面プレビュー本体 */}
+        <div className="w-full max-w-[300px] bg-white rounded-[2.5rem] border-[6px] border-gray-800 shadow-2xl overflow-hidden relative aspect-[9/19] flex flex-col shrink-0 mx-auto">
+          {/* スマホモックのノッチ部分 */}
+          <div className="absolute top-0 inset-x-0 h-6 bg-gray-800 rounded-b-3xl mx-16 z-20"></div>
+          
+          <div className="bg-[#F4F7F6] flex-1 flex flex-col overflow-hidden pt-7 relative z-10">
+            {/* ヘッダーモック */}
+            <div className="px-4 py-2 bg-white shadow-sm flex items-center justify-between mb-3 shrink-0">
+              <div className="flex items-center gap-1.5">
+                <div className="w-7 h-7 bg-indigo-600 rounded-md flex items-center justify-center text-white text-[8px] font-black shadow-xs">
+                  Logo
+                </div>
+                <span className="text-[10px] font-black text-gray-800">テナント名</span>
+              </div>
+            </div>
             
-            <div className="px-5 py-4 border-b border-gray-200 bg-gray-50 flex justify-between items-center shrink-0">
-              <div className="flex items-center gap-3">
-                <div className="w-9 h-9 rounded-xl bg-indigo-100 flex items-center justify-center shrink-0">
-                  <DynamicIcon name={inspectingApp.icon} className="w-5 h-5 text-indigo-600" />
+            {/* 本文エリア */}
+            <div className="px-3 pb-6 overflow-y-auto flex-1 custom-scrollbar space-y-4">
+              
+              {/* ユーザー情報モック */}
+              <div className="bg-white rounded-xl p-3 border border-gray-200 shadow-sm flex items-center gap-3">
+                <div className="w-9 h-9 rounded-full bg-gradient-to-tr from-yellow-400 to-amber-500 flex items-center justify-center text-white font-black text-[8px] text-center shadow-md shrink-0">
+                  User<br/>Photo
                 </div>
-                <div>
-                  <h3 className="text-sm font-black text-gray-900">{inspectingApp.name} - 利用許可メンバー</h3>
-                  <p className="text-[10px] font-bold text-gray-500">このアプリの利用権限が付与されているゲスト一覧</p>
+                <div className="min-w-0 flex-1">
+                  <h2 className="text-[11px] font-black text-gray-900 truncate">こんにちは、ゲスト さん</h2>
+                  <div className="flex items-center gap-1 text-[8px] font-bold text-gray-500 mt-0.5">
+                    <User className="w-2.5 h-2.5 shrink-0" /> 
+                    <span className="truncate">外部ユーザー</span>
+                  </div>
                 </div>
               </div>
-              <button 
-                onClick={() => setInspectingApp(null)}
-                className="p-1.5 text-gray-400 hover:text-gray-700 hover:bg-gray-200 rounded-full transition-colors"
-              >
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-
-            <div className="p-3.5 border-b border-gray-200 bg-white shrink-0">
-              <div className="relative">
-                <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
-                <input 
-                  type="text" 
-                  placeholder="メンバー名や所属で検索..." 
-                  value={appUserSearchQuery}
-                  onChange={(e) => setAppUserSearchQuery(e.target.value)}
-                  className="w-full pl-9 pr-3 py-1.5 sm:py-2 bg-gray-50 border border-gray-200 rounded-xl text-xs sm:text-sm font-bold focus:bg-white focus:ring-2 focus:ring-indigo-500 outline-none transition-all"
-                />
-              </div>
-            </div>
-
-            <div className="flex-1 overflow-y-auto custom-scrollbar p-3 sm:p-4">
-              {inspectingAppUsers.length === 0 ? (
-                <div className="text-center py-12 text-xs font-bold text-gray-400">
-                  該当する利用許可メンバーはいません。
-                </div>
-              ) : (
-                <div className="space-y-2">
-                  {inspectingAppUsers.map(user => (
-                    <div 
-                      key={user.id}
-                      onClick={() => {
-                        setInspectingApp(null);
-                        setManageMode({ show: true, mode: "view", targetUser: user });
-                      }}
-                      className="p-3 bg-gray-50 hover:bg-indigo-50/50 border border-gray-200 rounded-xl flex items-center justify-between cursor-pointer transition-all group"
-                    >
-                      <div className="flex items-center gap-3 min-w-0">
-                        <div className="w-8 h-8 rounded-full bg-gradient-to-tr from-yellow-400 to-amber-500 flex items-center justify-center text-white font-black text-xs shrink-0 shadow-2xs">
-                          {user.name.charAt(0)}
-                        </div>
-                        <div className="min-w-0 pr-2">
-                          <p className="text-xs sm:text-sm font-black text-gray-900 group-hover:text-indigo-700 transition-colors truncate">
-                            {user.name}
-                          </p>
-                          <p className="text-[10px] font-bold text-gray-500 truncate mt-0.5">
-                            ID: {user.loginId} | 所属: {user.affiliation || "未設定"}
-                          </p>
-                        </div>
-                      </div>
-
-                      <div className="flex items-center gap-2 shrink-0">
-                        <span className={`px-2 py-0.5 rounded text-[9px] font-black border ${
-                          user.status === "active" ? "bg-emerald-100 text-emerald-700 border-emerald-200" : "bg-amber-100 text-amber-700 border-amber-200"
-                        }`}>
-                          {user.status === "active" ? "有効" : "未有効化"}
-                        </span>
-                        <ChevronRight className="w-4 h-4 text-gray-300 group-hover:text-indigo-500 transition-colors" />
-                      </div>
+              
+              {/* アプリ一覧モック */}
+              <div>
+                <h3 className="text-[11px] font-black text-gray-700 mb-2.5 ml-1 flex items-center gap-1.5">
+                  <Globe className="w-3.5 h-3.5 text-indigo-500" />
+                  ご利用可能なメニュー
+                </h3>
+                <div className="space-y-3">
+                  {externalApps.length === 0 ? (
+                    <div className="bg-white rounded-xl border border-dashed border-gray-300 p-5 text-center">
+                      <p className="text-[10px] font-black text-gray-400">アプリがありません</p>
                     </div>
-                  ))}
-                </div>
-              )}
-            </div>
+                  ) : (
+                    externalApps.map(app => {
+                      const name = schoolData?.customExternalAppNames?.[app.appId] || schoolData?.customAppNames?.[app.appId] || app.name;
+                      const desc = schoolData?.customAppDescriptions?.[app.appId] || app.description|| "このアプリケーションは利用できます"; 
 
+                      return (
+                        <div key={app.id} className="bg-white p-3 rounded-xl border border-gray-200 shadow-sm flex items-start gap-3">
+                          <div className={`w-9 h-9 rounded-lg flex items-center justify-center shrink-0 bg-${app.color}-50 text-${app.color}-600`}>
+                            <DynamicIcon name={app.icon} className="w-4 h-4" />
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <h4 className="text-[11px] font-black text-gray-900 truncate">{name}</h4>
+                            <p className="text-[9px] font-bold text-gray-500 mt-0.5 line-clamp-2 leading-relaxed">{desc}</p>
+                          </div>
+                          <div className="h-9 flex items-center shrink-0">
+                            <ChevronRight className="w-3.5 h-3.5 text-gray-300" />
+                          </div>
+                        </div>
+                      );
+                    })
+                  )}
+                </div>
+              </div>
+
+            </div>
           </div>
         </div>
-      )}
-    </>
+        
+        <div className="mt-6 text-center shrink-0">
+          <p className="text-[11px] font-black text-gray-500 flex items-center justify-center gap-1.5">
+            <Smartphone className="w-4 h-4" />
+            ゲストのスマホ画面プレビュー
+          </p>
+          <p className="text-[9px] font-bold text-gray-400 mt-1 max-w-[280px]">
+            左側の設定で変更した表示名と説明文は、即座にこちらのゲストポータルに反映されます。（※スクロール可能です）
+          </p>
+        </div>
+      </div>
+    </div>
   );
 }

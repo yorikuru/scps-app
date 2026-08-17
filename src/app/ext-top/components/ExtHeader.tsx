@@ -1,74 +1,103 @@
 "use client";
 
-import React from "react";
-import { Globe, LogOut, ChevronLeft } from "lucide-react";
-import Link from "next/link";
-import * as LucideIcons from "lucide-react";
+import React, { useState } from "react";
+import { useRouter } from "next/navigation";
+import { LogOut, ArrowLeft, Home, Menu, X, Bell } from "lucide-react";
+
+// ★ 通知バッジの型を定義
+type AppBadges = {
+  chat?: { unread: number; mention: boolean };
+  equipment?: { active: number; overdue: boolean };
+  board?: { unread: number };
+};
+
+type AppConfig = { name: string; icon: string; color: string; };
 
 type Props = {
   schoolData: any;
   handleLogout: () => void;
-  appMeta?: { name: string; icon: string; color: string } | null;
+  appMeta?: AppConfig;
   showBackButton?: boolean;
-  backUrl?: string;
+  appBadges?: AppBadges; // ★ Propsに追加
 };
 
-// Tailwindの動的クラスパージ対策
-const COLOR_CLASSES: Record<string, string> = {
-  slate: "bg-slate-600", gray: "bg-gray-600", zinc: "bg-zinc-600", neutral: "bg-neutral-600", stone: "bg-stone-600",
-  red: "bg-red-600", orange: "bg-orange-600", amber: "bg-amber-600", yellow: "bg-yellow-600", lime: "bg-lime-600",
-  green: "bg-green-600", emerald: "bg-emerald-600", teal: "bg-teal-600", cyan: "bg-cyan-600", sky: "bg-sky-600",
-  blue: "bg-blue-600", indigo: "bg-indigo-600", violet: "bg-violet-600", purple: "bg-purple-600",
-  fuchsia: "bg-fuchsia-600", pink: "bg-pink-600", rose: "bg-rose-600",
-};
+export default function ExtHeader({ schoolData, handleLogout, appMeta, showBackButton = false, appBadges }: Props) {
+  const router = useRouter();
+  const [menuOpen, setMenuOpen] = useState(false);
 
-const DynamicIcon = ({ name, className }: { name: string, className?: string }) => {
-  const IconComponent = (LucideIcons as any)[name] || LucideIcons.Box;
-  return <IconComponent className={className} />;
-};
-
-export default function ExtHeader({ schoolData, handleLogout, appMeta, showBackButton, backUrl = "/ext-top" }: Props) {
-  const isAppMode = !!appMeta;
-  const bgClass = isAppMode && appMeta.color ? (COLOR_CLASSES[appMeta.color] || "bg-indigo-600") : "bg-white";
+  // ★ どこかのアプリで通知が発生しているかを判定
+  const hasNotification = 
+    (appBadges?.chat?.unread ?? 0) > 0 || 
+    (appBadges?.equipment?.overdue ?? false) || 
+    (appBadges?.board?.unread ?? 0) > 0;
 
   return (
-    <header className={`${bgClass} ${isAppMode ? 'text-white border-b-0 shadow-md' : 'text-gray-900 border-b border-gray-200 shadow-sm'} px-3 sm:px-6 py-2.5 flex items-center justify-between sticky top-0 z-30 w-full shrink-0 transition-colors`}>
-      <div className="flex items-center gap-2 sm:gap-3 min-w-0">
-        {showBackButton && (
-          <Link href={backUrl} className={`p-1.5 sm:p-2 rounded-xl transition-colors shrink-0 flex items-center justify-center ${isAppMode ? 'hover:bg-white/20 text-white' : 'hover:bg-gray-200 text-gray-500'}`}>
-            <ChevronLeft className="w-5 h-5 sm:w-6 sm:h-6" />
-          </Link>
-        )}
-        
-        {isAppMode ? (
-          <div className="w-8 h-8 sm:w-9 sm:h-9 bg-white/20 rounded-xl flex items-center justify-center shrink-0 shadow-inner">
-            <DynamicIcon name={appMeta.icon} className="w-4 h-4 sm:w-5 sm:h-5 text-white" />
+    <>
+      <header className="bg-white border-b border-gray-200 shrink-0 sticky top-0 z-50 shadow-sm">
+        <div className="flex items-center justify-between px-4 py-3 h-14">
+          <div className="flex items-center gap-3 min-w-0">
+            {showBackButton && (
+              <button 
+                onClick={() => router.push("/ext-top")} 
+                className="p-1.5 -ml-1.5 text-gray-500 hover:bg-gray-100 rounded-lg transition-colors relative shrink-0"
+              >
+                <ArrowLeft className="w-5 h-5" />
+                {hasNotification && (
+                  <span className="absolute top-1 right-1 w-2 h-2 bg-red-500 rounded-full border border-white"></span>
+                )}
+              </button>
+            )}
+            
+            <div className="flex flex-col min-w-0">
+              {appMeta ? (
+                <>
+                  <h1 className="text-sm font-black text-gray-900 truncate">{appMeta.name}</h1>
+                  <p className="text-[9px] font-bold text-gray-500 truncate">{schoolData?.name || "ゲストポータル"}</p>
+                </>
+              ) : (
+                <>
+                  <h1 className="text-sm font-black text-gray-900 truncate">{schoolData?.name || "ゲストポータル"}</h1>
+                  <p className="text-[9px] font-bold text-gray-500 truncate">生徒会ポータルシステム</p>
+                </>
+              )}
+            </div>
           </div>
-        ) : schoolData?.logoURL ? (
-          <img src={schoolData.logoURL} alt="School Logo" className="h-8 sm:h-9 w-auto object-contain rounded" />
-        ) : (
-          <div className="w-8 h-8 sm:w-9 sm:h-9 bg-indigo-100 text-indigo-600 rounded-xl flex items-center justify-center shrink-0">
-            <Globe className="w-5 h-5" />
-          </div>
-        )}
 
-        <div className="min-w-0 pr-2">
-          <h1 className="text-[12px] sm:text-sm font-black leading-tight truncate">
-            {isAppMode ? appMeta.name : (schoolData?.name || "SCPS ゲストポータル")}
-          </h1>
-          <p className={`text-[9px] sm:text-[10px] font-bold truncate mt-0.5 ${isAppMode ? 'text-white/80' : 'text-gray-500'}`}>
-            {isAppMode ? (schoolData?.name || "SCPS ゲストポータル") : "ゲスト専用ダッシュボード"}
-          </p>
+          <div className="flex items-center gap-2 shrink-0">
+            {/* ハンバーガーメニュー */}
+            <button 
+              onClick={() => setMenuOpen(!menuOpen)} 
+              className="p-2 text-gray-500 hover:bg-gray-100 rounded-lg transition-colors relative"
+            >
+              {menuOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
+              {hasNotification && !menuOpen && !showBackButton && (
+                <span className="absolute top-1.5 right-1.5 w-2 h-2 bg-red-500 rounded-full border border-white animate-pulse"></span>
+              )}
+            </button>
+          </div>
         </div>
-      </div>
+      </header>
 
-      <button 
-        onClick={handleLogout}
-        className={`p-2 rounded-full transition-colors shrink-0 flex items-center justify-center ${isAppMode ? 'hover:bg-white/20 text-white' : 'hover:text-red-600 hover:bg-red-50 text-gray-400'}`}
-        title="ログアウト"
-      >
-        <LogOut className="w-4 h-4 sm:w-5 sm:h-5" />
-      </button>
-    </header>
+      {/* ドロップダウンメニュー */}
+      {menuOpen && (
+        <div className="absolute top-14 left-0 w-full bg-white border-b border-gray-200 shadow-lg animate-fade-in p-3 z-40">
+          <div className="space-y-1">
+            <button 
+              onClick={() => { setMenuOpen(false); router.push("/ext-top"); }} 
+              className="w-full text-left px-4 py-3.5 rounded-xl hover:bg-gray-50 flex items-center justify-between text-sm font-bold text-gray-700 transition-colors"
+            >
+              <span className="flex items-center gap-3"><Home className="w-4 h-4" /> トップページ</span>
+              {hasNotification && <span className="px-2 py-0.5 bg-red-500 text-white text-[9px] rounded-full font-black animate-pulse shadow-sm">新着あり</span>}
+            </button>
+            <button 
+              onClick={() => { setMenuOpen(false); handleLogout(); }} 
+              className="w-full text-left px-4 py-3.5 rounded-xl hover:bg-red-50 text-red-600 flex items-center gap-3 text-sm font-bold transition-colors"
+            >
+              <LogOut className="w-4 h-4" /> ログアウト
+            </button>
+          </div>
+        </div>
+      )}
+    </>
   );
 }

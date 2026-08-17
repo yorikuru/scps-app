@@ -4,9 +4,9 @@ import React, { useEffect, useState, useMemo, Suspense } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { onAuthStateChanged, signOut } from "firebase/auth";
-import { doc, getDoc, getDocs, collection, query, where, onSnapshot, orderBy } from "firebase/firestore";
+import { doc, getDoc, getDocs, collection, query, where, onSnapshot, orderBy, updateDoc, arrayUnion } from "firebase/firestore";
 import { auth, db } from "@/lib/firebase";
-import { Loader2, AlertTriangle, LogOut, Search, ArrowDownUp, MessageSquareText, Calendar, ChevronLeft, Paperclip, FileIcon, Download, AlertOctagon } from "lucide-react";
+import { Loader2, AlertTriangle, LogOut, Search, ArrowDownUp, MessageSquareText, Calendar, ChevronLeft, Paperclip, FileIcon, Download, AlertOctagon, Check } from "lucide-react";
 import * as LucideIcons from "lucide-react";
 
 import { useDialog } from "@/components/DialogContext";
@@ -51,6 +51,8 @@ function ExternalBoardContent() {
 
   const [searchQuery, setSearchQuery] = useState("");
   const [filterCategory, setFilterCategory] = useState<string>("all");
+  // ★ 既読・未読フィルター
+  const [filterReadStatus, setFilterReadStatus] = useState<"all" | "unread" | "read">("all");
   const [sortOrder, setSortOrder] = useState<"desc" | "asc">("desc");
 
   const [appConfig, setAppConfig] = useState<AppConfig>({ name: "連絡事項", icon: "MessageSquareText", color: "indigo" });
@@ -156,6 +158,7 @@ function ExternalBoardContent() {
                 publishStartDate: docData.publishStartDate || null,
                 publishEndDate: docData.publishEndDate || null,
                 isExternal: docData.isExternal || false,
+                readByExternal: docData.readByExternal || [], // ★ 既読者リストを取得
               });
             });
             setAnnouncements(fetched);
@@ -204,7 +207,19 @@ function ExternalBoardContent() {
     router.replace(params.toString() ? `${window.location.pathname}?${params.toString()}` : window.location.pathname);
   };
 
-  // ★ Hookエラー解消：早期リターンの前に、フィルタリングとuseEffectを配置する
+  // ★ 既読処理
+  const markAsRead = async (noticeId: string) => {
+    if (!extUser) return;
+    try {
+      const noticeRef = doc(db, "announcements", noticeId);
+      await updateDoc(noticeRef, {
+        readByExternal: arrayUnion(extUser.id)
+      });
+    } catch (e) {
+      console.error("既読処理に失敗しました", e);
+    }
+  };
+
   const filteredAndSorted = useMemo(() => {
     const now = new Date().getTime();
     return announcements
@@ -214,6 +229,14 @@ function ExternalBoardContent() {
         return start <= now && (!end || end >= now);
       })
       .filter(a => filterCategory === "all" || a.categoryId === filterCategory)
+      // ★ 既読・未読フィルターの適用
+      .filter(a => {
+        if (!extUser) return true;
+        const isRead = (a as any).readByExternal?.includes(extUser.id);
+        if (filterReadStatus === "read") return isRead;
+        if (filterReadStatus === "unread") return !isRead;
+        return true;
+      })
       .filter(a => a.title.toLowerCase().includes(searchQuery.toLowerCase()) || a.content.toLowerCase().includes(searchQuery.toLowerCase()) || a.authorName.toLowerCase().includes(searchQuery.toLowerCase()))
       .sort((a, b) => {
         if (a.isUrgent && !b.isUrgent) return -1;
@@ -222,9 +245,8 @@ function ExternalBoardContent() {
         const timeB = b.publishStartDate ? new Date(b.publishStartDate).getTime() : new Date(b.createdAt).getTime();
         return sortOrder === "desc" ? timeB - timeA : timeA - timeB;
       });
-  }, [announcements, filterCategory, searchQuery, sortOrder]);
+  }, [announcements, filterCategory, searchQuery, sortOrder, filterReadStatus, extUser]);
 
-  // PC時は最初の項目を自動選択するが、スマホ時は自動選択しない
   useEffect(() => {
     const isMobile = window.innerWidth < 1024;
     if (!isMobile && !activeNoticeId && filteredAndSorted.length > 0) {
@@ -248,7 +270,6 @@ function ExternalBoardContent() {
     }
   };
 
-  // ★ ここから下で早期リターン
   if (isLoading) return <div className="h-[100dvh] flex justify-center items-center bg-gray-50"><Loader2 className="w-8 h-8 animate-spin text-indigo-500" /></div>;
 
   if (error || !extUser) {
@@ -271,6 +292,8 @@ function ExternalBoardContent() {
   const activeAuthorUser = tenantUsers.find(u => u.id === activeNotice?.authorId);
   const activeAvatarUrl = activeAuthorUser?.photoURL || activeNotice?.authorPhotoURL;
 
+  const isActiveNoticeRead = extUser && (activeNotice as any)?.readByExternal?.includes(extUser.id);
+
   const formatTimeCompact = (dateStr: string) => {
     const d = new Date(dateStr);
     const today = new Date();
@@ -281,7 +304,6 @@ function ExternalBoardContent() {
   return (
     <div className="h-[100dvh] font-sans flex flex-col text-gray-900 bg-gray-50 relative overflow-hidden">
       
-      {/* 共通の外部用ヘッダー */}
       <ExtHeader 
         schoolData={schoolData} 
         handleLogout={handleLogout} 
@@ -292,7 +314,6 @@ function ExternalBoardContent() {
       <main className="flex-1 w-full max-w-7xl mx-auto sm:p-4 flex flex-col min-h-0 bg-white sm:bg-transparent">
         <div className="flex-1 overflow-hidden flex bg-white sm:rounded-2xl sm:shadow-sm sm:border border-gray-200 relative min-h-0">
           
-          {/* ＝＝＝ 左ペイン：コンパクトリスト ＝＝＝ */}
           <div className={`w-full lg:w-[420px] xl:w-[480px] border-r border-gray-200 flex flex-col flex-shrink-0 bg-white h-full ${showMobileDetail ? 'hidden lg:flex' : 'flex'}`}>
             <div className="p-2 border-b border-gray-200 bg-gray-50/50 flex flex-col gap-2 shrink-0">
               <div className="relative w-full">
@@ -302,6 +323,20 @@ function ExternalBoardContent() {
                   className={`w-full pl-8 pr-2 py-1.5 bg-white border border-gray-200 rounded-lg text-xs font-bold focus:outline-none focus:ring-2 ${c.ring} shadow-2xs`}
                 />
               </div>
+
+              {/* ★ 既読・未読フィルターの追加 */}
+              <div className="flex bg-gray-200/50 p-1 rounded-xl">
+                <button onClick={() => setFilterReadStatus("all")} className={`flex-1 py-1.5 text-[11px] font-bold rounded-lg transition-colors ${filterReadStatus === "all" ? "bg-white shadow-sm text-gray-900" : "text-gray-500 hover:text-gray-700"}`}>
+                  すべて表示
+                </button>
+                <button onClick={() => setFilterReadStatus("unread")} className={`flex-1 py-1.5 text-[11px] font-bold rounded-lg transition-colors ${filterReadStatus === "unread" ? "bg-white shadow-sm text-gray-900" : "text-gray-500 hover:text-gray-700"}`}>
+                  未読のみ
+                </button>
+                <button onClick={() => setFilterReadStatus("read")} className={`flex-1 py-1.5 text-[11px] font-bold rounded-lg transition-colors ${filterReadStatus === "read" ? "bg-white shadow-sm text-gray-900" : "text-gray-500 hover:text-gray-700"}`}>
+                  既読のみ
+                </button>
+              </div>
+
               <div className="flex items-center gap-1.5 text-[10px]">
                 <select 
                   value={filterCategory} onChange={e => setFilterCategory(e.target.value)}
@@ -329,6 +364,7 @@ function ExternalBoardContent() {
                   const cat = categories.find(c => c.id === a.categoryId);
                   const authorUser = tenantUsers.find(u => u.id === a.authorId);
                   const avatarUrl = authorUser?.photoURL || a.authorPhotoURL;
+                  const isRead = (a as any).readByExternal?.includes(extUser?.id);
 
                   return (
                     <div 
@@ -346,10 +382,16 @@ function ExternalBoardContent() {
 
                       <div className="flex-1 min-w-0 flex flex-col justify-center">
                         <div className="flex items-center gap-1.5">
-                          <h4 className={`text-xs font-bold truncate flex-1 ${isSelected && window.innerWidth >= 1024 ? 'text-white' : 'text-gray-900'}`}>{a.title}</h4>
+                          {/* ★ 未読の場合は青ポッチを表示 */}
+                          {!isRead && (
+                            <span className={`w-2 h-2 rounded-full flex-shrink-0 ${isSelected && window.innerWidth >= 1024 ? 'bg-white' : 'bg-blue-500'}`}></span>
+                          )}
+                          <h4 className={`text-xs font-bold truncate flex-1 ${isSelected && window.innerWidth >= 1024 ? 'text-white' : (isRead ? 'text-gray-500' : 'text-gray-900')}`}>
+                            {a.title}
+                          </h4>
                           {a.attachments && a.attachments.length > 0 && <Paperclip className={`w-3 h-3 flex-shrink-0 ${isSelected && window.innerWidth >= 1024 ? 'text-white/70' : 'text-gray-400'}`} />}
                         </div>
-                        <div className="flex items-center gap-2 mt-0.5">
+                        <div className="flex items-center gap-2 mt-0.5 ml-3.5">
                           <span className={`text-[10px] truncate max-w-[80px] ${isSelected && window.innerWidth >= 1024 ? 'text-white/80' : 'text-gray-500'}`}>{a.authorName}</span>
                           {cat && <span className={`px-1.5 rounded-sm text-[9px] font-bold border truncate max-w-[60px] ${isSelected && window.innerWidth >= 1024 ? 'border-white/30 text-white/90' : cat.color}`}>{cat.name}</span>}
                         </div>
@@ -365,7 +407,6 @@ function ExternalBoardContent() {
             </div>
           </div>
 
-          {/* ＝＝＝ 右ペイン：プレビュー詳細 ＝＝＝ */}
           <div className={`flex-1 w-full h-full min-w-0 bg-white ${showMobileDetail ? 'block absolute inset-0 z-20' : 'hidden lg:flex flex-col'}`}>
             {!activeNotice ? (
               <div className="flex-1 flex flex-col items-center justify-center bg-gray-50/30 text-gray-400 p-6 text-center h-full">
@@ -378,7 +419,6 @@ function ExternalBoardContent() {
             ) : (
               <div className="flex-1 overflow-y-auto custom-scrollbar flex flex-col h-full bg-white relative">
                 
-                {/* スマホ用「戻る」ボタン（ヘッダー） */}
                 <div className="lg:hidden flex items-center px-4 py-3 border-b border-gray-100 bg-white sticky top-0 z-10 shrink-0 shadow-sm">
                   <button 
                     onClick={() => {
@@ -439,27 +479,31 @@ function ExternalBoardContent() {
                     </div>
                   </div>
                 )}
+                
+                {/* ★ 既読ボタンの追加 */}
+                <div className="p-4 sm:p-6 border-t border-gray-100 flex justify-center shrink-0">
+                  {isActiveNoticeRead ? (
+                    <div className="flex flex-col items-center">
+                      <button disabled className="px-8 py-3 bg-gray-100 text-gray-500 text-xs font-bold rounded-full flex items-center gap-2 cursor-not-allowed border border-gray-200">
+                        <Check className="w-4 h-4" /> 確認済み（既読）
+                      </button>
+                    </div>
+                  ) : (
+                    <button 
+                      onClick={() => markAsRead(activeNotice.id)}
+                      className="px-8 py-3 bg-blue-600 hover:bg-blue-700 text-white text-xs font-black rounded-full flex items-center gap-2 shadow-md transition-transform hover:scale-105"
+                    >
+                      <Check className="w-4 h-4" /> 内容を確認した（既読にする）
+                    </button>
+                  )}
+                </div>
+
               </div>
             )}
           </div>
 
         </div>
       </main>
-
-            {/* 外部ユーザー共通の固定フッター */}
-            <div className="flex flex-col gap-1.5 text-[9px] font-bold text-gray-500 text-center">
-          <div className="flex flex-wrap items-center justify-center gap-x-3 gap-y-1.5">
-            <Link href="/legal/terms" className="hover:text-gray-300 transition-colors">利用規約</Link>
-            <Link href="/legal/privacy" className="hover:text-gray-300 transition-colors">プライバシー</Link>
-            <Link href="/legal/commercial" className="hover:text-gray-300 transition-colors">特定商取引法</Link>
-          </div>
-          <div className="text-[8px] text-gray-600 mt-0.5">
-            &copy; {new Date().getFullYear()} YORIKURU / 生徒会ポータルシステム
-          </div>
-        </div>
-
-
-
     </div>
   );
 }
