@@ -1,4 +1,3 @@
-// src/app/top/external-users/page.tsx
 "use client";
 
 import React, { useEffect, useState, useMemo } from "react";
@@ -18,7 +17,7 @@ import { ExternalUser } from "@/app/types/external";
 
 import ExternalUserList from "./components/ExternalUserList";
 import ExternalUserForm from "./components/ExternalUserForm";
-import ExternalAppManagementTab from "./components/ExternalAppManagementTab"; // ★ 新しくインポート
+import ExternalAppManagementTab from "./components/ExternalAppManagementTab";
 
 type UserData = any; 
 type SystemApp = any;
@@ -81,24 +80,22 @@ export default function ExternalUsersPage() {
             setSchoolData(schoolDocSnap.data());
           }
 
-          const extPerms = schoolDocSnap.data()?.externalUserPermissions || {
-            canCreate: ["admin", "system_admin", "it_manager", "teacher"],
-            canView: ["admin", "system_admin", "it_manager", "teacher", "officer"],
-            canEdit: ["admin", "system_admin", "it_manager"],
-            canDelete: ["admin", "system_admin", "it_manager"]
-          };
-
-          const role = currentUserData.role || "guest";
-          const isAdmin = role === "admin" || role === "system_admin" || currentUserData.isITManager;
+          const userPerms = getDefaultChatPermissions(currentUserData);
+          const isAdmin = currentUserData.role === "admin" || currentUserData.role === "system_admin" || currentUserData.isITManager;
           
-          if (!extPerms.canView.includes(role) && !isAdmin) {
+          const canCreateExt = isAdmin || userPerms.canCreateExternalUser;
+          const canViewExt = isAdmin || userPerms.canViewExternalUser;
+
+          // 作成も参照もできなければアクセス自体不可
+          if (!canCreateExt && !canViewExt && !isAdmin) {
             setHasPermission(false);
             setIsLoading(false);
             return;
           }
 
+          // ★ surveys等の強制代入は削除し、(d.data() as any) で型エラーを回避
           const appsSnap = await getDocs(collection(db, "system_apps"));
-          setSystemApps(appsSnap.docs.map(d => ({ id: d.id, ...d.data() })));
+          setSystemApps(appsSnap.docs.map(d => ({ id: d.id, ...(d.data() as any) })));
 
           const qExt = query(collection(db, "external_users"), where("schoolId", "==", currentUserData.schoolId));
           unsubExt = onSnapshot(qExt, (snapshot) => {
@@ -133,9 +130,12 @@ export default function ExternalUsersPage() {
     };
   }, [router]);
 
-  const extPerms = schoolData?.externalUserPermissions || { canCreate: ["admin", "system_admin", "it_manager", "teacher"] };
+  // UI表示用の権限フラグ計算
+  const userPerms = userData ? getDefaultChatPermissions(userData) : null;
   const isSuperAdmin = userData?.role === "admin" || userData?.role === "system_admin" || userData?.isITManager;
-  const canCreate = userData ? extPerms.canCreate.includes(userData.role || "guest") || isSuperAdmin : false;
+  
+  const canCreateExt = isSuperAdmin || (userPerms?.canCreateExternalUser ?? false);
+  const canViewExt = isSuperAdmin || (userPerms?.canViewExternalUser ?? false);
 
   const filteredUsers = useMemo(() => {
     return externalUsers.filter(e => {
@@ -173,12 +173,18 @@ export default function ExternalUsersPage() {
     return Array.from(new Set(posNames));
   }, [tenantUsers]);
 
-  // 権限管理用の関数群
   const togglePermission = async (userId: string, permId: keyof ChatPermissions, currentPerms: ChatPermissions, isAdmin?: boolean) => {
     if (isAdmin) return; 
     setUpdatingUserId(userId);
     try {
       const newPerms = { ...currentPerms, [permId]: !currentPerms[permId] };
+
+      // 参照権限をOFFにした場合、連動して編集と削除も強制的にOFFにする
+      if (permId === "canViewExternalUser" && !newPerms.canViewExternalUser) {
+        newPerms.canEditExternalUser = false;
+        newPerms.canDeleteExternalUser = false;
+      }
+
       await updateDoc(doc(db, "users", userId), { chatPermissions: newPerms });
     } catch (e) {
       showAlert("権限の更新に失敗しました。", "error");
@@ -232,6 +238,11 @@ export default function ExternalUsersPage() {
           EXTERNAL_PERMISSIONS.forEach(item => { newPerms[item.id] = isAllow; });
         } else {
           newPerms[bulkTargetItem as keyof ChatPermissions] = isAllow;
+          // 一括操作で参照をOFFにした場合、連動して編集・削除もOFFにする
+          if (bulkTargetItem === "canViewExternalUser" && !isAllow) {
+            newPerms.canEditExternalUser = false;
+            newPerms.canDeleteExternalUser = false;
+          }
         }
         batch.update(doc(db, "users", u.id), { chatPermissions: newPerms });
       });
@@ -263,7 +274,6 @@ export default function ExternalUsersPage() {
     <div className="h-full w-full flex flex-col min-h-0 font-sans text-gray-900 bg-[#F9FAFB] relative overflow-hidden">
       <main className="flex-1 w-full max-w-6xl mx-auto p-3 sm:p-4 lg:p-6 flex flex-col min-h-0">
         
-        {/* ヘッダー */}
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 sm:gap-4 mb-3 sm:mb-4 flex-shrink-0">
           <div className="flex items-center gap-2.5 sm:gap-3">
             <div className="p-2 sm:p-2.5 bg-amber-100 text-amber-600 rounded-xl shadow-sm">
@@ -274,7 +284,7 @@ export default function ExternalUsersPage() {
               <p className="text-[10px] sm:text-xs font-bold text-gray-500 mt-0.5">テナント外のユーザーアカウントを発行・権限管理します</p>
             </div>
           </div>
-          {activeTab === "list" && canCreate && (
+          {activeTab === "list" && canCreateExt && (
             <button 
               onClick={() => setManageMode({ show: true, mode: "create" })}
               className="px-3.5 sm:px-4 py-2 sm:py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs sm:text-sm font-bold shadow-md transition-all flex items-center justify-center gap-2 hover:-translate-y-0.5"
@@ -284,7 +294,6 @@ export default function ExternalUsersPage() {
           )}
         </div>
 
-        {/* タブ切り替え（管理者・IT担当者のみ） */}
         {isSuperAdmin && (
           <div className="flex border-b border-gray-200 mb-3 sm:mb-4 shrink-0 overflow-x-auto custom-scrollbar">
             <button 
@@ -312,37 +321,60 @@ export default function ExternalUsersPage() {
           
           {/* TAB 1: ゲストユーザー一覧 */}
           {activeTab === "list" && (
-            <>
-              <div className="bg-white p-3 sm:p-4 rounded-2xl shadow-sm border border-gray-200 mb-3 sm:mb-4 flex flex-col sm:flex-row gap-2.5 sm:gap-3 shrink-0">
-                <div className="relative flex-1">
-                  <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
-                  <input 
-                    type="text" placeholder="名前や所属で検索..." value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)}
-                    className="w-full pl-9 pr-3 py-2 bg-gray-50 border border-gray-200 rounded-xl text-xs sm:text-sm font-bold focus:bg-white focus:ring-2 focus:ring-indigo-500 outline-none transition-all"
-                  />
-                </div>
-                <div className="flex gap-2 sm:gap-3">
-                  <div className="flex-1 sm:flex-none flex items-center gap-2 bg-gray-50 border border-gray-200 rounded-xl px-3 py-1.5">
-                    <Filter className="w-3.5 h-3.5 text-gray-500" />
-                    <select value={categoryFilter} onChange={(e) => setCategoryFilter(e.target.value)} className="bg-transparent border-none p-0 text-xs font-bold text-gray-700 focus:ring-0 cursor-pointer w-full">
-                      <option value="all">すべての区分</option><option value="student">生徒</option><option value="teacher">教職員</option><option value="other">その他</option>
-                    </select>
+            canViewExt ? (
+              <>
+                <div className="bg-white p-3 sm:p-4 rounded-2xl shadow-sm border border-gray-200 mb-3 sm:mb-4 flex flex-col sm:flex-row gap-2.5 sm:gap-3 shrink-0">
+                  <div className="relative flex-1">
+                    <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+                    <input 
+                      type="text" placeholder="名前や所属で検索..." value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)}
+                      className="w-full pl-9 pr-3 py-2 bg-gray-50 border border-gray-200 rounded-xl text-xs sm:text-sm font-bold focus:bg-white focus:ring-2 focus:ring-indigo-500 outline-none transition-all"
+                    />
                   </div>
-                  <div className="flex-1 sm:flex-none flex items-center gap-2 bg-gray-50 border border-gray-200 rounded-xl px-3 py-1.5">
-                    <ArrowUpDown className="w-3.5 h-3.5 text-gray-500" />
-                    <select value={sortOrder} onChange={(e) => setSortOrder(e.target.value as any)} className="bg-transparent border-none p-0 text-xs font-bold text-gray-700 focus:ring-0 cursor-pointer w-full">
-                      <option value="created_desc">登録日が新しい順</option><option value="name_asc">名前順 (昇順)</option><option value="valid_asc">有効期限が近い順</option>
-                    </select>
+                  <div className="flex gap-2 sm:gap-3">
+                    <div className="flex-1 sm:flex-none flex items-center gap-2 bg-gray-50 border border-gray-200 rounded-xl px-3 py-1.5">
+                      <Filter className="w-3.5 h-3.5 text-gray-500" />
+                      <select value={categoryFilter} onChange={(e) => setCategoryFilter(e.target.value)} className="bg-transparent border-none p-0 text-xs font-bold text-gray-700 focus:ring-0 cursor-pointer w-full">
+                        <option value="all">すべての区分</option><option value="student">生徒</option><option value="teacher">教職員</option><option value="other">その他</option>
+                      </select>
+                    </div>
+                    <div className="flex-1 sm:flex-none flex items-center gap-2 bg-gray-50 border border-gray-200 rounded-xl px-3 py-1.5">
+                      <ArrowUpDown className="w-3.5 h-3.5 text-gray-500" />
+                      <select value={sortOrder} onChange={(e) => setSortOrder(e.target.value as any)} className="bg-transparent border-none p-0 text-xs font-bold text-gray-700 focus:ring-0 cursor-pointer w-full">
+                        <option value="created_desc">登録日が新しい順</option><option value="name_asc">名前順 (昇順)</option><option value="valid_asc">有効期限が近い順</option>
+                      </select>
+                    </div>
                   </div>
                 </div>
-              </div>
 
-              <ExternalUserList 
-                users={filteredUsers}
-                systemApps={systemApps}
-                onRowClick={(user) => setManageMode({ show: true, mode: "view", targetUser: user })}
-              />
-            </>
+                <ExternalUserList 
+                  users={filteredUsers}
+                  systemApps={systemApps}
+                  onRowClick={(user) => {
+                    if (canViewExt) {
+                      setManageMode({ show: true, mode: "view", targetUser: user });
+                    }
+                  }}
+                />
+              </>
+            ) : (
+              <div className="flex-1 flex flex-col items-center justify-center bg-white rounded-2xl border border-dashed border-gray-300 p-8 shadow-sm">
+                <Globe className="w-12 h-12 text-gray-300 mb-4" />
+                <h2 className="text-sm font-black text-gray-700 mb-2">参照権限がありません</h2>
+                <p className="text-xs font-bold text-gray-500 mb-6 text-center leading-relaxed">
+                  外部ユーザーのリストを表示・閲覧する権限が付与されていません。<br/>
+                  {canCreateExt && "新しいゲストの登録操作のみ実行可能です。"}
+                </p>
+                {canCreateExt && (
+                  <button 
+                    onClick={() => setManageMode({ show: true, mode: "create" })}
+                    className="px-6 py-3 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-sm font-bold shadow-md transition-all flex items-center justify-center gap-2"
+                  >
+                    <UserPlus className="w-4 h-4" /> 新規ゲスト登録
+                  </button>
+                )}
+              </div>
+            )
           )}
 
           {/* TAB 2: メンバーの管理権限設定 */}
@@ -439,9 +471,14 @@ export default function ExternalUsersPage() {
                           </td>
                           {EXTERNAL_PERMISSIONS.map(item => {
                             const hasPermission = userPerms[item.id];
+                            
+                            // ★ 編集・削除権限は、参照権限がONのときのみ変更可能にする
+                            const isDependent = item.id === "canEditExternalUser" || item.id === "canDeleteExternalUser";
+                            const isDisabled = isProcessing || isAdmin || (isDependent && !userPerms.canViewExternalUser);
+
                             return (
                               <td key={item.id} className="px-3 py-3 text-center hover:bg-gray-50 transition-colors border-r border-gray-100 last:border-0">
-                                <button onClick={() => togglePermission(user.id, item.id, userPerms, isAdmin)} disabled={isProcessing || isAdmin} className={`p-1.5 rounded-lg transition-colors inline-flex items-center justify-center focus:outline-none ${isAdmin ? 'cursor-not-allowed opacity-60' : 'hover:bg-gray-200'}`}>
+                                <button onClick={() => togglePermission(user.id, item.id, userPerms, isAdmin)} disabled={isDisabled} className={`p-1.5 rounded-lg transition-colors inline-flex items-center justify-center focus:outline-none ${isDisabled ? 'cursor-not-allowed opacity-40' : 'hover:bg-gray-200'}`}>
                                   {hasPermission ? <CheckSquare className="w-5 h-5 text-indigo-600" /> : <Square className="w-5 h-5 text-gray-300" />}
                                 </button>
                               </td>
@@ -456,7 +493,7 @@ export default function ExternalUsersPage() {
             </div>
           )}
 
-          {/* TAB 3: 外部連携アプリマネジメント (コンポーネント化) */}
+          {/* TAB 3: 外部連携アプリマネジメント */}
           {activeTab === "apps" && isSuperAdmin && (
             <ExternalAppManagementTab 
               systemApps={systemApps}
@@ -470,10 +507,10 @@ export default function ExternalUsersPage() {
         </div>
       </main>
 
-      {/* 外部ユーザー管理（新規・編集）モーダル */}
+      {/* ★ 外部ユーザー管理（新規・編集）モーダル：被っていたラッパーを解除し、直接Formを呼ぶ */}
       {manageMode.show && (
         <div className="absolute inset-0 z-50 flex justify-center items-end sm:items-center bg-black/40 backdrop-blur-sm sm:p-4">
-          <div className="w-full max-w-4xl h-[95vh] sm:h-[85vh] bg-white rounded-t-3xl sm:rounded-3xl shadow-2xl overflow-hidden animate-slide-up sm:animate-fade-in flex flex-col">
+          <div className="w-full max-w-4xl h-[95vh] sm:h-[85vh] animate-slide-up sm:animate-fade-in flex flex-col">
             <ExternalUserForm 
               userData={userData}
               mode={manageMode.mode}
@@ -482,7 +519,7 @@ export default function ExternalUsersPage() {
               onSuccess={() => {}}
               systemApps={systemApps}
               schoolData={schoolData}
-              setMode={(newMode) => setManageMode(prev => ({ ...prev, mode: newMode }))}
+              setMode={(newMode: any) => setManageMode(prev => ({ ...prev, mode: newMode }))}
             />
           </div>
         </div>

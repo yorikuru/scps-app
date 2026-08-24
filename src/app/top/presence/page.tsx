@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams, usePathname } from "next/navigation";
 import { onAuthStateChanged } from "firebase/auth";
 import { doc, getDoc, getDocs, collection, query, where, orderBy, onSnapshot, setDoc, serverTimestamp, writeBatch } from "firebase/firestore";
 import { auth, db } from "@/lib/firebase";
@@ -9,7 +9,7 @@ import * as LucideIcons from "lucide-react";
 import { Loader2, AlertTriangle, CalendarDays, MapPin, Printer } from "lucide-react";
 
 import { UserData } from "../page";
-import { UserPresence, PresenceState, PresenceLocation } from "./types";
+import { UserPresence, PresenceState, PresenceLocation, ScheduledPresence, WeeklyDayRoutine } from "./types";
 import StatusOverview from "./components/StatusOverview";
 import MyStatusEditor from "./components/MyStatusEditor";
 import WeeklyScheduleEditor from "./components/WeeklyScheduleEditor";
@@ -39,6 +39,9 @@ const isToday = (isoString?: string) => {
 
 export default function PresencePage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const pathname = usePathname();
+
   const [userData, setUserData] = useState<UserData | null>(null);
   const [tenantUsers, setTenantUsers] = useState<UserData[]>([]);
   const [appConfig, setAppConfig] = useState({ name: "メンバー動静", icon: "Users", color: "indigo" });
@@ -49,9 +52,15 @@ export default function PresencePage() {
   const [myPresence, setMyPresence] = useState<UserPresence | null>(null);
   const [locations, setLocations] = useState<PresenceLocation[]>([]);
 
-  const [showScheduleModal, setShowScheduleModal] = useState(false);
-  const [showLocationModal, setShowLocationModal] = useState(false);
-  const [proxyTargetUser, setProxyTargetUser] = useState<UserData | null>(null);
+  // ★ 追加：全員のスケジュールとルーティンを読み込むステート
+  const [schedules, setSchedules] = useState<ScheduledPresence[]>([]);
+  const [routines, setRoutines] = useState<WeeklyDayRoutine[]>([]);
+
+  const modalParam = searchParams.get("modal"); 
+  const proxyParam = searchParams.get("proxy"); 
+
+  const showScheduleModal = modalParam === "schedule";
+  const showLocationModal = modalParam === "location";
 
   const [toast, setToast] = useState<{ show: boolean; type: "success" | "error"; message: string }>({ show: false, type: "success", message: "" });
   const showAlert = (type: "success" | "error", message: string) => {
@@ -59,10 +68,32 @@ export default function PresencePage() {
     setTimeout(() => setToast((prev) => ({ ...prev, show: false })), 3000);
   };
 
+  const openModal = (modalName: string) => {
+    const params = new URLSearchParams(searchParams.toString());
+    params.set("modal", modalName);
+    router.push(`${pathname}?${params.toString()}`);
+  };
+
+  const closeModal = () => {
+    const params = new URLSearchParams(searchParams.toString());
+    params.delete("modal");
+    params.delete("proxy");
+    params.delete("tab");
+    router.replace(`${pathname}?${params.toString()}`, { scroll: false });
+  };
+
+  const openProxy = (userId: string) => {
+    const params = new URLSearchParams(searchParams.toString());
+    params.set("proxy", userId);
+    router.push(`${pathname}?${params.toString()}`);
+  };
+
   useEffect(() => {
     let unsubUsers: (() => void) | undefined;
     let unsubPresences: (() => void) | undefined;
     let unsubLocations: (() => void) | undefined;
+    let unsubSchedules: (() => void) | undefined;
+    let unsubRoutines: (() => void) | undefined;
 
     const unsubscribeAuth = onAuthStateChanged(auth, async (user) => {
       if (user) {
@@ -131,16 +162,34 @@ export default function PresencePage() {
             setMyPresence(mine);
           });
 
+          unsubSchedules = onSnapshot(query(collection(db, "presence_schedules"), where("schoolId", "==", uData.schoolId)), (snap) => {
+            const list: ScheduledPresence[] = [];
+            snap.forEach(d => list.push({ id: d.id, ...d.data() } as ScheduledPresence));
+            setSchedules(list);
+          });
+
+          unsubRoutines = onSnapshot(query(collection(db, "presence_weekly_templates"), where("schoolId", "==", uData.schoolId)), (snap) => {
+            const list: WeeklyDayRoutine[] = [];
+            snap.forEach(d => list.push({ id: d.id, ...d.data() } as WeeklyDayRoutine));
+            setRoutines(list);
+          });
+
           await sendHeartbeat(uData);
           setIsLoading(false);
         } catch (e) { setIsLoading(false); }
       } else { router.push("/login"); }
     });
 
-    return () => { unsubscribeAuth(); if (unsubUsers) unsubUsers(); if (unsubPresences) unsubPresences(); if (unsubLocations) unsubLocations(); };
+    return () => { 
+      unsubscribeAuth(); 
+      if (unsubUsers) unsubUsers(); 
+      if (unsubPresences) unsubPresences(); 
+      if (unsubLocations) unsubLocations(); 
+      if (unsubSchedules) unsubSchedules();
+      if (unsubRoutines) unsubRoutines();
+    };
   }, [router]);
 
-  // ★ タブのフォーカス（表示・非表示）に応じた自動判別ロジック（手動設定優先ガード付き）
   useEffect(() => {
     if (!userData?.id) return;
 
@@ -152,13 +201,8 @@ export default function PresencePage() {
 
         if (snap.exists()) {
           const data = snap.data();
-          // ★ 手動設定（isManualOverride === true）または予約スケジュールが存在する場合は、
-          // タブのフォーカスによる自動判別で勝手に上書きされないようにガードする
-          if (data.isManualOverride === true) {
-            return;
-          }
+          if (data.isManualOverride === true) return; // 手動設定は維持
 
-          // 通常の自動オンライン中、またはオフライン切り替えの場合は自動反映
           await setDoc(ref, {
             ...data,
             currentState: newState,
@@ -173,17 +217,11 @@ export default function PresencePage() {
     };
 
     const handleVisibilityChange = () => {
-      if (document.hidden) {
-        // タブから離れた -> 退席中
-        updateVisibilityState("away");
-      } else {
-        // タブに戻ってきた -> 連絡可能
-        updateVisibilityState("available");
-      }
+      if (document.hidden) updateVisibilityState("away");
+      else updateVisibilityState("available");
     };
 
     const handleBeforeUnload = () => {
-      // ログアウトまたはタブ閉鎖 -> オフライン
       const ref = doc(db, "presence_statuses", userData.id);
       setDoc(ref, { currentState: "offline", isAutoOnline: true, lastActiveAt: new Date().toISOString() }, { merge: true }).catch(()=>{});
     };
@@ -229,21 +267,15 @@ export default function PresencePage() {
 
   const handlePrint = () => {
     const toggleBtn = document.getElementById("sidebar-toggle-btn") as HTMLButtonElement | null;
-    const mainDiv = document.querySelector("main > div");
-    const isBlurred = mainDiv?.classList.contains("blur-[4px]");
-    const aside = document.querySelector("aside");
-    const isSidebarVisible = aside && aside.offsetWidth > 0;
-
-    if (toggleBtn && (isBlurred || isSidebarVisible)) {
+    if (toggleBtn) {
       toggleBtn.click();
-      setTimeout(() => {
-        window.print();
-        setTimeout(() => { toggleBtn.click(); }, 500);
-      }, 400);
+      setTimeout(() => { window.print(); setTimeout(() => { toggleBtn.click(); }, 500); }, 400);
     } else {
       window.print();
     }
   };
+
+  const proxyTargetUser = tenantUsers.find(u => u.id === proxyParam) || null;
 
   if (isLoading) return <div className="h-full bg-[#F9FAFB] flex justify-center items-center"><Loader2 className="w-8 h-8 animate-spin text-indigo-600" /></div>;
   if (!hasPermission) return <div className="h-full flex flex-col items-center justify-center p-4"><AlertTriangle className="w-12 h-12 text-red-500 mb-4" /><h1 className="text-xl font-black">アクセス権限がありません</h1></div>;
@@ -277,12 +309,12 @@ export default function PresencePage() {
           </button>
           
           {canManageAll && (
-            <button onClick={() => setShowLocationModal(true)} className="px-3 py-1.5 bg-white hover:bg-gray-50 text-gray-700 border border-gray-200 rounded-lg text-[11px] sm:text-xs font-bold transition-colors shadow-2xs flex items-center gap-1.5 whitespace-nowrap">
+            <button onClick={() => openModal("location")} className="px-3 py-1.5 bg-white hover:bg-gray-50 text-gray-700 border border-gray-200 rounded-lg text-[11px] sm:text-xs font-bold transition-colors shadow-2xs flex items-center gap-1.5 whitespace-nowrap">
               <MapPin className="w-3.5 h-3.5" /> 勤務先マスタ
             </button>
           )}
-          <button onClick={() => setShowScheduleModal(true)} className="px-3 py-1.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 rounded-lg text-[11px] sm:text-xs font-bold transition-colors shadow-2xs flex items-center gap-1.5 whitespace-nowrap">
-            <CalendarDays className="w-3.5 h-3.5" /> 一括設定・予約
+          <button onClick={() => openModal("schedule")} className="px-3 py-1.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 rounded-lg text-[11px] sm:text-xs font-bold transition-colors shadow-2xs flex items-center gap-1.5 whitespace-nowrap">
+            <CalendarDays className="w-3.5 h-3.5" /> スケジュール設定
           </button>
         </div>
       </div>
@@ -296,9 +328,11 @@ export default function PresencePage() {
                 targetUser={userData}
                 currentUser={userData}
                 initialPresence={myPresence}
+                schedules={schedules} 
+                routines={routines}   
                 locations={locations}
                 showAlert={showAlert}
-                onClose={() => {}}
+                onClose={closeModal}
                 isModal={false}
               />
             )}
@@ -307,28 +341,31 @@ export default function PresencePage() {
           {userData && (
             <StatusOverview
               presences={presences}
+              schedules={schedules} 
+              routines={routines}   
               tenantUsers={tenantUsers}
               locations={locations}
               currentUser={userData}
               canManageAll={canManageAll}
-              onProxyEdit={(user) => setProxyTargetUser(user)}
+              onProxyEdit={(user) => openProxy(user.id)}
             />
           )}
 
         </div>
       </main>
 
-      {/* 代理設定用モーダル */}
-      {proxyTargetUser && userData && (
+      {proxyParam && proxyTargetUser && userData && (
         <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/40 backdrop-blur-sm sm:p-4 animate-fade-in print:hidden">
           <div className="bg-white rounded-t-2xl sm:rounded-2xl shadow-2xl w-full max-w-xl flex flex-col overflow-visible animate-slide-up sm:animate-fade-in border border-gray-200">
             <MyStatusEditor
               targetUser={proxyTargetUser}
               currentUser={userData}
               initialPresence={presences.find(p => p.userId === proxyTargetUser.id) || null}
+              schedules={schedules}
+              routines={routines}
               locations={locations}
               showAlert={showAlert}
-              onClose={() => setProxyTargetUser(null)}
+              onClose={closeModal}
               isModal={true}
             />
           </div>
@@ -341,7 +378,8 @@ export default function PresencePage() {
           tenantUsers={tenantUsers}
           canManageAll={canManageAll}
           locations={locations}
-          onClose={() => setShowScheduleModal(false)}
+          schedules={schedules} 
+          onClose={closeModal}
           showAlert={showAlert}
         />
       )}
@@ -350,7 +388,7 @@ export default function PresencePage() {
         <LocationMaster
           schoolId={userData.schoolId}
           locations={locations}
-          onClose={() => setShowLocationModal(false)}
+          onClose={closeModal}
           showAlert={showAlert}
         />
       )}

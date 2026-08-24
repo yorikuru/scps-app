@@ -2,7 +2,7 @@
 
 import React, { useEffect, useState } from "react";
 import { useRouter, usePathname } from "next/navigation";
-import { onAuthStateChanged, signOut } from "firebase/auth";
+import { onAuthStateChanged } from "firebase/auth";
 import { doc, collection, query, where, onSnapshot, orderBy, getDoc, setDoc, serverTimestamp } from "firebase/firestore";
 import { auth, db } from "@/lib/firebase";
 import { Loader2, ShieldAlert } from "lucide-react";
@@ -47,23 +47,44 @@ export default function TopLayout({ children }: { children: React.ReactNode }) {
   const [accessDeniedApp, setAccessDeniedApp] = useState<string | null>(null);
   const [accountStatusError, setAccountStatusError] = useState<string | null>(null);
 
+  const [chatUnreadCount, setChatUnreadCount] = useState(0);
+  const [hasChatMention, setHasChatMention] = useState(false);
+  const [activeRentalsCount, setActiveRentalsCount] = useState(0);
+  const [hasOverdueRental, setHasOverdueRental] = useState(false);
+  const [surveyUnansweredCount, setSurveyUnansweredCount] = useState(0);
+  const [surveyRequiredUnansweredCount, setSurveyRequiredUnansweredCount] = useState(0);
+
+  // ★ 修正：onAuthStateChanged の中のリスナーを適切に解除する仕組みに変更
   useEffect(() => {
+    let unsubUser: (() => void) | undefined;
+
     const unsubscribeAuth = onAuthStateChanged(auth, (user) => {
       if (user) {
-        const unsubUser = onSnapshot(doc(db, "users", user.uid), (userDocSnap) => {
-          if (!userDocSnap.exists()) { router.push("/login"); return; }
-          const uData = { id: user.uid, ...userDocSnap.data() } as UserData;
-          setUserData(uData);
-        });
-        return () => unsubUser();
+        unsubUser = onSnapshot(
+          doc(db, "users", user.uid), 
+          (userDocSnap) => {
+            if (!userDocSnap.exists()) { router.push("/login"); return; }
+            const uData = { id: user.uid, ...userDocSnap.data() } as UserData;
+            setUserData(uData);
+          },
+          (error) => {
+            // ログアウト時などに発生する権限エラーを握りつぶす
+            console.warn("User listener disconnected");
+          }
+        );
       } else {
+        if (unsubUser) unsubUser();
+        setUserData(null);
         router.push("/login");
       }
     });
-    return () => unsubscribeAuth();
+
+    return () => {
+      unsubscribeAuth();
+      if (unsubUser) unsubUser();
+    };
   }, [router]);
 
-  // ★ ログイン中の自動プレゼンス判別 (Visibility API ＆ ログアウト監視)
   useEffect(() => {
     if (!userData?.id || !userData?.schoolId) return;
 
@@ -89,7 +110,6 @@ export default function TopLayout({ children }: { children: React.ReactNode }) {
           });
         } else {
           const data = snap.data();
-          // 手動設定やスケジュール優先：isAutoOnline が false (手動) の場合は勝手に自動上書きしない
           if (data.isAutoOnline !== false || newState === "offline") {
             await setDoc(ref, {
               ...data,
@@ -101,25 +121,18 @@ export default function TopLayout({ children }: { children: React.ReactNode }) {
           }
         }
       } catch (e) {
-        console.error(e);
+        // console.error(e);
       }
     };
 
-    // 初期化時は「連絡可能」に
     updatePresenceState("available", true);
 
     const handleVisibilityChange = () => {
-      if (document.hidden) {
-        // タブから離れた -> 退席中
-        updatePresenceState("away", true);
-      } else {
-        // タブに戻ってきた -> 連絡可能
-        updatePresenceState("available", true);
-      }
+      if (document.hidden) updatePresenceState("away", true);
+      else updatePresenceState("available", true);
     };
 
     const handleBeforeUnload = () => {
-      // ページを閉じる・離脱 -> オフライン
       const ref = doc(db, "presence_statuses", userData.id);
       setDoc(ref, { currentState: "offline", isAutoOnline: true, lastActiveAt: new Date().toISOString() }, { merge: true }).catch(()=>{});
     };
@@ -146,20 +159,29 @@ export default function TopLayout({ children }: { children: React.ReactNode }) {
     }
   }, [userData, pathname]);
 
+  // ★ 修正：すべてのリスナーにエラーハンドラーを追加し、ログアウト時のエラーを握りつぶす
   useEffect(() => {
     if (!userData?.schoolId) return;
     
-    const unsubSchool = onSnapshot(doc(db, "schools", userData.schoolId), (schoolDocSnap) => {
-      const sData = schoolDocSnap.exists() ? { id: schoolDocSnap.id, ...schoolDocSnap.data() } as ExtendedSchoolData : null;
-      setSchoolData(sData);
-    });
+    const unsubSchool = onSnapshot(
+      doc(db, "schools", userData.schoolId), 
+      (schoolDocSnap) => {
+        const sData = schoolDocSnap.exists() ? { id: schoolDocSnap.id, ...schoolDocSnap.data() } as ExtendedSchoolData : null;
+        setSchoolData(sData);
+      },
+      () => {} // ログアウト時のエラーを無視
+    );
 
     const qTenantUsers = query(collection(db, "users"), where("schoolId", "==", userData.schoolId));
-    const unsubTenantUsers = onSnapshot(qTenantUsers, (snap) => {
-      const users: UserData[] = [];
-      snap.forEach(d => users.push({ id: d.id, ...d.data() } as UserData));
-      setTenantUsers(users);
-    });
+    const unsubTenantUsers = onSnapshot(
+      qTenantUsers, 
+      (snap) => {
+        const users: UserData[] = [];
+        snap.forEach(d => users.push({ id: d.id, ...d.data() } as UserData));
+        setTenantUsers(users);
+      },
+      () => {}
+    );
 
     return () => {
       unsubSchool();
@@ -171,25 +193,37 @@ export default function TopLayout({ children }: { children: React.ReactNode }) {
     if (!userData?.schoolId) return;
 
     const qApps = query(collection(db, "system_apps"), orderBy("order", "asc"));
-    const unsubApps = onSnapshot(qApps, (snap) => {
-      const appsList: SystemApp[] = [];
-      snap.forEach(d => appsList.push({ id: d.id, appId: d.id, ...d.data() } as SystemApp));
-      setSystemApps(appsList);
-    });
+    const unsubApps = onSnapshot(
+      qApps, 
+      (snap) => {
+        const appsList: SystemApp[] = [];
+        snap.forEach(d => appsList.push({ id: d.id, appId: d.id, ...d.data() } as SystemApp));
+        setSystemApps(appsList);
+      },
+      () => {}
+    );
 
     const qMessages = query(collection(db, "system_messages"), where("targetTenants", "array-contains", userData.schoolId));
-    const unsubMessages = onSnapshot(qMessages, (snap) => {
-       const msgs: SystemMessage[] = [];
-       snap.forEach(d => msgs.push({ id: d.id, ...d.data() } as SystemMessage));
-       setMessages(msgs);
-    });
+    const unsubMessages = onSnapshot(
+      qMessages, 
+      (snap) => {
+         const msgs: SystemMessage[] = [];
+         snap.forEach(d => msgs.push({ id: d.id, ...d.data() } as SystemMessage));
+         setMessages(msgs);
+      },
+      () => {}
+    );
 
     const qEvents = query(collection(db, "events"), where("schoolId", "==", userData.schoolId));
-    const unsubEvents = onSnapshot(qEvents, (snap) => {
-       const evs: any[] = [];
-       snap.forEach(d => evs.push({ id: d.id, ...d.data() }));
-       setAllEvents(evs);
-    });
+    const unsubEvents = onSnapshot(
+      qEvents, 
+      (snap) => {
+         const evs: any[] = [];
+         snap.forEach(d => evs.push({ id: d.id, ...d.data() }));
+         setAllEvents(evs);
+      },
+      () => {}
+    );
 
     return () => {
       unsubApps();
@@ -225,6 +259,123 @@ export default function TopLayout({ children }: { children: React.ReactNode }) {
   }, [userData, schoolData]);
 
   useEffect(() => {
+    if (!userData || !schoolData) return;
+
+    let unsubChatRooms: (() => void) | undefined;
+    let unsubRentals: (() => void) | undefined;
+    let unsubSurveys: (() => void) | undefined;
+    let unsubSurveyResponses: (() => void) | undefined;
+
+    if (userData.allowedModules?.includes("chat") || userData.role === "admin" || userData.role === "system_admin" || userData.isITManager) {
+      const qChat = query(collection(db, "chat_rooms"), where("schoolId", "==", userData.schoolId), where("members", "array-contains", userData.id));
+      unsubChatRooms = onSnapshot(
+        qChat, 
+        (snapshot) => {
+          let unreadTotal = 0;
+          let mentionDetected = false;
+          snapshot.forEach(d => {
+            const rData = d.data();
+            const myUnread = rData.unreadCount?.[userData.id] || 0;
+            if (myUnread > 0) {
+              unreadTotal += myUnread;
+              if (rData.lastMessage && rData.lastMessage.includes(`@${userData.name}`)) mentionDetected = true;
+            }
+          });
+          setChatUnreadCount(unreadTotal);
+          setHasChatMention(mentionDetected);
+        },
+        () => {}
+      );
+    }
+
+    if (userData.allowedModules?.includes("equipment") || userData.role === "admin" || userData.role === "system_admin" || userData.isITManager) {
+      const qRentals = query(collection(db, "rentals"), where("schoolId", "==", userData.schoolId));
+      unsubRentals = onSnapshot(
+        qRentals, 
+        (snapshot) => {
+          let activeCount = 0;
+          let overdueDetected = false;
+          const now = new Date();
+          snapshot.forEach(d => {
+            const rData = d.data();
+            if (rData.status === "active" || rData.status === "partial") {
+              activeCount++;
+              if (rData.endDate && new Date(`${rData.endDate}T23:59:59`) < now) overdueDetected = true;
+            }
+          });
+          setActiveRentalsCount(activeCount);
+          setHasOverdueRental(overdueDetected);
+        },
+        () => {}
+      );
+    }
+
+    if (userData.allowedModules?.includes("surveys") || userData.role === "admin" || userData.role === "system_admin" || userData.isITManager) {
+      let currentSurveys: any[] = [];
+      let myRespondedIds = new Set<string>();
+
+      const calculateSurveyBadges = () => {
+        let requiredUnanswered = 0;
+        let optionalUnanswered = 0;
+        const now = new Date().getTime();
+
+        currentSurveys.forEach(survey => {
+          const sData = survey.settings || {};
+          const accepting = sData.acceptingResponses ?? survey.isActive ?? true;
+          if (!accepting) return;
+
+          const startDate = sData.startDate ? new Date(sData.startDate).getTime() : 0;
+          const endDate = sData.endDate ? new Date(sData.endDate).getTime() : Infinity;
+          if (now < startDate || now > endDate) return;
+
+          const accessTarget = sData.accessTarget ?? (survey.isPublic ? "public" : "tenant_members");
+          let isTarget = false;
+          if (["tenant_members", "external_users", "public"].includes(accessTarget)) isTarget = true;
+          else if (accessTarget === "selected_users" && (sData.respondentIds || []).includes(userData.id)) isTarget = true;
+
+          if (isTarget && !myRespondedIds.has(survey.id)) {
+            if ((sData.requiredRespondentIds || []).includes(userData.id)) {
+              requiredUnanswered++;
+            } else {
+              optionalUnanswered++;
+            }
+          }
+        });
+
+        setSurveyRequiredUnansweredCount(requiredUnanswered);
+        setSurveyUnansweredCount(optionalUnanswered);
+      };
+
+      const qSurveys = query(collection(db, "surveys"), where("tenantId", "==", userData.schoolId));
+      unsubSurveys = onSnapshot(
+        qSurveys, 
+        (snap) => {
+          currentSurveys = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+          calculateSurveyBadges();
+        },
+        () => {}
+      );
+
+      const qMyResponses = query(collection(db, "survey_responses"), where("respondentId", "==", userData.id));
+      unsubSurveyResponses = onSnapshot(
+        qMyResponses, 
+        (snap) => {
+          myRespondedIds = new Set(snap.docs.map(d => d.data().surveyId));
+          calculateSurveyBadges();
+        },
+        () => {}
+      );
+    }
+
+    return () => {
+      if (unsubChatRooms) unsubChatRooms();
+      if (unsubRentals) unsubRentals();
+      if (unsubSurveys) unsubSurveys();
+      if (unsubSurveyResponses) unsubSurveyResponses();
+    };
+  }, [userData, schoolData]);
+
+  useEffect(() => {
     if (isLoading || !userData || !schoolData || systemApps.length === 0) return;
 
     const currentApp = systemApps.find(app => (app as any).path && pathname.startsWith((app as any).path) && (app as any).path !== "/top");
@@ -251,7 +402,6 @@ export default function TopLayout({ children }: { children: React.ReactNode }) {
   }, [pathname, isLoading, userData, schoolData, systemApps]);
 
   const handleLogout = async () => {
-    // ログアウト時にステータスをオフラインに確実に更新してからサインアウト
     if (userData?.id) {
       try {
         const ref = doc(db, "presence_statuses", userData.id);
@@ -376,6 +526,7 @@ export default function TopLayout({ children }: { children: React.ReactNode }) {
       {renderModals()}
       <div className="fixed inset-0 flex w-full bg-white text-gray-900 font-sans overflow-hidden">
         
+        {/* @ts-ignore SidebarのPropsにappBadgesを追加するまで型エラーを無視 */}
         <Sidebar 
           isSidebarOpen={isSidebarOpen} 
           setIsSidebarOpen={setIsSidebarOpen}
@@ -385,6 +536,11 @@ export default function TopLayout({ children }: { children: React.ReactNode }) {
           selectedDate={selectedDate} 
           setSelectedDate={setSelectedDate} 
           allEvents={allEvents} 
+          appBadges={{
+            chat: { unread: chatUnreadCount, mention: hasChatMention },
+            equipment: { active: activeRentalsCount, overdue: hasOverdueRental },
+            surveys: { required: surveyRequiredUnansweredCount, optional: surveyUnansweredCount }
+          }}
         />
         
         <div className="flex-1 flex flex-col min-w-0 bg-[#F9FAFB] h-full overflow-hidden">

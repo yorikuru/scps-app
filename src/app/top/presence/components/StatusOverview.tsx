@@ -1,13 +1,15 @@
 "use client";
 
-import React, { useState, useMemo } from "react";
+import React, { useState, useMemo, useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { PRESENCE_CONFIG, UserPresence, PresenceState, PresenceLocation } from "../types";
+import { PRESENCE_CONFIG, UserPresence, PresenceState, PresenceLocation, ScheduledPresence, WeeklyDayRoutine, getEffectivePresence } from "../types";
 import { UserData } from "../../page";
-import { Search, MapPin, MessageCircle, UserCog, ArrowUpDown } from "lucide-react";
+import { Search, MapPin, MessageCircle, UserCog, ArrowUpDown, MessageSquareText } from "lucide-react";
 
 type Props = {
   presences: UserPresence[];
+  schedules: ScheduledPresence[]; 
+  routines: WeeklyDayRoutine[];   
   tenantUsers: UserData[];
   locations: PresenceLocation[];
   currentUser: UserData;
@@ -15,7 +17,7 @@ type Props = {
   onProxyEdit: (user: UserData) => void;
 };
 
-export default function StatusOverview({ presences, tenantUsers, locations, currentUser, canManageAll, onProxyEdit }: Props) {
+export default function StatusOverview({ presences, schedules, routines, tenantUsers, locations, currentUser, canManageAll, onProxyEdit }: Props) {
   const router = useRouter();
   const [searchQuery, setSearchQuery] = useState("");
   const [filterState, setFilterState] = useState<string>("all");
@@ -23,27 +25,24 @@ export default function StatusOverview({ presences, tenantUsers, locations, curr
   const [sortBy, setSortBy] = useState<"systemId" | "name" | "status">("systemId");
   const [sortOrder, setSortOrder] = useState<"asc" | "desc">("asc");
 
+  const [tick, setTick] = useState(0);
+  useEffect(() => {
+    const timer = setInterval(() => setTick(t => t + 1), 60000);
+    return () => clearInterval(timer);
+  }, []);
+
   const processedList = useMemo(() => {
     let list = tenantUsers.map((u) => {
-      const p = presences.find((item) => item.userId === u.id);
-      return {
-        user: u,
-        presence: p || {
-          id: u.id, 
-          userId: u.id, 
-          userName: u.name, 
-          role: u.role, 
-          positionName: u.positionName, 
-          systemId: (u as any).systemId || "",
-          currentState: "offline" as PresenceState, 
-          lastActiveAt: "",
-          locationId: null,
-          statusMessage: "",
-          statusUpdatedAt: "",
-          updatedByUserId: null,
-          updatedByUserName: null
-        } as UserPresence,
-      };
+      const rawPresence = presences.find((item) => item.userId === u.id) || {
+        id: u.id, userId: u.id, userName: u.name, role: u.role, positionName: u.positionName, systemId: (u as any).systemId || "",
+        currentState: "offline" as PresenceState, lastActiveAt: "", locationId: null, statusMessage: "", statusUpdatedAt: "",
+        isManualOverride: false, isAutoOnline: false
+      } as UserPresence;
+
+      // ★ スケジュールを加味した実効ステータスを計算
+      const effectivePresence = getEffectivePresence(rawPresence, schedules, routines) as UserPresence;
+
+      return { user: u, presence: effectivePresence };
     }).filter(({ user, presence }) => {
       const locName = locations.find(l => l.id === presence.locationId)?.name || "";
       const matchSearch = user.name.toLowerCase().includes(searchQuery.toLowerCase()) 
@@ -79,14 +78,13 @@ export default function StatusOverview({ presences, tenantUsers, locations, curr
     });
 
     return list;
-  }, [tenantUsers, presences, locations, searchQuery, filterState, filterRole, sortBy, sortOrder]);
+  }, [tenantUsers, presences, locations, searchQuery, filterState, filterRole, sortBy, sortOrder, tick, schedules, routines]);
 
-  const availableCount = presences.filter((p) => p.currentState === "available").length;
+  const availableCount = processedList.filter((p) => p.presence.currentState === "available").length;
 
   return (
     <div className="space-y-4">
       
-      {/* 画面用検索・フィルター・ソートバー */}
       <div className="bg-white p-2.5 sm:p-3 rounded-2xl border border-gray-200 shadow-2xs space-y-2.5 print:hidden">
         <div className="flex flex-col sm:flex-row gap-2">
           <div className="relative flex-1">
@@ -100,7 +98,7 @@ export default function StatusOverview({ presences, tenantUsers, locations, curr
           <div className="flex gap-2 overflow-x-auto custom-scrollbar">
             <select
               value={filterState} onChange={(e) => setFilterState(e.target.value)}
-              className="bg-gray-50 border border-gray-200 rounded-xl px-2.5 py-2 text-[16px] sm:text-xs font-bold text-gray-700 outline-none focus:ring-2 focus:ring-indigo-500"
+              className="bg-gray-50 border border-gray-200 rounded-xl px-2.5 py-2 text-[16px] sm:text-xs font-bold text-gray-700 outline-none focus:ring-2 focus:ring-indigo-500 shrink-0"
             >
               <option value="all">全ステータス</option>
               {(Object.keys(PRESENCE_CONFIG) as PresenceState[]).map((st) => (
@@ -110,7 +108,7 @@ export default function StatusOverview({ presences, tenantUsers, locations, curr
 
             <select
               value={filterRole} onChange={(e) => setFilterRole(e.target.value)}
-              className="bg-gray-50 border border-gray-200 rounded-xl px-2.5 py-2 text-[16px] sm:text-xs font-bold text-gray-700 outline-none focus:ring-2 focus:ring-indigo-500"
+              className="bg-gray-50 border border-gray-200 rounded-xl px-2.5 py-2 text-[16px] sm:text-xs font-bold text-gray-700 outline-none focus:ring-2 focus:ring-indigo-500 shrink-0"
             >
               <option value="all">全権限</option>
               <option value="admin">管理者</option>
@@ -118,7 +116,7 @@ export default function StatusOverview({ presences, tenantUsers, locations, curr
               <option value="teacher">教職員</option>
             </select>
 
-            <div className="flex items-center gap-1 bg-gray-50 border border-gray-200 rounded-xl px-2">
+            <div className="flex items-center gap-1 bg-gray-50 border border-gray-200 rounded-xl px-2 shrink-0">
               <ArrowUpDown className="w-3.5 h-3.5 text-gray-400 shrink-0" />
               <select
                 value={sortBy} onChange={(e: any) => setSortBy(e.target.value)}
@@ -145,7 +143,6 @@ export default function StatusOverview({ presences, tenantUsers, locations, curr
         </span>
       </div>
 
-      {/* ★ スマホ対応強化版：カードレイアウト */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2.5 sm:gap-4 print:hidden">
         {processedList.map(({ user, presence }) => {
           const config = PRESENCE_CONFIG[presence.currentState || "offline"];
@@ -190,7 +187,6 @@ export default function StatusOverview({ presences, tenantUsers, locations, curr
                   </div>
                 </div>
 
-                {/* 右上のアクションボタン (スマホではアイコンのみ) */}
                 <div className="absolute top-3 right-3 flex items-center gap-1">
                   {!isMe && canManageAll && (
                     <button onClick={() => onProxyEdit(user)} className="p-1.5 bg-amber-50 text-amber-700 hover:bg-amber-100 rounded-lg transition-colors shadow-2xs" title="代理設定">
@@ -207,18 +203,19 @@ export default function StatusOverview({ presences, tenantUsers, locations, curr
               </div>
 
               {presence.statusMessage && (
-                <div className="bg-gray-50/80 p-2 sm:p-2.5 rounded-lg sm:rounded-xl border border-gray-100 text-[10px] sm:text-[11px] font-bold text-gray-700 leading-snug break-words">
-                  💬 {presence.statusMessage}
+                <div className="bg-gray-50/80 p-2 sm:p-2.5 rounded-lg sm:rounded-xl border border-gray-100 text-[10px] sm:text-[11px] font-bold text-gray-700 leading-snug break-words flex items-start gap-1.5 mt-1">
+                  <MessageSquareText className="w-3.5 h-3.5 text-gray-400 shrink-0 mt-0.5" />
+                  <span>{presence.statusMessage}</span>
                 </div>
               )}
 
               <div className="flex items-center justify-between pt-1.5 border-t border-gray-100/80 mt-auto">
                 <span className="text-[8px] font-bold text-gray-400">
-                  更新: {presence.lastActiveAt ? new Date(presence.lastActiveAt).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'}) : '未登録'}
+                  {presence.isManualOverride === false && presence.isAutoOnline === false ? "スケジュール適用中" : `更新: ${presence.lastActiveAt ? new Date(presence.lastActiveAt).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'}) : '未登録'}`}
                 </span>
                 {presence.updatedByUserName && !isMe && (
                   <span className="text-[8px] font-bold text-amber-600 flex items-center gap-1">
-                    <UserCog className="w-2.5 h-2.5" /> {presence.updatedByUserName} が代理設定
+                    <UserCog className="w-2.5 h-2.5" /> {presence.updatedByUserName} が設定
                   </span>
                 )}
               </div>
@@ -228,7 +225,6 @@ export default function StatusOverview({ presences, tenantUsers, locations, curr
         })}
       </div>
 
-      {/* 印刷/PDF用の名簿レイアウト (印刷時のみ表示) */}
       <div className="hidden print:block w-full text-black">
         <div className="text-center border-b border-black pb-3 mb-4">
           <h1 className="text-lg font-black">生徒会 リアルタイム動静名簿</h1>

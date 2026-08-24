@@ -5,7 +5,7 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { 
   PanelLeftClose, PanelLeft, Settings, ShieldCheck, LogOut, Clock, User as UserIcon,
-  BellRing, Mail, MailOpen, Star, Trash2, CheckCircle2, ChevronRight, Home, MapPin, MessageSquare, Save, ChevronDown, Check, X
+  BellRing, Mail, MailOpen, Star, Trash2, CheckCircle2, ChevronRight, Home, MapPin, MessageSquareText, Save, ChevronDown, Check, X, RotateCcw
 } from "lucide-react";
 import * as LucideIcons from "lucide-react";
 import { doc, getDoc, getDocs, collection, query, where, onSnapshot, updateDoc, deleteDoc, writeBatch, setDoc, serverTimestamp } from "firebase/firestore";
@@ -13,7 +13,7 @@ import { db } from "@/lib/firebase";
 import { UserData, SchoolData } from "../page";
 import HeaderSearch from "./HeaderSearch";
 import { useDialog } from "@/components/DialogContext";
-import { PRESENCE_CONFIG, PresenceState, PresenceLocation, UserPresence } from "../presence/types";
+import { PRESENCE_CONFIG, PresenceState, PresenceLocation, UserPresence, ScheduledPresence, WeeklyDayRoutine, getEffectivePresence } from "../presence/types";
 
 // 通知のカラーマッピング
 const NOTICE_COLORS: Record<string, { color: string, bg: string }> = {
@@ -66,8 +66,11 @@ export default function Header({
   const [allNotifications, setAllNotifications] = useState<any[]>([]);
 
   // 自分の動静ステータス用のステート
-  const [myPresence, setMyPresence] = useState<UserPresence | null>(null);
+  const [rawPresence, setRawPresence] = useState<UserPresence | null>(null);
+  const [schedules, setSchedules] = useState<ScheduledPresence[]>([]);
+  const [routines, setRoutines] = useState<WeeklyDayRoutine[]>([]);
   const [locations, setLocations] = useState<PresenceLocation[]>([]);
+  
   const [isPresenceQuickEditOpen, setIsPresenceQuickEditOpen] = useState(false);
   
   // クイック編集フォーム用
@@ -76,9 +79,18 @@ export default function Header({
   const [quickLocationId, setQuickLocationId] = useState("");
   const [isUpdatingPresence, setIsUpdatingPresence] = useState(false);
 
-  // メニュー内インラインプルダウン用の開閉ステート
   const [isStateDropdownOpen, setIsStateDropdownOpen] = useState(false);
   const [isLocationDropdownOpen, setIsLocationDropdownOpen] = useState(false);
+
+  // 1秒ごとにチェックして00秒ジャストでスケジュールを即時反映させる
+  const [tick, setTick] = useState(0);
+  useEffect(() => {
+    const timer = setInterval(() => setTick(t => t + 1), 1000);
+    return () => clearInterval(timer);
+  }, []);
+
+  // スケジュールを加味した実効ステータス
+  const myPresence = useMemo(() => getEffectivePresence(rawPresence, schedules, routines, new Date()), [rawPresence, schedules, routines, tick]);
 
   const currentSchoolData = schoolData || fetchedSchoolData;
 
@@ -136,12 +148,20 @@ export default function Header({
     if (isPresenceEnabled) {
       const unsubPresence = onSnapshot(doc(db, "presence_statuses", userData.id), (snap) => {
         if (snap.exists()) {
-          const data = { id: snap.id, ...snap.data() } as UserPresence;
-          setMyPresence(data);
-          setQuickState(data.currentState || "available");
-          setQuickMessage(data.statusMessage || "");
-          setQuickLocationId(data.locationId || "");
+          setRawPresence({ id: snap.id, ...snap.data() } as UserPresence);
         }
+      });
+
+      const unsubSchedules = onSnapshot(query(collection(db, "presence_schedules"), where("schoolId", "==", userData.schoolId)), (snap) => {
+        const list: ScheduledPresence[] = [];
+        snap.forEach(d => list.push({ id: d.id, ...d.data() } as ScheduledPresence));
+        setSchedules(list);
+      });
+
+      const unsubRoutines = onSnapshot(query(collection(db, "presence_weekly_templates"), where("schoolId", "==", userData.schoolId)), (snap) => {
+        const list: WeeklyDayRoutine[] = [];
+        snap.forEach(d => list.push({ id: d.id, ...d.data() } as WeeklyDayRoutine));
+        setRoutines(list);
       });
 
       const qLoc = query(collection(db, "presence_locations"), where("schoolId", "==", userData.schoolId));
@@ -151,9 +171,17 @@ export default function Header({
         setLocations(locList);
       });
 
-      return () => { unsubPresence(); unsubLoc(); };
+      return () => { unsubPresence(); unsubSchedules(); unsubRoutines(); unsubLoc(); };
     }
   }, [userData, schoolData, isPresenceEnabled]);
+
+  useEffect(() => {
+    if (myPresence) {
+      setQuickState(myPresence.currentState || "available");
+      setQuickMessage(myPresence.statusMessage || "");
+      setQuickLocationId(myPresence.locationId || "");
+    }
+  }, [myPresence]);
 
   useEffect(() => {
     if (!userData?.id || !userData?.schoolId) return;
@@ -202,6 +230,8 @@ export default function Header({
         case "task":
         case "tasks": iconName = "CheckSquare"; colorKey = "amber"; defaultLabel = "タスク"; break;
         case "equipment": iconName = "Package"; colorKey = "blue"; defaultLabel = "備品管理"; break;
+        case "survey":
+        case "surveys": iconName = "FileText"; colorKey = "purple"; defaultLabel = "アンケート"; break;
         case "system": iconName = "Settings"; colorKey = "slate"; defaultLabel = "システム"; break;
       }
     }
@@ -302,13 +332,38 @@ export default function Header({
         lastActiveAt: new Date().toISOString(),
         statusUpdatedAt: new Date().toISOString(),
         isAutoOnline: false,
+        isManualOverride: true, // 手動設定をON
         updatedAt: serverTimestamp(),
       }, { merge: true });
-      showAlert("ステータスを更新しました。"); // ★ エラー解消
+      showAlert("ステータスを手動更新しました。"); 
       setIsProfileMenuOpen(false);
       setIsPresenceQuickEditOpen(false);
     } catch (e) {
-      showAlert("更新に失敗しました。"); // ★ エラー解消
+      showAlert("更新に失敗しました。"); 
+    } finally {
+      setIsUpdatingPresence(false);
+    }
+  };
+
+  const handleClearManualOverride = async () => {
+    if (!userData || !isPresenceEnabled) return;
+    setIsUpdatingPresence(true);
+    try {
+      const ref = doc(db, "presence_statuses", userData.id);
+      await setDoc(ref, {
+        currentState: "available",
+        statusMessage: "",
+        locationId: null,
+        isAutoOnline: true,
+        isManualOverride: false, // 手動設定解除
+        lastActiveAt: new Date().toISOString(),
+        updatedAt: serverTimestamp(),
+      }, { merge: true });
+      showAlert("スケジュールに従うように設定しました。"); 
+      setIsProfileMenuOpen(false);
+      setIsPresenceQuickEditOpen(false);
+    } catch (e) {
+      showAlert("更新に失敗しました。"); 
     } finally {
       setIsUpdatingPresence(false);
     }
@@ -322,7 +377,7 @@ export default function Header({
   const quickLocationName = locations.find(l => l.id === quickLocationId)?.name;
 
   return (
-    <header className="h-11 sm:h-12 bg-white border-b border-gray-200 flex items-center justify-between px-2 sm:px-4 flex-shrink-0 z-30 relative w-full">
+    <header className="h-11 sm:h-12 bg-white border-b border-gray-200 flex items-center justify-between px-2 sm:px-4 flex-shrink-0 z-50 relative w-full">
       
       <div className="flex items-center gap-1 sm:gap-2">
         <button id="sidebar-toggle-btn" onClick={() => setIsSidebarOpen(!isSidebarOpen)} className="p-1.5 text-gray-400 hover:bg-gray-100 rounded-md transition-colors">
@@ -449,8 +504,8 @@ export default function Header({
             title="プロフィール設定"
           >
             <div className="w-7 h-7 sm:w-8 sm:h-8 rounded-full bg-gray-100 flex items-center justify-center overflow-hidden border border-gray-200 shadow-sm relative">
-              {(userData as any)?.photoURL ? (
-                <img src={(userData as any).photoURL} alt="Avatar" className="w-full h-full object-cover" />
+              {userData?.photoURL ? (
+                <img src={userData.photoURL} alt="Avatar" className="w-full h-full object-cover" />
               ) : (
                 <div className="w-full h-full bg-gradient-to-tr from-indigo-500 to-purple-500 flex items-center justify-center text-white text-[10px] font-bold">
                   {userData?.name?.charAt(0) || "U"}
@@ -469,8 +524,8 @@ export default function Header({
               
               <div className="flex items-center gap-3 pb-3 border-b border-gray-100">
                 <div className="relative shrink-0">
-                  {(userData as any)?.photoURL ? (
-                    <img src={(userData as any).photoURL} alt="Avatar" className="w-11 h-11 rounded-full object-cover border border-gray-100" />
+                  {userData?.photoURL ? (
+                    <img src={userData.photoURL} alt="Avatar" className="w-11 h-11 rounded-full object-cover border border-gray-100" />
                   ) : (
                     <div className="w-11 h-11 rounded-full bg-indigo-600 flex items-center justify-center text-white font-bold text-sm">
                       {userData?.name?.charAt(0) || "U"}
@@ -493,7 +548,9 @@ export default function Header({
                     <p className="text-[10px] font-bold text-gray-500 truncate mt-0.5">{userData?.email || "メール未設定"}</p>
                   )}
                   {isPresenceEnabled && myPresence?.statusMessage && (
-                    <p className="text-[9px] font-medium text-gray-500 truncate mt-0.5">💬 {myPresence.statusMessage}</p>
+                    <p className="text-[9px] font-medium text-gray-500 truncate mt-0.5 flex items-center gap-1">
+                      <MessageSquareText className="w-3 h-3 text-gray-400" /> {myPresence.statusMessage}
+                    </p>
                   )}
                 </div>
               </div>
@@ -506,8 +563,13 @@ export default function Header({
                       onClick={() => setIsPresenceQuickEditOpen(true)}
                       className="w-full py-2 px-3 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 rounded-xl text-xs font-bold transition-colors flex items-center justify-center gap-1.5 shadow-2xs"
                     >
-                      <MessageSquare className="w-3.5 h-3.5" /> ステータス・勤務先を変更する
+                      <MessageSquareText className="w-3.5 h-3.5" /> ステータス・勤務先を変更する
                     </button>
+                    {rawPresence?.isManualOverride && (
+                      <button type="button" onClick={handleClearManualOverride} className="mt-2 text-[10px] font-bold text-indigo-600 hover:text-indigo-800 bg-indigo-50 hover:bg-indigo-100 rounded-xl border border-indigo-100 py-1.5 px-2 w-full flex items-center justify-center gap-1 transition-colors shadow-2xs">
+                        <RotateCcw className="w-3.5 h-3.5" /> 手動設定を解除しスケジュールに従う
+                      </button>
+                    )}
                   </div>
                 ) : (
                   <form onSubmit={handleQuickPresenceSave} className="py-2.5 space-y-2.5 animate-fade-in">

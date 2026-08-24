@@ -5,14 +5,14 @@ import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { collection, query, where, onSnapshot } from "firebase/firestore";
 import { db } from "@/lib/firebase"; 
-import { LayoutDashboard, Settings, Bell, ShieldCheck, Grid, ChevronLeft, ChevronRight, Megaphone, X, Globe } from "lucide-react";
+import { LayoutDashboard, Settings, Bell, ShieldCheck, Grid, ChevronLeft, ChevronRight, Megaphone, X, Globe, FileText, AlertCircle } from "lucide-react";
 import * as LucideIcons from "lucide-react";
 import { SchoolData, UserData } from "../page";
 import MiniCalendar from "./MiniCalendar";
 
 // ★ バッジのカラールール定義 ★
-// ・赤 (bg-red-500) ＝ 「未読」「未着手」を示すバッジ
-// ・青 (bg-blue-500) ＝ 「未対応」「進行中・貸出中・確認待ち等」を示すバッジ
+// ・赤 (bg-red-500) ＝ 「未読」「未着手」「必須」を示すバッジ
+// ・青 (bg-blue-500) ＝ 「未対応」「進行中・貸出中・任意」を示すバッジ
 
 type ExtendedSchoolData = SchoolData & {
   availableModules?: string[];
@@ -28,6 +28,13 @@ type ExtendedSchoolData = SchoolData & {
   };
 };
 
+type AppBadges = {
+  chat?: { unread: number, mention: boolean };
+  equipment?: { active: number, overdue: boolean };
+  surveys?: { required: number, optional: number };
+  [key: string]: any;
+};
+
 type Props = {
   isSidebarOpen: boolean;
   setIsSidebarOpen: (open: boolean) => void;
@@ -37,6 +44,7 @@ type Props = {
   selectedDate: Date;
   setSelectedDate: (date: Date) => void;
   allEvents: any[];
+  appBadges?: AppBadges; 
 };
 
 const DynamicIcon = ({ name, className }: { name: string, className?: string }) => {
@@ -61,7 +69,7 @@ const COLOR_MAPPINGS: Record<string, { bg: string, text: string, hover: string, 
 };
 
 export default function Sidebar({ 
-  isSidebarOpen, setIsSidebarOpen, schoolData, userData, availableApps, selectedDate, setSelectedDate, allEvents 
+  isSidebarOpen, setIsSidebarOpen, schoolData, userData, availableApps, selectedDate, setSelectedDate, allEvents, appBadges 
 }: Props) {
   const pathname = usePathname();
   const router = useRouter();
@@ -73,12 +81,9 @@ export default function Sidebar({
 
   const [unreadCounts, setUnreadCounts] = useState<Record<string, number>>({});
   const [totalUnread, setTotalUnread] = useState(0);
-  const [chatUnreadCount, setChatUnreadCount] = useState(0);
 
   const [taskRedCount, setTaskRedCount] = useState(0);
   const [taskBlueCount, setTaskBlueCount] = useState(0);
-
-  const [activeRentalsCount, setActiveRentalsCount] = useState(0);
 
   const [systemMessages, setSystemMessages] = useState<any[]>([]);
   const [tenantUserCount, setTenantUserCount] = useState(0);
@@ -100,7 +105,6 @@ export default function Sidebar({
     ((userData as any)?.positionName && ((userData as any).positionName.includes("会長") || (userData as any).positionName.includes("顧問")))
   );
 
-  // 外部ユーザー機能のアクセス権限判定
   const canAccessExternalUsers = Boolean(
     exSchoolData?.isExternalUserEnabled && 
     (
@@ -145,28 +149,6 @@ export default function Sidebar({
     if (!userData?.id || !userData?.schoolId) return;
 
     const q = query(
-      collection(db, "chat_rooms"),
-      where("schoolId", "==", userData.schoolId),
-      where("members", "array-contains", userData.id)
-    );
-
-    const unsubscribe = onSnapshot(q, (snapshot) => {
-      let totalChatUnread = 0;
-      snapshot.forEach((doc) => {
-        const roomData = doc.data();
-        const unread = roomData.unreadCount?.[userData.id] || 0;
-        totalChatUnread += unread;
-      });
-      setChatUnreadCount(totalChatUnread);
-    });
-
-    return () => unsubscribe();
-  }, [userData]);
-
-  useEffect(() => {
-    if (!userData?.id || !userData?.schoolId) return;
-
-    const q = query(
       collection(db, "tasks"),
       where("schoolId", "==", userData.schoolId),
       where("assignees", "array-contains", userData.id)
@@ -177,36 +159,11 @@ export default function Sidebar({
       let blue = 0;
       snapshot.forEach((doc) => {
         const t = doc.data();
-        if (t.status === "not_started") {
-          red++;
-        } else if (t.status === "in_progress" || t.status === "waiting" || t.status === "pending") {
-          blue++;
-        }
+        if (t.status === "not_started") red++;
+        else if (t.status === "in_progress" || t.status === "waiting" || t.status === "pending") blue++;
       });
       setTaskRedCount(red);
       setTaskBlueCount(blue);
-    });
-
-    return () => unsubscribe();
-  }, [userData]);
-
-  useEffect(() => {
-    if (!userData?.id || !userData?.schoolId) return;
-
-    const q = query(
-      collection(db, "rentals"),
-      where("schoolId", "==", userData.schoolId)
-    );
-
-    const unsubscribe = onSnapshot(q, (snapshot) => {
-      let activeCount = 0;
-      snapshot.forEach((doc) => {
-        const r = doc.data();
-        if (r.status === "active" || r.status === "partial") {
-          activeCount++;
-        }
-      });
-      setActiveRentalsCount(activeCount);
     });
 
     return () => unsubscribe();
@@ -319,7 +276,6 @@ export default function Sidebar({
 
   return (
     <>
-      {/* モバイル用：サイドバーが開いている時に背景を暗くしてタッチを遮断するオーバーレイ */}
       {isSidebarOpen && (
         <div 
           className="fixed inset-0 bg-black/50 z-40 md:hidden"
@@ -327,7 +283,6 @@ export default function Sidebar({
         />
       )}
 
-      {/* ワッフルメニュー */}
       {isAppMenuOpen && (
         <div 
           ref={appMenuRef}
@@ -352,8 +307,12 @@ export default function Sidebar({
                 const isTasksApp = app.id === "tasks" || app.id === "task";
                 const isChatApp = app.id === "chat";
                 const isEquipmentApp = app.id === "equipment" || app.id === "rentals";
+                const isSurveyApp = app.id === "surveys" || app.id === "survey";
 
-                const unread = isChatApp ? chatUnreadCount : (unreadCounts[app.id] || 0);
+                const unread = isChatApp ? (appBadges?.chat?.unread || 0) : (unreadCounts[app.id] || 0);
+                const equipmentActive = appBadges?.equipment?.active || 0;
+                const surveyRequired = appBadges?.surveys?.required || 0;
+                const surveyOptional = appBadges?.surveys?.optional || 0;
 
                 return (
                   <Link 
@@ -366,7 +325,7 @@ export default function Sidebar({
                       <DynamicIcon name={app.icon} className="w-5 h-5" />
                     </div>
                     
-                    {/* ワッフルメニュー内の通知バッジ */}
+                    {/* ワッフルメニュー内の通知バッジ（0を弾く修正） */}
                     {isTasksApp ? (
                       <div className="absolute -top-1 -right-1 flex gap-0.5 z-10">
                         {taskRedCount > 0 && <span className="w-4 h-4 bg-red-500 border-2 border-[#2C2C2E] rounded-full flex items-center justify-center text-[8px] font-black text-white shadow-sm">{taskRedCount > 99 ? '99+' : taskRedCount}</span>}
@@ -375,7 +334,12 @@ export default function Sidebar({
                     ) : isEquipmentApp ? (
                       <div className="absolute -top-1 -right-1 flex gap-0.5 z-10">
                         {unread > 0 && <span className="w-4 h-4 bg-red-500 border-2 border-[#2C2C2E] rounded-full flex items-center justify-center text-[8px] font-black text-white shadow-sm">{unread > 99 ? '99+' : unread}</span>}
-                        {activeRentalsCount > 0 && <span className="w-4 h-4 bg-blue-500 border-2 border-[#2C2C2E] rounded-full flex items-center justify-center text-[8px] font-black text-white shadow-sm">{activeRentalsCount > 99 ? '99+' : activeRentalsCount}</span>}
+                        {equipmentActive > 0 && <span className="w-4 h-4 bg-blue-500 border-2 border-[#2C2C2E] rounded-full flex items-center justify-center text-[8px] font-black text-white shadow-sm">{equipmentActive > 99 ? '99+' : equipmentActive}</span>}
+                      </div>
+                    ) : isSurveyApp ? (
+                      <div className="absolute -top-1 -right-1 flex gap-0.5 z-10">
+                        {surveyRequired > 0 && <span className="w-4 h-4 bg-red-500 border-2 border-[#2C2C2E] rounded-full flex items-center justify-center text-[8px] font-black text-white shadow-sm">{surveyRequired > 99 ? '99+' : surveyRequired}</span>}
+                        {surveyOptional > 0 && <span className="w-4 h-4 bg-blue-500 border-2 border-[#2C2C2E] rounded-full flex items-center justify-center text-[8px] font-black text-white shadow-sm">{surveyOptional > 99 ? '99+' : surveyOptional}</span>}
                       </div>
                     ) : (
                       unread > 0 && (
@@ -454,7 +418,6 @@ export default function Sidebar({
           
           <div className="flex-shrink-0">
             <p className="px-2 text-[10px] font-bold text-gray-500 mb-1.5 uppercase tracking-wider">Menu</p>
-            {/* ★ 高さを抑えるために余白と文字サイズをコンパクト化 */}
             <div className="space-y-0.5">
               <Link 
                 href="/top" 
@@ -514,7 +477,6 @@ export default function Sidebar({
                 </Link>
               )}
 
-              {/* ★ 新規追加：外部ユーザー・ゲスト管理 */}
               {canAccessExternalUsers && (
                 <Link 
                   href="/top/external-users" 
@@ -535,7 +497,6 @@ export default function Sidebar({
                   onClick={handleMenuClick}
                   className={`relative flex items-center gap-2.5 px-2.5 py-1.5 rounded-md font-bold text-xs transition-all duration-200 overflow-hidden ${isActive("/top/admin") && !isActive("/top/admin/messages") ? "bg-[#2C2C2E] text-white shadow-sm" : "text-gray-400 hover:bg-[#2C2C2E]/50 hover:text-gray-300"}`}
                 >
-                  {/* ★ テナント設定の色を rose-500 に変更し、外部連携の amber と被らないように調整 */}
                   <div className={`absolute left-0 top-0 bottom-0 w-1 bg-rose-500 transition-transform duration-300 origin-left ${isActive("/top/admin") && !isActive("/top/admin/messages") ? "scale-x-100" : "scale-x-0"}`}></div>
                   <ShieldCheck className={`w-3.5 h-3.5 transition-colors duration-200 ${isActive("/top/admin") && !isActive("/top/admin/messages") ? "text-rose-400" : "text-gray-500"}`} /> 
                   テナント設定
@@ -586,8 +547,12 @@ export default function Sidebar({
                   const isTasksApp = app.id === "tasks" || app.id === "task";
                   const isChatApp = app.id === "chat";
                   const isEquipmentApp = app.id === "equipment" || app.id === "rentals";
+                  const isSurveyApp = app.id === "surveys" || app.id === "survey";
 
-                  const unread = isChatApp ? chatUnreadCount : (unreadCounts[app.id] || 0);
+                  const unread = isChatApp ? (appBadges?.chat?.unread || 0) : (unreadCounts[app.id] || 0);
+                  const equipmentActive = appBadges?.equipment?.active || 0;
+                  const surveyRequired = appBadges?.surveys?.required || 0;
+                  const surveyOptional = appBadges?.surveys?.optional || 0;
 
                   return (
                     <Link 
@@ -606,7 +571,7 @@ export default function Sidebar({
                         <span className="truncate">{app.displayName}</span>
                       </div>
                       
-                      {/* サイドバー内のバッジ */}
+                      {/* サイドバーリスト内の通知バッジ（0を弾く修正） */}
                       {isTasksApp ? (
                         <div className="flex shrink-0 gap-1 ml-auto">
                           {taskRedCount > 0 && (
@@ -627,9 +592,22 @@ export default function Sidebar({
                               {unread > 99 ? '99+' : unread}
                             </span>
                           )}
-                          {activeRentalsCount > 0 && (
+                          {equipmentActive > 0 && (
                             <span className="flex-shrink-0 px-1.5 py-0.5 text-[9px] font-black rounded-full shadow-sm bg-blue-500 text-white border border-transparent" title="貸出中の案件">
-                              {activeRentalsCount > 99 ? '99+' : activeRentalsCount}
+                              {equipmentActive > 99 ? '99+' : equipmentActive}
+                            </span>
+                          )}
+                        </div>
+                      ) : isSurveyApp ? (
+                        <div className="flex shrink-0 gap-1 ml-auto">
+                          {surveyRequired > 0 && (
+                            <span className="flex-shrink-0 px-1.5 py-0.5 text-[9px] font-black rounded-full shadow-sm bg-red-500 text-white border border-transparent" title="必須未回答">
+                              {surveyRequired > 99 ? '99+' : surveyRequired}
+                            </span>
+                          )}
+                          {surveyOptional > 0 && (
+                            <span className="flex-shrink-0 px-1.5 py-0.5 text-[9px] font-black rounded-full shadow-sm bg-blue-500 text-white border border-transparent" title="任意未回答">
+                              {surveyOptional > 99 ? '99+' : surveyOptional}
                             </span>
                           )}
                         </div>

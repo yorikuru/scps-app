@@ -98,6 +98,10 @@ export default function NormalTop({ userData, schoolData, messages, systemApps, 
   const [unreadCounts, setUnreadCounts] = useState<Record<string, number>>({});
   const [chatUnreadCount, setChatUnreadCount] = useState(0);
 
+  // ★ サーベイ用のバッジステート追加
+  const [surveyUnansweredCount, setSurveyUnansweredCount] = useState(0);
+  const [surveyRequiredUnansweredCount, setSurveyRequiredUnansweredCount] = useState(0);
+
   useEffect(() => {
     if (!schoolData) return;
 
@@ -136,8 +140,14 @@ export default function NormalTop({ userData, schoolData, messages, systemApps, 
   useEffect(() => {
     if (!userData?.id || !schoolData?.id) return;
 
+    let unsubNotif: (() => void) | undefined;
+    let unsubChat: (() => void) | undefined;
+    let unsubSurveys: (() => void) | undefined;
+    let unsubSurveyResponses: (() => void) | undefined;
+
+    // 1. 一般通知の監視
     const qNotif = query(collection(db, "notifications"), where("userId", "==", userData.id), where("schoolId", "==", schoolData.id), where("isRead", "==", false));
-    const unsubNotif = onSnapshot(qNotif, (snapshot) => {
+    unsubNotif = onSnapshot(qNotif, (snapshot) => {
       const counts: Record<string, number> = {};
       const now = Date.now();
       snapshot.forEach((doc) => {
@@ -151,8 +161,9 @@ export default function NormalTop({ userData, schoolData, messages, systemApps, 
       setUnreadCounts(counts);
     });
 
+    // 2. チャットの監視
     const qChat = query(collection(db, "chat_rooms"), where("schoolId", "==", schoolData.id), where("members", "array-contains", userData.id));
-    const unsubChat = onSnapshot(qChat, (snapshot) => {
+    unsubChat = onSnapshot(qChat, (snapshot) => {
       let totalChatUnread = 0;
       snapshot.forEach((doc) => {
         totalChatUnread += (doc.data().unreadCount?.[userData.id] || 0);
@@ -160,7 +171,60 @@ export default function NormalTop({ userData, schoolData, messages, systemApps, 
       setChatUnreadCount(totalChatUnread);
     });
 
-    return () => { unsubNotif(); unsubChat(); };
+    // 3. サーベイ（アンケート）の監視
+    let currentSurveys: any[] = [];
+    let myRespondedIds = new Set<string>();
+
+    const calculateSurveyBadges = () => {
+      let requiredUnanswered = 0;
+      let optionalUnanswered = 0;
+      const now = new Date().getTime();
+
+      currentSurveys.forEach(survey => {
+        const sData = survey.settings || {};
+        const accepting = sData.acceptingResponses ?? survey.isActive ?? true;
+        if (!accepting) return;
+
+        const startDate = sData.startDate ? new Date(sData.startDate).getTime() : 0;
+        const endDate = sData.endDate ? new Date(sData.endDate).getTime() : Infinity;
+        if (now < startDate || now > endDate) return;
+
+        const accessTarget = sData.accessTarget ?? (survey.isPublic ? "public" : "tenant_members");
+        let isTarget = false;
+        if (["tenant_members", "external_users", "public"].includes(accessTarget)) isTarget = true;
+        else if (accessTarget === "selected_users" && (sData.respondentIds || []).includes(userData.id)) isTarget = true;
+
+        if (isTarget && !myRespondedIds.has(survey.id)) {
+          if ((sData.requiredRespondentIds || []).includes(userData.id)) {
+            requiredUnanswered++;
+          } else {
+            optionalUnanswered++;
+          }
+        }
+      });
+
+      setSurveyRequiredUnansweredCount(requiredUnanswered);
+      setSurveyUnansweredCount(optionalUnanswered);
+    };
+
+    const qSurveys = query(collection(db, "surveys"), where("tenantId", "==", schoolData.id));
+    unsubSurveys = onSnapshot(qSurveys, (snap) => {
+      currentSurveys = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+      calculateSurveyBadges();
+    });
+
+    const qMyResponses = query(collection(db, "survey_responses"), where("respondentId", "==", userData.id));
+    unsubSurveyResponses = onSnapshot(qMyResponses, (snap) => {
+      myRespondedIds = new Set(snap.docs.map(d => d.data().surveyId));
+      calculateSurveyBadges();
+    });
+
+    return () => { 
+      if (unsubNotif) unsubNotif(); 
+      if (unsubChat) unsubChat(); 
+      if (unsubSurveys) unsubSurveys();
+      if (unsubSurveyResponses) unsubSurveyResponses();
+    };
   }, [userData, schoolData]);
 
   const userAllowedApps = useMemo(() => {
@@ -269,6 +333,7 @@ export default function NormalTop({ userData, schoolData, messages, systemApps, 
                     const isTasksApp = app.id === "tasks" || app.id === "task";
                     const isChatApp = app.id === "chat";
                     const isEquipmentApp = app.id === "equipment" || app.id === "rentals";
+                    const isSurveyApp = app.id === "surveys" || app.id === "survey"; // ★ サーベイ判定
 
                     let unread = 0;
                     if (isChatApp) unread = chatUnreadCount;
@@ -283,6 +348,7 @@ export default function NormalTop({ userData, schoolData, messages, systemApps, 
                         <div className={`relative w-8 h-8 sm:w-10 sm:h-10 rounded-[10px] sm:rounded-xl flex items-center justify-center transition-transform group-hover:scale-105 shadow-sm border border-gray-100/50 shrink-0 ${c.lightBg} ${c.text}`}>
                           <DynamicIcon name={app.icon} className="w-4 h-4 sm:w-5 sm:h-5" />
                           
+                          {/* ★ 各種バッジ表示 */}
                           {isTasksApp ? (
                             <div className="absolute -top-1 -right-1 flex gap-[1px] z-10 scale-[0.75] sm:scale-90 origin-top-right">
                               {taskRedCount > 0 && <span className="w-4 h-4 bg-red-500 border-2 border-white rounded-full flex items-center justify-center text-[8px] font-black text-white shadow-sm">{taskRedCount > 99 ? '99+' : taskRedCount}</span>}
@@ -292,6 +358,11 @@ export default function NormalTop({ userData, schoolData, messages, systemApps, 
                             <div className="absolute -top-1 -right-1 flex gap-[1px] z-10 scale-[0.75] sm:scale-90 origin-top-right">
                               {unread > 0 && <span className="w-4 h-4 bg-red-500 border-2 border-white rounded-full flex items-center justify-center text-[8px] font-black text-white shadow-sm">{unread > 99 ? '99+' : unread}</span>}
                               {activeRentalsCount > 0 && <span className="w-4 h-4 bg-blue-500 border-2 border-white rounded-full flex items-center justify-center text-[8px] font-black text-white shadow-sm">{activeRentalsCount > 99 ? '99+' : activeRentalsCount}</span>}
+                            </div>
+                          ) : isSurveyApp ? (
+                            <div className="absolute -top-1 -right-1 flex gap-[1px] z-10 scale-[0.75] sm:scale-90 origin-top-right">
+                              {surveyRequiredUnansweredCount > 0 && <span className="w-4 h-4 bg-red-500 border-2 border-white rounded-full flex items-center justify-center text-[8px] font-black text-white shadow-sm">{surveyRequiredUnansweredCount > 99 ? '99+' : surveyRequiredUnansweredCount}</span>}
+                              {surveyUnansweredCount > 0 && <span className="w-4 h-4 bg-blue-500 border-2 border-white rounded-full flex items-center justify-center text-[8px] font-black text-white shadow-sm">{surveyUnansweredCount > 99 ? '99+' : surveyUnansweredCount}</span>}
                             </div>
                           ) : (
                             unread > 0 && (

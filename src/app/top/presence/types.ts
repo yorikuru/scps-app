@@ -1,12 +1,12 @@
 import { CheckCircle2, Circle, MinusCircle, Clock, XCircle, LucideIcon } from "lucide-react";
 
 export type PresenceState = 
-  | "available"      // 連絡可能
-  | "busy"           // 取り込み中
-  | "do_not_disturb" // 応答不可
-  | "be_right_back"  // すぐに戻ります
-  | "away"           // 退席中
-  | "offline";       // オフライン
+  | "available"      
+  | "busy"           
+  | "do_not_disturb" 
+  | "be_right_back"  
+  | "away"           
+  | "offline";       
 
 export type PresenceLocation = {
   id: string;
@@ -20,11 +20,12 @@ export type PresenceLocation = {
 export type UserPresence = {
   id: string;
   userId: string;
+  schoolId?: string;
   userName: string;
   userPhotoURL?: string | null;
   positionName?: string;
   role: string;
-  systemId?: string; // システム利用番号
+  systemId?: string; 
   
   currentState: PresenceState;
   locationId?: string | null;
@@ -32,6 +33,7 @@ export type UserPresence = {
   statusUpdatedAt?: string;
   
   isAutoOnline?: boolean;
+  isManualOverride?: boolean;
   lastActiveAt: string;
   expiresAt?: string | null;
 
@@ -39,30 +41,35 @@ export type UserPresence = {
   updatedByUserName?: string | null;
 };
 
-// ★ 曜日ごとの時間帯スロット定義
 export type TimeSlotRoutine = {
   id: string;
-  startTime: string; // "10:00"
-  endTime: string;   // "12:00"
+  startTime: string; 
+  endTime: string;   
   state: PresenceState;
   locationId?: string | null;
   note?: string;
 };
 
 export type WeeklyDayRoutine = {
-  dayOfWeek: number; // 0:日, 1:月, ..., 6:土
+  id?: string;
+  userId: string;
+  schoolId?: string;
+  dayOfWeek: number; 
   slots: TimeSlotRoutine[];
 };
 
 export type ScheduledPresence = {
   id: string;
-  userId: string;
+  userId?: string;     
+  userIds: string[];   
+  schoolId?: string;
   date: string;
   startTime: string;
   endTime: string;
   state: PresenceState;
   locationId?: string | null;
   note?: string;
+  createdAt?: any;
 };
 
 export const PRESENCE_CONFIG: Record<PresenceState, { label: string; icon: LucideIcon; colorClass: string; fillClass: string }> = {
@@ -72,4 +79,37 @@ export const PRESENCE_CONFIG: Record<PresenceState, { label: string; icon: Lucid
   be_right_back: { label: "すぐに戻ります", icon: Clock, colorClass: "text-yellow-500", fillClass: "fill-yellow-500 text-white" },
   away: { label: "退席中", icon: Clock, colorClass: "text-yellow-500", fillClass: "fill-yellow-500 text-white" },
   offline: { label: "オフライン", icon: XCircle, colorClass: "text-gray-400", fillClass: "fill-white text-gray-400" },
+};
+
+// ★ スケジュールを計算するロジック（endTime を `timeStr < s.endTime` に変更し、終了時刻の00秒で即終了させる）
+export const getEffectivePresence = (p: UserPresence | null, scheds: ScheduledPresence[], routs: WeeklyDayRoutine[], nowTime?: Date): UserPresence | null => {
+  if (!p) return null;
+  if (p.isManualOverride) return p;
+
+  const now = nowTime || new Date();
+  const offset = now.getTimezoneOffset() * 60000;
+  const localIso = new Date(now.getTime() - offset).toISOString();
+  const dateStr = localIso.split("T")[0];
+  const timeStr = localIso.split("T")[1].substring(0, 5); // "HH:mm"
+
+  const mySched = scheds.find(s => {
+    const isMember = (s.userIds && s.userIds.includes(p.userId)) || s.userId === p.userId;
+    // <= を < に変更したことで、終了時刻(00秒)の瞬間にスケジュールが無効になる
+    return isMember && s.date === dateStr && s.startTime <= timeStr && timeStr < s.endTime; 
+  });
+
+  if (mySched) {
+    return { ...p, currentState: mySched.state, locationId: mySched.locationId, statusMessage: mySched.note || p.statusMessage, isAutoOnline: false };
+  }
+
+  const dayNum = now.getDay();
+  const myRout = routs.find(r => r.userId === p.userId && r.dayOfWeek === dayNum);
+  if (myRout) {
+    const slot = myRout.slots.find(s => s.startTime <= timeStr && timeStr < s.endTime); 
+    if (slot) {
+      return { ...p, currentState: slot.state, locationId: slot.locationId, statusMessage: slot.note || p.statusMessage, isAutoOnline: false };
+    }
+  }
+
+  return p;
 };

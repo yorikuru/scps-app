@@ -7,10 +7,10 @@ import Link from "next/link";
 import { onAuthStateChanged, signOut } from "firebase/auth";
 import { collection, query, where, getDocs, doc, getDoc, onSnapshot } from "firebase/firestore";
 import { auth, db } from "@/lib/firebase";
-import { Loader2, ChevronRight, User, Globe, AlertCircle, Bell } from "lucide-react";
+import { Loader2, ChevronRight, User, Globe, AlertCircle, Bell, FileText } from "lucide-react";
 import * as LucideIcons from "lucide-react";
 
-import { ExternalUser } from "@/app/types/external"; // ★ 型をインポート
+import { ExternalUser } from "@/app/types/external";
 import ExtHeader from "./components/ExtHeader"; 
 
 const DynamicIcon = ({ name, className }: { name: string, className?: string }) => {
@@ -21,20 +21,23 @@ const DynamicIcon = ({ name, className }: { name: string, className?: string }) 
 export default function ExtTopPage() {
   const router = useRouter();
   
-  // ★ 型を ExternalUser に指定
   const [extUser, setExtUser] = useState<ExternalUser | null>(null);
   const [schoolData, setSchoolData] = useState<any>(null);
   const [systemApps, setSystemApps] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [greeting, setGreeting] = useState("こんにちは");
 
+  // アプリごとのバッジ・通知用ステート
   const [chatUnreadCount, setChatUnreadCount] = useState(0);
   const [hasMention, setHasMention] = useState(false);
-  
   const [rentalsActiveCount, setRentalsActiveCount] = useState(0);
   const [hasOverdueRental, setHasOverdueRental] = useState(false);
-  
   const [boardUnreadCount, setBoardUnreadCount] = useState(0);
+
+  // ★ surveys 用のステートを追加
+  const [surveysList, setSurveysList] = useState<any[]>([]);
+  const [myRespondedIds, setMyRespondedIds] = useState<Set<string>>(new Set());
+  const [surveysUnansweredCount, setSurveysUnansweredCount] = useState(0);
 
   const getGreeting = () => {
     const hour = new Date().getHours();
@@ -49,6 +52,8 @@ export default function ExtTopPage() {
     let unsubChatRooms: (() => void) | undefined;
     let unsubRentals: (() => void) | undefined;
     let unsubBoard: (() => void) | undefined;
+    let unsubSurveys: (() => void) | undefined;
+    let unsubMyResponses: (() => void) | undefined;
 
     const unsubscribe = onAuthStateChanged(auth, async (user) => {
       if (user) {
@@ -58,7 +63,6 @@ export default function ExtTopPage() {
           
           if (!extSnap.empty) {
             const docData = extSnap.docs[0].data();
-            // ★ as ExternalUser を付与して型を明示
             const userData = { id: extSnap.docs[0].id, ...docData } as ExternalUser;
             setExtUser(userData);
 
@@ -126,6 +130,23 @@ export default function ExtTopPage() {
               });
             }
 
+            // ★ アンケート (surveys) のバッジ処理（必須回答かつ未回答の数をカウント）
+            if (allowedModules.includes("surveys")) {
+              const qSurveys = query(collection(db, "surveys"), where("tenantId", "==", userData.schoolId));
+              unsubSurveys = onSnapshot(qSurveys, (snapshot) => {
+                const sList: any[] = [];
+                snapshot.forEach(d => sList.push({ id: d.id, ...d.data() }));
+                setSurveysList(sList);
+              });
+
+              const qResp = query(collection(db, "survey_responses"), where("respondentId", "==", userData.id));
+              unsubMyResponses = onSnapshot(qResp, (snapshot) => {
+                const ids = new Set<string>();
+                snapshot.forEach(d => ids.add(d.data().surveyId));
+                setMyRespondedIds(ids);
+              });
+            }
+
             setIsLoading(false);
           } else {
             router.push("/top");
@@ -143,8 +164,34 @@ export default function ExtTopPage() {
       if (unsubChatRooms) unsubChatRooms();
       if (unsubRentals) unsubRentals();
       if (unsubBoard) unsubBoard();
+      if (unsubSurveys) unsubSurveys();
+      if (unsubMyResponses) unsubMyResponses();
     };
   }, [router]);
+
+  // ★ Surveysの未回答数を計算
+  useEffect(() => {
+    if (!extUser) return;
+    const now = Date.now();
+    let count = 0;
+    
+    surveysList.forEach(s => {
+      if (!s.settings?.acceptingResponses) return;
+      const start = s.settings.startDate ? new Date(s.settings.startDate).getTime() : 0;
+      const end = s.settings.endDate ? new Date(s.settings.endDate).getTime() : Infinity;
+      if (now < start || now > end) return;
+      
+      const target = s.settings.accessTarget;
+      // 自分が回答対象のアンケートか確認
+      if (target === "external_users" || target === "public" || (target === "selected_users" && s.settings.respondentIds?.includes(extUser.id))) {
+        // 必須回答者に含まれていて、まだ回答していない場合カウント
+        if (s.settings.requiredRespondentIds?.includes(extUser.id) && !myRespondedIds.has(s.id)) {
+          count++;
+        }
+      }
+    });
+    setSurveysUnansweredCount(count);
+  }, [surveysList, myRespondedIds, extUser]);
 
   const handleLogout = async () => {
     await signOut(auth);
@@ -160,13 +207,20 @@ export default function ExtTopPage() {
     const appMeta = systemApps.find(a => a.appId === appId || a.id === appId);
     const customName = schoolData?.customExternalAppNames?.[appId] || schoolData?.customAppNames?.[appId];
     const customDesc = schoolData?.customAppDescriptions?.[appId];
-    const href = appMeta?.externalPath || (appId === "chat" ? "/ext-top/chat" : `/ext-top/${appId}`);
+    
+    // ★ surveys の場合は、外部ユーザー用のアンケート一覧に飛ばすか、直接アプリを起動させる
+    let href = appMeta?.externalPath || `/ext-top/${appId}`;
+    if (appId === "chat") href = "/ext-top/chat";
+    // もし外部ユーザー用の専用一覧ページ `/ext-top/surveys` を作っていない場合は、
+    // ここで一旦トップレベルの `/top/surveys` に飛ばして権限確認させることも可能ですが、
+    // セキュリティ上 `/ext-top/surveys` を作成して一覧表示させるのが王道です。
+
     return {
       id: appId,
       name: customName || appMeta?.name || appId,
       description: customDesc || appMeta?.description || "このアプリケーションは利用可能です",
-      icon: appMeta?.icon || "Box",
-      color: appMeta?.color || "indigo",
+      icon: appMeta?.icon || (appId === "surveys" ? "FileText" : "Box"),
+      color: appMeta?.color || (appId === "surveys" ? "purple" : "indigo"),
       href: href,
       order: appMeta?.order ?? 999
     };
@@ -176,6 +230,10 @@ export default function ExtTopPage() {
     if (appId === "chat" && chatUnreadCount > 0) return <span className={`px-2 py-0.5 text-[10px] font-black rounded-full shadow-sm flex items-center gap-1 ${hasMention ? 'bg-red-600 text-white animate-pulse' : 'bg-red-500 text-white'}`}><Bell className="w-2.5 h-2.5" />{chatUnreadCount}</span>;
     if (appId === "equipment" && rentalsActiveCount > 0) return <span className={`px-2 py-0.5 text-[10px] font-black rounded-full shadow-sm flex items-center gap-1 ${hasOverdueRental ? 'bg-red-600 text-white animate-pulse' : 'bg-blue-500 text-white'}`}><AlertCircle className="w-2.5 h-2.5" />{hasOverdueRental ? '期限超過' : `${rentalsActiveCount}件 貸出中`}</span>;
     if (appId === "board" && boardUnreadCount > 0) return <span className="px-2 py-0.5 bg-red-500 text-white text-[10px] font-black rounded-full shadow-sm flex items-center gap-1">新着 {boardUnreadCount}</span>;
+    
+    // ★ surveys のバッジ
+    if (appId === "surveys" && surveysUnansweredCount > 0) return <span className="px-2 py-0.5 bg-red-500 text-white text-[10px] font-black rounded-full shadow-sm flex items-center gap-1 animate-pulse"><AlertCircle className="w-2.5 h-2.5" /> 必須 {surveysUnansweredCount}件</span>;
+    
     return null;
   };
 
@@ -188,7 +246,9 @@ export default function ExtTopPage() {
         appBadges={{
           chat: { unread: chatUnreadCount, mention: hasMention },
           equipment: { active: rentalsActiveCount, overdue: hasOverdueRental },
-          board: { unread: boardUnreadCount }
+          board: { unread: boardUnreadCount },
+          // Header側にsurveysバッジ表示機能があれば渡しておく
+          surveys: { unread: surveysUnansweredCount } 
         }}
       />
 

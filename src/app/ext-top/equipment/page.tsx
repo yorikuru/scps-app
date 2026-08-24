@@ -9,7 +9,7 @@ import { auth, db } from "@/lib/firebase";
 import { 
   Package, Calendar as CalendarIcon, MapPin, CheckCircle2, AlertCircle, Loader2, ArrowLeft,
   MessageSquareText, Search, FileText, ChevronLeft, LogOut, ArrowRightLeft, ShieldAlert,
-  AlertTriangle, ScanLine
+  AlertTriangle, ScanLine, X, QrCode
 } from "lucide-react";
 import * as LucideIcons from "lucide-react";
 
@@ -58,10 +58,32 @@ function ExternalEquipmentContent() {
   const [activeRentalId, setActiveRentalId] = useState<string | null>(null);
   const [showMobileDetail, setShowMobileDetail] = useState(false);
 
+  // ★ QRコード拡大ポップアップ用のステート
+  const [showQrModal, setShowQrModal] = useState(false);
+  const [currentTime, setCurrentTime] = useState<string>("");
+
   const [searchQuery, setSearchQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState<"all" | "active" | "returned">("active");
 
   const [appConfig, setAppConfig] = useState<AppConfig>({ name: "レンタル管理", icon: "Package", color: "indigo" });
+
+  // リアルタイム時計の更新
+  useEffect(() => {
+    const updateClock = () => {
+      const now = new Date();
+      setCurrentTime(now.toLocaleString("ja-JP", {
+        year: "numeric",
+        month: "2-digit",
+        day: "2-digit",
+        hour: "2-digit",
+        minute: "2-digit",
+        second: "2-digit"
+      }));
+    };
+    updateClock();
+    const timer = setInterval(updateClock, 1000);
+    return () => clearInterval(timer);
+  }, []);
 
   useEffect(() => {
     let unsubRentals: (() => void) | undefined;
@@ -320,18 +342,16 @@ function ExternalEquipmentContent() {
               )}
             </div>
 
-            {/* フッターリンク */}
-      {/* 外部ユーザー共通の固定フッター */}
-      <div className="flex flex-col gap-1.5 text-[9px] font-bold text-gray-500 text-center">
-          <div className="flex flex-wrap items-center justify-center gap-x-3 gap-y-1.5">
-            <Link href="/legal/terms" className="hover:text-gray-300 transition-colors">利用規約</Link>
-            <Link href="/legal/privacy" className="hover:text-gray-300 transition-colors">プライバシー</Link>
-            <Link href="/legal/commercial" className="hover:text-gray-300 transition-colors">特定商取引法</Link>
-          </div>
-          <div className="text-[8px] text-gray-600 mt-0.5">
-            &copy; {new Date().getFullYear()} YORIKURU / 生徒会ポータルシステム
-          </div>
-        </div>
+            <div className="flex flex-col gap-1.5 text-[9px] font-bold text-gray-500 text-center">
+              <div className="flex flex-wrap items-center justify-center gap-x-3 gap-y-1.5">
+                <Link href="/legal/terms" className="hover:text-gray-300 transition-colors">利用規約</Link>
+                <Link href="/legal/privacy" className="hover:text-gray-300 transition-colors">プライバシー</Link>
+                <Link href="/legal/commercial" className="hover:text-gray-300 transition-colors">特定商取引法</Link>
+              </div>
+              <div className="text-[8px] text-gray-600 mt-0.5">
+                &copy; {new Date().getFullYear()} YORIKURU / 生徒会ポータルシステム
+              </div>
+            </div>
           </div>
 
           {/* ＝＝＝ 右ペイン：プレビュー詳細 ＝＝＝ */}
@@ -347,7 +367,6 @@ function ExternalEquipmentContent() {
             ) : (
               <div className="flex-1 overflow-y-auto custom-scrollbar flex flex-col h-full bg-white relative">
                 
-                {/* スマホ用戻るボタン */}
                 <div className="lg:hidden flex items-center px-4 py-3 border-b border-gray-100 bg-white sticky top-0 z-10 shrink-0 shadow-sm">
                   <button 
                     onClick={() => {
@@ -360,7 +379,6 @@ function ExternalEquipmentContent() {
                   </button>
                 </div>
 
-                {/* 貸出ステータスバナー */}
                 <div className={`p-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 border-b border-gray-100 shrink-0 ${
                   activeRental.status === "returned" ? "bg-emerald-50" :
                   isOverdue(activeRental.endDate) ? "bg-red-600 text-white" : "bg-blue-50"
@@ -389,7 +407,6 @@ function ExternalEquipmentContent() {
 
                 <div className="p-4 sm:p-8 flex-1">
                   
-                  {/* 貸出概要カード */}
                   <div className="bg-gray-50 border border-gray-100 rounded-2xl p-5 mb-8 shadow-sm">
                     <h3 className="text-xs font-black text-gray-400 uppercase tracking-wider mb-4 border-b border-gray-200 pb-2">貸出概要</h3>
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-y-4 gap-x-6">
@@ -412,7 +429,6 @@ function ExternalEquipmentContent() {
                     </div>
                   </div>
 
-                  {/* 借りている備品リスト */}
                   <h3 className="text-sm font-black text-gray-900 mb-3 flex items-center gap-2">
                     <Package className="w-4 h-4 text-indigo-500" /> 対象の備品一覧 <span className="text-[10px] text-gray-500 font-bold ml-1">計 {(activeRental.items || []).length} 点</span>
                   </h3>
@@ -447,10 +463,13 @@ function ExternalEquipmentContent() {
 
                 </div>
 
-                {/* ★ QRコードと補足メッセージ領域 */}
+                {/* ★ タップすると大きく開くQRコードエリア */}
                 {(activeRental.status === "active" || activeRental.status === "partial") && (
-                  <div className="p-4 sm:p-6 bg-blue-50/50 border-t border-blue-100 shrink-0 flex flex-col sm:flex-row items-center gap-6">
-                    <div className="flex-shrink-0 bg-white p-2 rounded-2xl border border-blue-200 shadow-sm relative group">
+                  <div 
+                    onClick={() => setShowQrModal(true)}
+                    className="p-4 sm:p-6 bg-blue-50/50 border-t border-blue-100 shrink-0 flex flex-col sm:flex-row items-center gap-6 cursor-pointer hover:bg-blue-100/50 transition-colors group"
+                  >
+                    <div className="flex-shrink-0 bg-white p-2 rounded-2xl border border-blue-200 shadow-sm relative group-hover:scale-105 transition-transform">
                       <img 
                         src={`https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=${encodeURIComponent(`https://scps.yorikuru.com/rentals/${activeRental.id}`)}&margin=0`} 
                         alt="返却用QRコード" 
@@ -465,10 +484,10 @@ function ExternalEquipmentContent() {
                     <div className="flex-1 text-center sm:text-left">
                       <h4 className="text-sm font-black text-blue-900 mb-2 flex items-center justify-center sm:justify-start gap-1.5">
                         <ScanLine className="w-4 h-4 text-blue-600" />
-                        返却用QRコード
+                        返却用QRコード <span className="text-[10px] text-blue-500 font-bold ml-2 ">（タップして拡大表示）</span>
                       </h4>
                       <p className="text-xs font-bold text-blue-800/80 leading-relaxed mb-3">
-                        返却時は、貸出時のご案内に従って指定窓口にて担当者直接ご返却ください。
+                        返却時はこのQRコードを担当者に提示してください。
                       </p>
                       <p className="text-[10px] font-mono text-blue-500 bg-white px-2 py-1 rounded-md border border-blue-200 inline-block shadow-sm">
                         ID: {activeRental.id}
@@ -482,6 +501,66 @@ function ExternalEquipmentContent() {
 
         </div>
       </main>
+
+      {/* ★ QRコード拡大ポップアップモーダル */}
+      {showQrModal && activeRental && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-md p-4 animate-fade-in">
+          <div className="bg-white rounded-3xl max-w-md w-full p-6 sm:p-8 shadow-2xl relative border border-gray-100 flex flex-col items-center text-center">
+            
+            <button 
+              onClick={() => setShowQrModal(false)}
+              className="absolute top-4 right-4 p-2 text-gray-400 hover:text-gray-700 hover:bg-gray-100 rounded-full transition-colors"
+            >
+              <X className="w-6 h-6" />
+            </button>
+
+            <div className="flex items-center gap-2 text-indigo-600 mb-1">
+              <QrCode className="w-5 h-5" />
+              <h3 className="text-base font-black tracking-tight">返却用QRコード</h3>
+            </div>
+            <p className="text-[10px] font-bold text-gray-400 mb-4">担当者に提示してください</p>
+
+            {/* QRコード本体 */}
+            <div className="bg-white p-4 rounded-2xl border-2 border-indigo-100 shadow-inner mb-6 inline-block">
+              <img 
+                src={`https://api.qrserver.com/v1/create-qr-code/?size=240x240&data=${encodeURIComponent(`https://scps.yorikuru.com/rentals/${activeRental.id}`)}&margin=0`} 
+                alt="拡大QRコード" 
+                className="w-52 h-52 sm:w-60 sm:h-60 object-contain mx-auto"
+              />
+            </div>
+
+            {/* 詳細情報カード */}
+            <div className="w-full bg-gray-50 rounded-2xl p-4 text-left border border-gray-100 space-y-2 mb-6">
+              <div className="flex justify-between text-xs font-bold border-b border-gray-200/60 pb-1.5">
+                <span className="text-gray-400">ID</span>
+                <span className="font-mono text-gray-800">{activeRental.id}</span>
+              </div>
+              <div className="flex justify-between text-xs font-bold border-b border-gray-200/60 pb-1.5">
+                <span className="text-gray-400">氏名</span>
+                <span className="text-gray-900">{extUser.name}</span>
+              </div>
+              <div className="flex justify-between text-xs font-bold border-b border-gray-200/60 pb-1.5">
+                <span className="text-gray-400">内容</span>
+                <span className="text-gray-900 truncate max-w-[200px]">
+                  {(activeRental.items || []).map(i => i.equipmentName).join(", ")}
+                </span>
+              </div>
+              <div className="flex justify-between text-xs font-bold">
+                <span className="text-gray-400">現在時刻</span>
+                <span className="font-mono text-indigo-600 bg-indigo-50 px-1.5 py-0.5 rounded">{currentTime}</span>
+              </div>
+            </div>
+
+            <button 
+              onClick={() => setShowQrModal(false)}
+              className="w-full py-3.5 bg-gray-900 hover:bg-black text-white text-xs font-black rounded-xl shadow-lg transition-all"
+            >
+              閉じる
+            </button>
+          </div>
+        </div>
+      )}
+
     </div>
   );
 }

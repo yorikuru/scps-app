@@ -1,15 +1,28 @@
 "use client";
 
-import React from "react";
-import { X, MessageCircle, Briefcase, ShieldAlert, UserCog, Mail, Phone, Tag, User } from "lucide-react";
+import React, { useState, useEffect, useMemo } from "react";
+import { doc, collection, query, where, onSnapshot } from "firebase/firestore";
+import { db } from "@/lib/firebase";
+import { X, MessageCircle, Briefcase, ShieldAlert, UserCog, Mail, Phone, Tag, User, MessageSquareText } from "lucide-react";
 import { UserData, ExternalUser, ChatRoom, Position, AppConfig, COLOR_MAPPINGS } from "../types";
+import { PRESENCE_CONFIG, PresenceState, UserPresence, ScheduledPresence, WeeklyDayRoutine, getEffectivePresence } from "../../presence/types";
 
-const UserAvatar = ({ name, url, isExternal = false, className = "w-10 h-10 text-sm" }: { name: string, url?: string | null, isExternal?: boolean, className?: string }) => {
-  return url ? (
-    <img src={url} alt={name} className={`${className} rounded-full object-cover shadow-2xs flex-shrink-0 border border-gray-100 bg-white`} />
-  ) : (
-    <div className={`${className} rounded-full bg-gradient-to-tr ${isExternal ? 'from-yellow-400 to-amber-500' : 'from-indigo-500 to-purple-600'} flex items-center justify-center text-white font-bold flex-shrink-0 shadow-2xs`}>
-      {name.charAt(0)}
+const UserAvatar = ({ name, url, isExternal = false, className = "w-10 h-10 text-sm", presenceState }: { name: string, url?: string | null, isExternal?: boolean, className?: string, presenceState?: PresenceState }) => {
+  const config = presenceState ? PRESENCE_CONFIG[presenceState] : null;
+  return (
+    <div className="relative inline-block flex-shrink-0">
+      {url ? (
+        <img src={url} alt={name} className={`${className} rounded-full object-cover shadow-2xs border-2 border-white bg-white`} />
+      ) : (
+        <div className={`${className} rounded-full bg-gradient-to-tr ${isExternal ? 'from-yellow-400 to-amber-500' : 'from-indigo-500 to-purple-600'} flex items-center justify-center text-white font-bold flex-shrink-0 shadow-2xs border-2 border-white`}>
+          {name.charAt(0)}
+        </div>
+      )}
+      {config && !isExternal && (
+        <div className="absolute -bottom-1 -right-1 bg-white rounded-full p-[2.5px] shadow-sm">
+          <config.icon className={`w-5 h-5 ${config.fillClass}`} />
+        </div>
+      )}
     </div>
   );
 };
@@ -29,6 +42,43 @@ export default function UserProfileModal({ user, currentUser, positions, chatRoo
   const c = COLOR_MAPPINGS[appConfig.color] || COLOR_MAPPINGS.default;
   const isExternal = "category" in user;
   
+  const [rawPresence, setRawPresence] = useState<UserPresence | null>(null);
+  const [schedules, setSchedules] = useState<ScheduledPresence[]>([]);
+  const [routines, setRoutines] = useState<WeeklyDayRoutine[]>([]);
+  
+  // ★ 毎秒監視し、"分"が切り替わった瞬間に再計算させる
+  const [currentMinute, setCurrentMinute] = useState(new Date().getMinutes());
+  useEffect(() => {
+    const timer = setInterval(() => setCurrentMinute(new Date().getMinutes()), 1000);
+    return () => clearInterval(timer);
+  }, []);
+
+  useEffect(() => {
+    if (isExternal) return;
+    const schoolId = (user as UserData).schoolId;
+    if (!schoolId) return;
+
+    const unsubP = onSnapshot(doc(db, "presence_statuses", user.id), (snap) => {
+      if (snap.exists()) setRawPresence({ id: snap.id, ...snap.data() } as UserPresence);
+    });
+    const unsubS = onSnapshot(query(collection(db, "presence_schedules"), where("schoolId", "==", schoolId)), (snap) => {
+      const list: ScheduledPresence[] = [];
+      snap.forEach(d => list.push({ id: d.id, ...d.data() } as ScheduledPresence));
+      setSchedules(list);
+    });
+    const unsubR = onSnapshot(query(collection(db, "presence_weekly_templates"), where("schoolId", "==", schoolId)), (snap) => {
+      const list: WeeklyDayRoutine[] = [];
+      snap.forEach(d => list.push({ id: d.id, ...d.data() } as WeeklyDayRoutine));
+      setRoutines(list);
+    });
+
+    return () => { unsubP(); unsubS(); unsubR(); };
+  }, [user, isExternal]);
+
+  const effectivePresence = useMemo(() => getEffectivePresence(rawPresence, schedules, routines, new Date()), [rawPresence, schedules, routines, currentMinute]);
+  const presenceState = effectivePresence?.currentState;
+  const presenceConfig = presenceState ? PRESENCE_CONFIG[presenceState] : null;
+
   const userPositions = !isExternal ? positions.filter(p => (user as UserData).positionIds?.includes(p.id) || (user as UserData).primaryPositionId === p.id) : [];
 
   return (
@@ -39,13 +89,26 @@ export default function UserProfileModal({ user, currentUser, positions, chatRoo
         </button>
         
         <div className="px-6 pt-10 pb-8 flex flex-col items-center">
-          <UserAvatar name={user.name} url={(user as any).photoURL} isExternal={isExternal} className="w-24 h-24 text-3xl mb-4 shadow-md border-2 border-white" />
+          <UserAvatar name={user.name} url={(user as any).photoURL} isExternal={isExternal} presenceState={presenceState} className="w-24 h-24 text-3xl mb-4 shadow-md border-2 border-white" />
           
           <h2 className="text-xl font-black text-gray-900 mb-1">{user.name}</h2>
-          {user.nameKana && <p className="text-[11px] font-bold text-gray-400 mb-4">{user.nameKana}</p>}
+          {user.nameKana && <p className="text-[11px] font-bold text-gray-400 mb-2">{user.nameKana}</p>}
+
+          {presenceConfig && !isExternal && (
+            <div className="flex flex-col items-center mt-2 mb-4 w-full px-4">
+              <div className="flex items-center gap-1.5 px-3 py-1 bg-gray-50 rounded-full border border-gray-100">
+                <span className={`text-xs font-black ${presenceConfig.colorClass}`}>{presenceConfig.label}</span>
+              </div>
+              {effectivePresence?.statusMessage && (
+                <div className="mt-2 text-[11px] font-bold text-gray-600 flex items-start gap-1.5 bg-gray-50/80 px-3 py-2 rounded-xl border border-gray-100 max-w-xs text-left w-full">
+                  <MessageSquareText className="w-3.5 h-3.5 text-gray-400 shrink-0 mt-0.5" />
+                  <span className="whitespace-pre-wrap leading-relaxed">{effectivePresence.statusMessage}</span>
+                </div>
+              )}
+            </div>
+          )}
           
-          <div className="w-full space-y-2 mt-2">
-            
+          <div className={`w-full space-y-2 ${isExternal ? 'mt-2' : ''}`}>
             <div className="flex items-center justify-between p-3 bg-gray-50 rounded-xl border border-gray-100">
               <div className="flex items-center gap-2 text-gray-500">
                 <Tag className="w-4 h-4" />

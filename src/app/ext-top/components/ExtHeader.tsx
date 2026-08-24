@@ -9,6 +9,7 @@ type AppBadges = {
   chat?: { unread: number; mention: boolean };
   equipment?: { active: number; overdue: boolean };
   board?: { unread: number };
+  surveys?: { unread: number }; // ★ 追加
 };
 
 type AppConfig = { name: string; icon: string; color: string; };
@@ -29,7 +30,8 @@ export default function ExtHeader({ schoolData, handleLogout, appMeta, showBackB
   const hasNotification = 
     (appBadges?.chat?.unread ?? 0) > 0 || 
     (appBadges?.equipment?.overdue ?? false) || 
-    (appBadges?.board?.unread ?? 0) > 0;
+    (appBadges?.board?.unread ?? 0) > 0 ||
+    (appBadges?.surveys?.unread ?? 0) > 0; // ★ 追加
 
   return (
     <>

@@ -1,11 +1,14 @@
 "use client";
 
-import React, { useMemo } from "react";
+import React, { useMemo, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import * as LucideIcons from "lucide-react";
 import { ChevronRight, Zap, Users, CheckCircle2 } from "lucide-react";
+import { collection, query, where, onSnapshot, getDoc, doc } from "firebase/firestore";
+import { db, auth } from "@/lib/firebase";
+import { onAuthStateChanged } from "firebase/auth";
 import { SystemApp } from "../page";
-import { UserPresence } from "../presence/types";
+import { UserPresence, ScheduledPresence, WeeklyDayRoutine, getEffectivePresence } from "../presence/types";
 
 const DynamicIcon = ({ name, className }: { name: string, className?: string }) => {
   const IconComponent = (LucideIcons as any)[name] || LucideIcons.Box;
@@ -15,35 +18,92 @@ const DynamicIcon = ({ name, className }: { name: string, className?: string }) 
 type Props = {
   presenceApp: SystemApp;
   presenceC: { lightBg: string, text: string, hoverBg: string, iconText: string };
-  activePresences: UserPresence[];
+  activePresences: UserPresence[]; 
 };
 
-export default function PresenceWidget({ presenceApp, presenceC, activePresences }: Props) {
+export default function PresenceWidget({ presenceApp, presenceC, activePresences: fallbackPresences }: Props) {
   const router = useRouter();
 
-  // ★ 確実に数値としてシステム利用番号順にソートする処理
+  const [presences, setPresences] = useState<UserPresence[]>([]);
+  const [schedules, setSchedules] = useState<ScheduledPresence[]>([]);
+  const [routines, setRoutines] = useState<WeeklyDayRoutine[]>([]);
+  
+  // ★ 毎秒更新し、00秒になった瞬間即時反映させる
+  const [tick, setTick] = useState(0);
+  useEffect(() => {
+    const timer = setInterval(() => setTick(t => t + 1), 1000);
+    return () => clearInterval(timer);
+  }, []);
+
+  useEffect(() => {
+    const unsubAuth = onAuthStateChanged(auth, async (user) => {
+      if (user) {
+        let schoolId = fallbackPresences[0]?.schoolId;
+        
+        if (!schoolId) {
+          try {
+            const uDoc = await getDoc(doc(db, "users", user.uid));
+            if (uDoc.exists()) {
+              schoolId = uDoc.data().schoolId;
+            }
+          } catch (e) {
+            console.error("Failed to fetch user's schoolId", e);
+          }
+        }
+
+        if (!schoolId) {
+          setPresences(fallbackPresences);
+          return;
+        }
+
+        const unsubP = onSnapshot(query(collection(db, "presence_statuses"), where("schoolId", "==", schoolId)), (snap) => {
+          const list: UserPresence[] = [];
+          snap.forEach(d => list.push({ id: d.id, ...d.data() } as UserPresence));
+          setPresences(list);
+        });
+        const unsubS = onSnapshot(query(collection(db, "presence_schedules"), where("schoolId", "==", schoolId)), (snap) => {
+          const list: ScheduledPresence[] = [];
+          snap.forEach(d => list.push({ id: d.id, ...d.data() } as ScheduledPresence));
+          setSchedules(list);
+        });
+        const unsubR = onSnapshot(query(collection(db, "presence_weekly_templates"), where("schoolId", "==", schoolId)), (snap) => {
+          const list: WeeklyDayRoutine[] = [];
+          snap.forEach(d => list.push({ id: d.id, ...d.data() } as WeeklyDayRoutine));
+          setRoutines(list);
+        });
+
+        return () => { unsubP(); unsubS(); unsubR(); };
+      }
+    });
+
+    return () => unsubAuth();
+  }, [fallbackPresences]);
+
+  const effectiveActivePresences = useMemo(() => {
+    const source = presences.length > 0 ? presences : fallbackPresences;
+    const now = new Date();
+    return source
+      .map(p => getEffectivePresence(p, schedules, routines, now))
+      .filter((p): p is UserPresence => p !== null && p.currentState === "available");
+  }, [presences, fallbackPresences, schedules, routines, tick]);
+
   const sortedPresences = useMemo(() => {
-    return [...activePresences].sort((a: any, b: any) => {
-      // systemId または userSystemId を取得（無い場合は空文字）
+    return [...effectiveActivePresences].sort((a: any, b: any) => {
       const valA = a.systemId || a.userSystemId || "";
       const valB = b.systemId || b.userSystemId || "";
 
-      // 確実に「数値」として比較する（10進数）
-      // ※番号が取得できない人はリストの一番後ろ（Infinity）に回す
       const numA = valA !== "" && !isNaN(Number(valA)) ? parseInt(valA, 10) : Infinity;
       const numB = valB !== "" && !isNaN(Number(valB)) ? parseInt(valB, 10) : Infinity;
 
-      // 数値で大小を比較
       if (numA !== numB) {
         return numA - numB;
       }
 
-      // 万が一数値が同じ（または両方数値でない）場合は、名前順などにフォールバック
       const nameA = String(a.userName || "");
       const nameB = String(b.userName || "");
       return nameA.localeCompare(nameB);
     });
-  }, [activePresences]);
+  }, [effectiveActivePresences]);
 
   return (
     <div className="bg-white border border-gray-200 rounded-2xl shadow-2xs overflow-hidden flex flex-col min-w-0">

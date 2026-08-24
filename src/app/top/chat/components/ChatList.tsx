@@ -4,7 +4,7 @@ import React, { useState, useEffect, useRef } from "react";
 import { 
   Search, UserPlus, MessageCircle, Users, ChevronRight, X, User, 
   GraduationCap, Building2, Briefcase, Shield, Sparkles, Pin, Globe, Star, 
-  Filter, ArrowUpDown, Image as ImageIcon, Edit3, Settings, Paperclip 
+  Filter, ArrowUpDown, Image as ImageIcon, Edit3, Settings, Paperclip, MessageSquareText
 } from "lucide-react";
 import { updateDoc, doc, collection, query, where, getDocs, addDoc, serverTimestamp, onSnapshot } from "firebase/firestore";
 import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
@@ -12,7 +12,7 @@ import { db, storage } from "@/lib/firebase";
 import { UserData, ExternalUser, ChatRoom, ChatMessage, AppConfig, COLOR_MAPPINGS, Position, ChatRoomType, getDefaultChatPermissions } from "../types";
 import GroupCreateModal from "./GroupCreateModal";
 import { useDialog } from "@/components/DialogContext";
-import { PRESENCE_CONFIG, PresenceState, UserPresence } from "../../presence/types";
+import { PRESENCE_CONFIG, PresenceState, UserPresence, ScheduledPresence, WeeklyDayRoutine, getEffectivePresence } from "../../presence/types";
 
 const UserAvatar = ({ 
   name, url, isExternal = false, className = "w-9 h-9 text-xs", presenceState 
@@ -83,14 +83,23 @@ export default function ChatList({
   const [targetRoomIdForIcon, setTargetRoomIdForIcon] = useState<string | null>(null);
 
   const [allMessagesCache, setAllMessagesCache] = useState<ChatMessage[] | null>(null);
+  
   const [presences, setPresences] = useState<UserPresence[]>([]);
+  const [schedules, setSchedules] = useState<ScheduledPresence[]>([]);
+  const [routines, setRoutines] = useState<WeeklyDayRoutine[]>([]);
+  
+  // ★ 毎秒監視してUIを最新に保つ
+  const [currentMinute, setCurrentMinute] = useState(new Date().getMinutes());
+  useEffect(() => {
+    const timer = setInterval(() => setCurrentMinute(new Date().getMinutes()), 1000);
+    return () => clearInterval(timer);
+  }, []);
 
   const c = COLOR_MAPPINGS[appConfig.color] || COLOR_MAPPINGS.default;
 
   const isInternalUser = userData ? !("category" in userData) : false;
   const internalUser = isInternalUser ? (userData as UserData) : null;
 
-  // ★ presenceアプリが有効かどうかの判定
   const isPresenceEnabled = React.useMemo(() => {
     if (!schoolData || !internalUser || isExternalMode) return false;
     const exSchool = schoolData as any;
@@ -110,19 +119,38 @@ export default function ChatList({
 
   useEffect(() => {
     if (!isPresenceEnabled || !userData?.schoolId) return;
-    const q = query(collection(db, "presence_statuses"), where("schoolId", "==", userData.schoolId));
-    const unsub = onSnapshot(q, (snap) => {
+    
+    const qP = query(collection(db, "presence_statuses"), where("schoolId", "==", userData.schoolId));
+    const unsubP = onSnapshot(qP, (snap) => {
       const list: UserPresence[] = [];
       snap.forEach(d => list.push({ id: d.id, ...d.data() } as UserPresence));
       setPresences(list);
     });
-    return () => unsub();
+
+    const qS = query(collection(db, "presence_schedules"), where("schoolId", "==", userData.schoolId));
+    const unsubS = onSnapshot(qS, (snap) => {
+      const list: ScheduledPresence[] = [];
+      snap.forEach(d => list.push({ id: d.id, ...d.data() } as ScheduledPresence));
+      setSchedules(list);
+    });
+
+    const qR = query(collection(db, "presence_weekly_templates"), where("schoolId", "==", userData.schoolId));
+    const unsubR = onSnapshot(qR, (snap) => {
+      const list: WeeklyDayRoutine[] = [];
+      snap.forEach(d => list.push({ id: d.id, ...d.data() } as WeeklyDayRoutine));
+      setRoutines(list);
+    });
+
+    return () => { unsubP(); unsubS(); unsubR(); };
   }, [isPresenceEnabled, userData?.schoolId]);
 
   const getUserPresenceState = (userId: string): PresenceState | undefined => {
     if (!isPresenceEnabled) return undefined;
+    const dummy = currentMinute; 
     const p = presences.find(item => item.userId === userId);
-    return p ? p.currentState : "offline";
+    if (!p) return "offline";
+    const effective = getEffectivePresence(p, schedules, routines, new Date());
+    return effective ? effective.currentState : "offline";
   };
 
   const perms = isInternalUser && internalUser ? getDefaultChatPermissions(internalUser) : {

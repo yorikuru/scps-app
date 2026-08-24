@@ -1,41 +1,32 @@
 "use client";
 
 import React, { useEffect, useState } from "react";
-import { useParams, useRouter } from "next/navigation";
+import { useParams, useRouter, useSearchParams, usePathname } from "next/navigation";
 import { onAuthStateChanged } from "firebase/auth";
 import { doc, getDoc, collection, query, where, orderBy, onSnapshot, deleteDoc } from "firebase/firestore";
 import { auth, db } from "@/lib/firebase";
-import { 
-  ArrowLeft, Trash2, AlertCircle, CheckCircle, 
-  MessageSquare, Clock, User, UserX, Loader2, FileText, Globe, Lock
-} from "lucide-react";
+import { AlertCircle, CheckCircle, Loader2, BarChart3, List, Download, Edit3 } from "lucide-react";
+import Link from "next/link"; 
 
-// ユーザーデータ
-type UserData = {
-  name: string;
-  schoolId: string;
-  role: string;
-};
+import { Survey, UserData, sanitizeSurveyData, getDefaultSurveySettings } from "../../types";
+import ResponsesHeader from "./components/ResponsesHeader";
+import DeleteConfirmModal from "./components/DeleteConfirmModal";
+import ResponsesList from "./components/ResponsesList";
+import ResponsesSummary from "./components/ResponsesSummary";
+import ResponsesGrading from "./components/ResponsesGrading";
 
-// アンケートデータ
-type Survey = {
-  id: string;
-  title: string;
-  description: string;
-  isPublic: boolean;
-  isAnonymous: boolean;
-};
-
-// 回答データ
-type ResponseData = {
+export type ResponseData = {
   id: string;
   respondentName: string;
   respondentId?: string | null;
+  email?: string | null;
   content: string;
+  rawAnswers: Record<string, any>;
+  manualScores?: Record<string, number>;
+  timeTaken?: number;
   createdAt: Date | null;
 };
 
-// UIアラート
 type AlertState = {
   show: boolean;
   type: "success" | "error";
@@ -45,6 +36,8 @@ type AlertState = {
 export default function SurveyResponsesPage() {
   const params = useParams();
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const pathname = usePathname();
   const surveyId = params.id as string;
 
   const [userData, setUserData] = useState<UserData | null>(null);
@@ -52,9 +45,20 @@ export default function SurveyResponsesPage() {
   const [responses, setResponses] = useState<ResponseData[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
-  // UIアラート・削除モーダル用ステート
+  const [viewTab, setViewTab] = useState<"summary" | "individual" | "grading">("summary");
+
   const [alert, setAlert] = useState<AlertState>({ show: false, type: "success", message: "" });
   const [responseToDelete, setResponseToDelete] = useState<string | null>(null);
+
+  // ★ URLの変更を監視してタブ状態を同期させる
+  useEffect(() => {
+    const tabParam = searchParams.get("tab") as "summary" | "individual" | "grading";
+    if (tabParam && ["summary", "individual", "grading"].includes(tabParam)) {
+      setViewTab(tabParam);
+    } else {
+      setViewTab("summary");
+    }
+  }, [searchParams]);
 
   useEffect(() => {
     let unsubscribeResponses: () => void;
@@ -62,7 +66,6 @@ export default function SurveyResponsesPage() {
     const unsubscribeAuth = onAuthStateChanged(auth, async (user) => {
       if (user) {
         try {
-          // 1. ユーザーデータ取得
           const userDocRef = doc(db, "users", user.uid);
           const userDocSnap = await getDoc(userDocRef);
           
@@ -70,28 +73,20 @@ export default function SurveyResponsesPage() {
             const myData = userDocSnap.data() as UserData;
             setUserData(myData);
 
-            // 2. アンケート詳細取得
             const surveyDocRef = doc(db, "surveys", surveyId);
             const surveyDocSnap = await getDoc(surveyDocRef);
             if (surveyDocSnap.exists()) {
-              const surveyData = surveyDocSnap.data();
-              if (surveyData.schoolId !== myData.schoolId && surveyData.tenantId !== myData.schoolId) {
+              const rawData = surveyDocSnap.data();
+              if (rawData.schoolId !== myData.schoolId && rawData.tenantId !== myData.schoolId) {
                 router.push("/top/surveys");
                 return;
               }
-              setSurvey({ 
-                id: surveyDocSnap.id, 
-                title: surveyData.title,
-                description: surveyData.description,
-                isPublic: surveyData.isPublic ?? false,
-                isAnonymous: surveyData.isAnonymous ?? false
-              } as Survey);
+              setSurvey(sanitizeSurveyData({ id: surveyDocSnap.id, ...rawData }, getDefaultSurveySettings()));
             } else {
               router.push("/top/surveys");
               return;
             }
 
-            // 3. このアンケートに対する回答一覧をリアルタイム取得
             const responsesRef = collection(db, "survey_responses");
             const q = query(
               responsesRef,
@@ -107,7 +102,11 @@ export default function SurveyResponsesPage() {
                   id: docSnap.id,
                   respondentName: docData.respondentName,
                   respondentId: docData.respondentId || null,
+                  email: docData.email || null,
                   content: docData.content,
+                  rawAnswers: docData.rawAnswers || {},
+                  manualScores: docData.manualScores || {}, 
+                  timeTaken: docData.timeTaken || 0,
                   createdAt: docData.createdAt ? docData.createdAt.toDate() : null,
                 });
               });
@@ -133,6 +132,15 @@ export default function SurveyResponsesPage() {
     };
   }, [surveyId, router]);
 
+  useEffect(() => {
+    if (survey && !survey.settings.isQuiz && viewTab === "grading") {
+      setViewTab("summary");
+      const params = new URLSearchParams(searchParams.toString());
+      params.set("tab", "summary");
+      router.replace(`${pathname}?${params.toString()}`, { scroll: false });
+    }
+  }, [survey, viewTab, pathname, router, searchParams]);
+
   const showAlert = (type: "success" | "error", message: string) => {
     setAlert({ show: true, type, message });
     setTimeout(() => {
@@ -142,7 +150,6 @@ export default function SurveyResponsesPage() {
 
   const handleDeleteResponse = async () => {
     if (!responseToDelete) return;
-
     try {
       const responseRef = doc(db, "survey_responses", responseToDelete);
       await deleteDoc(responseRef);
@@ -155,15 +162,83 @@ export default function SurveyResponsesPage() {
     }
   };
 
-  const formatDate = (date: Date | null) => {
-    if (!date) return "同期中...";
-    return new Intl.DateTimeFormat("ja-JP", {
-      month: "short",
-      day: "numeric",
-      hour: "2-digit",
-      minute: "2-digit",
-    }).format(date);
+  const handleTabChange = (tab: "summary" | "individual" | "grading") => {
+    setViewTab(tab);
+    const params = new URLSearchParams(searchParams.toString());
+    params.set("tab", tab);
+    router.replace(`${pathname}?${params.toString()}`, { scroll: false });
   };
+
+  const handleDownloadExcel = () => {
+    if (!survey || responses.length === 0) {
+      showAlert("error", "ダウンロードするデータがありません。");
+      return;
+    }
+    
+    const questions = survey.questions.filter(q => q.type !== "section" && q.type !== "description");
+    const header = ["回答日時", "所要時間(秒)", "回答者", "メールアドレス", ...questions.map(q => q.title)];
+    
+    if (survey.settings.isQuiz) {
+      header.splice(4, 0, "合計得点");
+    }
+    
+    const rows = responses.map(r => {
+      const row = [
+        r.createdAt ? r.createdAt.toLocaleString('ja-JP') : "",
+        r.timeTaken || "",
+        r.respondentName,
+        r.email || ""
+      ];
+
+      if (survey.settings.isQuiz) {
+        let score = 0;
+        questions.forEach(q => {
+           if (["radio", "checkbox", "select"].includes(q.type) || (q.type === "text" && q.correctAnswers && q.correctAnswers.length > 0)) {
+             const ans = r.rawAnswers[q.id];
+             let isCorrect = false;
+             if (q.type === "radio" || q.type === "select") isCorrect = q.correctAnswers?.[0] === ans;
+             else if (q.type === "checkbox") {
+                const arr = Array.isArray(ans) ? ans : [];
+                if (q.quizScoringType === "partial_match") isCorrect = arr.some(c => q.correctAnswers?.includes(c));
+                else isCorrect = q.correctAnswers?.length === arr.length && q.correctAnswers.every(c => arr.includes(c));
+             } else if (q.type === "text") {
+                isCorrect = q.correctAnswers?.some(c => c.trim().toLowerCase() === String(ans || "").trim().toLowerCase()) || false;
+             }
+             if (isCorrect) score += (q.points || 0);
+           } else {
+             score += (r.manualScores?.[q.id] || 0);
+           }
+        });
+        row.push(String(score));
+      }
+      
+      questions.forEach(q => {
+        const val = r.rawAnswers[q.id];
+        if (val === undefined || val === null) {
+          row.push("");
+        } else if (Array.isArray(val)) {
+          row.push(`"${val.join(" | ").replace(/"/g, '""')}"`);
+        } else if (typeof val === "object") {
+          row.push(`"${JSON.stringify(val).replace(/"/g, '""')}"`);
+        } else {
+          row.push(`"${String(val).replace(/"/g, '""')}"`);
+        }
+      });
+      return row.join(",");
+    });
+
+    const csvContent = "\uFEFF" + header.map(h => `"${h.replace(/"/g, '""')}"`).join(",") + "\n" + rows.join("\n");
+    const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.setAttribute("download", `${survey.title}_回答結果.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
+  const showGradingTab = survey?.settings.isQuiz;
 
   if (isLoading) {
     return (
@@ -174,61 +249,28 @@ export default function SurveyResponsesPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-100 pb-20 relative">
+    <div className="min-h-screen bg-[#F9FAFB] pb-20 relative font-sans">
       
-      {/* 削除確認モーダル */}
-      {responseToDelete && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50 px-4">
-          <div className="bg-white rounded-xl shadow-2xl p-6 w-full max-w-sm transform transition-all">
-            <div className="flex items-center justify-center h-12 w-12 rounded-full bg-red-100 mb-4 mx-auto">
-              <AlertCircle className="h-6 w-6 text-red-600" />
-            </div>
-            <h3 className="text-lg font-bold text-center text-gray-900 mb-2">回答の削除</h3>
-            <p className="text-sm text-center text-gray-500 mb-6">
-              この回答をシステムから永久に削除します。<br />よろしいですか？
-            </p>
-            <div className="flex justify-center space-x-3">
-              <button
-                onClick={() => setResponseToDelete(null)}
-                className="px-4 py-2 border border-gray-300 rounded-md text-sm font-bold text-gray-700 bg-white hover:bg-gray-50 focus:outline-none transition-colors"
-              >
-                キャンセル
-              </button>
-              <button
-                onClick={handleDeleteResponse}
-                className="px-4 py-2 border border-transparent rounded-md text-sm font-bold text-white bg-red-600 hover:bg-red-700 focus:outline-none transition-colors"
-              >
-                削除する
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      <DeleteConfirmModal 
+        isOpen={!!responseToDelete} 
+        onCancel={() => setResponseToDelete(null)} 
+        onConfirm={handleDeleteResponse} 
+      />
 
-      {/* ヘッダー */}
-      <header className="bg-white shadow-sm border-b border-gray-200 sticky top-0 z-40">
-        <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
-          <div className="flex items-center overflow-hidden">
-            <button
-              onClick={() => router.push("/top/surveys")}
-              className="mr-4 p-2 rounded-full hover:bg-gray-100 transition-colors flex-shrink-0"
-              title="管理に戻る"
-            >
-              <ArrowLeft className="h-5 w-5 text-gray-600" />
-            </button>
-            <div className="truncate">
-              <div className="flex items-center text-xs font-bold text-purple-600 mb-0.5">
-                <FileText className="h-3 w-3 mr-1" /> 回答ビューア
-              </div>
-              <h1 className="text-lg sm:text-xl font-bold text-gray-900 truncate">
-                {survey?.title}
-              </h1>
-            </div>
-          </div>
-        </div>
-      </header>
+      <ResponsesHeader title={survey?.title} />
 
-      {/* UIアラート表示部 */}
+      <div className="flex justify-center pt-8 pb-4">
+        <div className="bg-white rounded-full p-1 shadow-sm border border-gray-200 inline-flex items-center">
+          <Link href={`/top/surveys?tab=builder&editTab=questions&id=${surveyId}`} className="px-6 py-2 rounded-full text-sm font-bold text-gray-600 hover:bg-gray-50 transition-colors">質問</Link>
+          
+          <div className="px-6 py-2 rounded-full text-sm font-bold bg-purple-100 text-purple-700 transition-colors flex items-center">
+            結果 <span className="ml-1.5 bg-purple-200 px-2 py-0.5 rounded-full text-[10px]">{responses.length}</span>
+          </div>
+
+          <Link href={`/top/surveys?tab=builder&editTab=settings&id=${surveyId}`} className="px-6 py-2 rounded-full text-sm font-bold text-gray-600 hover:bg-gray-50 transition-colors">設定</Link>
+        </div>
+      </div>
+
       {alert.show && (
         <div className="fixed top-20 left-1/2 transform -translate-x-1/2 z-50 w-full max-w-md px-4">
           <div className={`p-4 rounded-lg shadow-lg flex items-center border-l-4 ${alert.type === "success" ? "bg-white border-green-500 text-green-800" : "bg-white border-red-500 text-red-800"}`}>
@@ -238,90 +280,53 @@ export default function SurveyResponsesPage() {
         </div>
       )}
 
-      <main className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-6 sm:py-8">
+      <main className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-2">
         
-        {/* アンケート要約情報 */}
-        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 sm:p-8 mb-8">
-          <div className="flex items-center flex-wrap gap-2 mb-3">
-            {survey?.isPublic ? (
-              <span className="flex items-center text-blue-600 bg-blue-50 px-2 py-0.5 rounded border border-blue-100 text-xs font-bold"><Globe className="h-3 w-3 mr-1" /> 一般公開</span>
-            ) : (
-              <span className="flex items-center text-orange-600 bg-orange-50 px-2 py-0.5 rounded border border-orange-100 text-xs font-bold"><Lock className="h-3 w-3 mr-1" /> 限定公開</span>
-            )}
-            {survey?.isAnonymous ? (
-              <span className="flex items-center text-gray-600 bg-gray-100 px-2 py-0.5 rounded border border-gray-200 text-xs font-bold"><UserX className="h-3 w-3 mr-1" /> 匿名式</span>
-            ) : (
-              <span className="flex items-center text-purple-600 bg-purple-50 px-2 py-0.5 rounded border border-purple-100 text-xs font-bold"><User className="h-3 w-3 mr-1" /> 記名式</span>
+        <div className="flex flex-col sm:flex-row items-center justify-between mb-6 gap-4">
+          <div className="flex flex-wrap bg-gray-200/60 p-1 rounded-xl shadow-inner text-sm font-bold w-full sm:w-auto">
+            <button 
+              onClick={() => handleTabChange("summary")} 
+              className={`flex-1 sm:flex-none px-4 py-2.5 rounded-lg flex items-center justify-center gap-1.5 transition-all ${viewTab === "summary" ? "bg-white text-purple-700 shadow-sm" : "text-gray-500 hover:text-gray-700"}`}
+            >
+              <BarChart3 className="w-4 h-4" /> 概要レポート
+            </button>
+            <button 
+              onClick={() => handleTabChange("individual")} 
+              className={`flex-1 sm:flex-none px-4 py-2.5 rounded-lg flex items-center justify-center gap-1.5 transition-all ${viewTab === "individual" ? "bg-white text-purple-700 shadow-sm" : "text-gray-500 hover:text-gray-700"}`}
+            >
+              <List className="w-4 h-4" /> 個別リスト
+            </button>
+
+            {showGradingTab && (
+              <button 
+                onClick={() => handleTabChange("grading")} 
+                className={`flex-1 sm:flex-none px-4 py-2.5 rounded-lg flex items-center justify-center gap-1.5 transition-all ${viewTab === "grading" ? "bg-white text-amber-700 shadow-sm" : "text-gray-500 hover:text-amber-700"}`}
+              >
+                <Edit3 className="w-4 h-4" /> 手動採点
+              </button>
             )}
           </div>
-          <p className="text-sm text-gray-600 whitespace-pre-wrap mb-6">{survey?.description || "説明はありません。"}</p>
-          <div className="border-t border-gray-100 pt-4 flex justify-between items-end">
-            <span className="text-sm font-bold text-gray-500">集まった回答の総数</span>
-            <div className="text-3xl font-extrabold text-purple-600 flex items-baseline">
-              {responses.length} <span className="text-sm font-bold text-gray-500 ml-1">件</span>
-            </div>
-          </div>
+
+          <button 
+            onClick={handleDownloadExcel}
+            className="w-full sm:w-auto px-5 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-sm font-bold shadow-sm transition-colors flex items-center justify-center gap-2"
+          >
+            <Download className="w-4 h-4" /> Excel(CSV)出力
+          </button>
         </div>
 
-        {/* 回答一覧 */}
-        <div className="space-y-4">
-          <h3 className="text-lg font-extrabold text-gray-900 flex items-center mb-4">
-            <MessageSquare className="h-5 w-5 mr-2 text-gray-500" /> 回収された意見一覧
-          </h3>
-          
-          {responses.length === 0 ? (
-            <div className="text-center py-16 bg-white rounded-xl shadow-sm border border-gray-200">
-              <MessageSquare className="h-12 w-12 text-gray-300 mx-auto mb-3" />
-              <p className="text-sm font-bold text-gray-500">回答はまだ届いていません。</p>
-            </div>
-          ) : (
-            <div className="space-y-4">
-              {responses.map((response, index) => {
-                const isAnonymous = response.respondentName === "匿名";
-                
-                return (
-                  <div key={response.id} className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden group hover:shadow-md transition-shadow">
-                    <div className="px-4 py-3 sm:px-6 bg-gray-50 flex justify-between items-center border-b border-gray-100">
-                      <div className="flex items-center space-x-3">
-                        <span className="text-xs font-extrabold text-gray-400">
-                          #{responses.length - index}
-                        </span>
-                        <div className={`flex items-center px-2.5 py-1 rounded-full text-xs font-bold ${
-                          isAnonymous 
-                            ? "bg-gray-200 text-gray-600" 
-                            : "bg-blue-100 text-blue-800 border border-blue-200 shadow-sm"
-                        }`}>
-                          {isAnonymous ? <UserX className="h-3 w-3 mr-1" /> : <User className="h-3 w-3 mr-1" />}
-                          {response.respondentName}
-                          {!isAnonymous && response.respondentId && (
-                            <span className="ml-1 opacity-60 font-normal"> (認証済)</span>
-                          )}
-                        </div>
-                      </div>
-                      <div className="flex items-center text-xs font-medium text-gray-500">
-                        <Clock className="h-3.5 w-3.5 mr-1" />
-                        {formatDate(response.createdAt)}
-                      </div>
-                    </div>
-                    <div className="p-4 sm:p-6">
-                      <p className="text-sm text-gray-800 whitespace-pre-wrap font-medium leading-relaxed">
-                        {response.content}
-                      </p>
-                      <div className="mt-4 pt-3 border-t border-gray-50 flex justify-end">
-                        <button
-                          onClick={() => setResponseToDelete(response.id)}
-                          className="inline-flex items-center text-xs font-bold text-red-500 hover:text-red-700 bg-white hover:bg-red-50 px-3 py-1.5 rounded-md border border-transparent hover:border-red-200 transition-colors focus:outline-none focus:ring-2 focus:ring-red-500"
-                        >
-                          <Trash2 className="h-3.5 w-3.5 mr-1" /> この回答を削除
-                        </button>
-                      </div>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          )}
-        </div>
+        {viewTab === "summary" ? (
+          <ResponsesSummary survey={survey} responses={responses} />
+        ) : viewTab === "individual" ? (
+          <ResponsesList 
+            survey={survey} 
+            responses={responses} 
+            onDeleteRequest={(id) => setResponseToDelete(id)} 
+          />
+        ) : (
+          <ResponsesGrading survey={survey} responses={responses} showAlert={showAlert} />
+        )}
+
       </main>
     </div>
   );

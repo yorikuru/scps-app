@@ -1,15 +1,29 @@
 "use client";
 
-import React, { useState, useRef, useEffect } from "react";
+import React, { useState, useRef, useEffect, useMemo } from "react";
 import { ChevronLeft, Search, X, Sparkles, Users, Pin, User, MoreVertical, Building2, Shield, GraduationCap, Briefcase, Star, Settings } from "lucide-react";
+import { doc, collection, query, where, onSnapshot } from "firebase/firestore";
+import { db } from "@/lib/firebase";
 import { UserData, ExternalUser, ChatRoom, Position, AppConfig, COLOR_MAPPINGS } from "../types";
+import { PRESENCE_CONFIG, PresenceState, UserPresence, ScheduledPresence, WeeklyDayRoutine, getEffectivePresence } from "../../presence/types";
 
-const UserAvatar = ({ name, url, isExternal = false, className = "w-8 h-8 text-xs" }: { name: string, url?: string | null, isExternal?: boolean, className?: string }) => {
-  return url ? (
-    <img src={url} alt={name} className={`${className} rounded-full object-cover shadow-sm flex-shrink-0 border border-gray-200 bg-white`} />
-  ) : (
-    <div className={`${className} rounded-full bg-gradient-to-tr ${isExternal ? 'from-yellow-400 to-amber-500' : 'from-indigo-500 to-purple-600'} flex items-center justify-center text-white font-bold flex-shrink-0 shadow-sm`}>
-      {name.charAt(0)}
+const UserAvatar = ({ name, url, isExternal = false, className = "w-8 h-8 text-xs", presenceState }: { name: string, url?: string | null, isExternal?: boolean, className?: string, presenceState?: PresenceState }) => {
+  const config = presenceState ? PRESENCE_CONFIG[presenceState] : null;
+
+  return (
+    <div className="relative inline-block flex-shrink-0">
+      {url ? (
+        <img src={url} alt={name} className={`${className} rounded-full object-cover shadow-sm flex-shrink-0 border border-gray-200 bg-white`} />
+      ) : (
+        <div className={`${className} rounded-full bg-gradient-to-tr ${isExternal ? 'from-yellow-400 to-amber-500' : 'from-indigo-500 to-purple-600'} flex items-center justify-center text-white font-bold flex-shrink-0 shadow-sm`}>
+          {name.charAt(0)}
+        </div>
+      )}
+      {config && !isExternal && (
+        <div className="absolute -bottom-0.5 -right-0.5 bg-white rounded-full p-[1.5px] shadow-sm">
+          <config.icon className={`w-3.5 h-3.5 ${config.fillClass}`} />
+        </div>
+      )}
     </div>
   );
 };
@@ -45,6 +59,46 @@ export default function ChatRoomHeader({
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
 
+  // ★ 相手の実効ステータス取得用ステート
+  const [otherUserPresence, setOtherUserPresence] = useState<UserPresence | null>(null);
+  const [schedules, setSchedules] = useState<ScheduledPresence[]>([]);
+  const [routines, setRoutines] = useState<WeeklyDayRoutine[]>([]);
+  const [tick, setTick] = useState(0);
+
+  // 1分ごとにステータス（スケジュール）を再計算
+  useEffect(() => {
+    const timer = setInterval(() => setTick(t => t + 1), 60000);
+    return () => clearInterval(timer);
+  }, []);
+
+  const otherUser = room.type === "direct" ? roomMembers.find(u => u.id !== userData.id) : null;
+  const isExt = otherUser ? "category" in otherUser : false;
+
+  // 相手のプレゼンス情報をリアルタイム監視
+  useEffect(() => {
+    if (!otherUser || isExt || isExternalMode) return;
+    const schoolId = (otherUser as UserData).schoolId;
+    if (!schoolId) return;
+
+    const unsubP = onSnapshot(doc(db, "presence_statuses", otherUser.id), (snap) => {
+      if (snap.exists()) setOtherUserPresence({ id: snap.id, ...snap.data() } as UserPresence);
+    });
+    const unsubS = onSnapshot(query(collection(db, "presence_schedules"), where("schoolId", "==", schoolId)), (snap) => {
+      const list: ScheduledPresence[] = [];
+      snap.forEach(d => list.push({ id: d.id, ...d.data() } as ScheduledPresence));
+      setSchedules(list);
+    });
+    const unsubR = onSnapshot(query(collection(db, "presence_weekly_templates"), where("schoolId", "==", schoolId)), (snap) => {
+      const list: WeeklyDayRoutine[] = [];
+      snap.forEach(d => list.push({ id: d.id, ...d.data() } as WeeklyDayRoutine));
+      setRoutines(list);
+    });
+
+    return () => { unsubP(); unsubS(); unsubR(); };
+  }, [otherUser, isExt, isExternalMode]);
+
+  const effectivePresence = useMemo(() => getEffectivePresence(otherUserPresence, schedules, routines), [otherUserPresence, schedules, routines, tick]);
+
   useEffect(() => {
     const handleClickOutside = (e: MouseEvent) => {
       if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
@@ -57,7 +111,6 @@ export default function ChatRoomHeader({
 
   const roomInfo = (() => {
     if (room.isOfficial || room.type === "custom_group") return { name: room.name || "グループ", isGroup: true };
-    const otherUser = roomMembers.find(u => u.id !== userData.id);
     return { name: otherUser?.name || "退会したユーザー", isGroup: false };
   })();
 
@@ -81,9 +134,7 @@ export default function ChatRoomHeader({
 
   const renderDescription = () => {
     if (room.type === "direct") {
-      const otherUser = roomMembers.find(u => u.id !== userData.id);
       if (!otherUser) return <p className="text-[10px] font-bold text-gray-400">退会したユーザー</p>;
-      const isExt = "category" in otherUser;
       const roleText = isExt ? ((otherUser as ExternalUser).affiliation || "外部ユーザー") : ((otherUser as UserData).positionName || ((otherUser as UserData).role === "teacher" ? "教職員" : (otherUser as UserData).role === "admin" ? "管理者" : "一般生徒"));
       return <p className="text-[10px] font-medium text-gray-500 truncate max-w-[200px] sm:max-w-md">{roleText}</p>;
     } else if (room.type === "tenant_all") {
@@ -115,7 +166,7 @@ export default function ChatRoomHeader({
           </button>
           
           {room.type === "direct" ? (
-            <UserAvatar name={roomMembers.find(u => u.id !== userData.id)?.name || "退会"} url={(roomMembers.find(u => u.id !== userData.id) as any)?.photoURL} isExternal={"category" in (roomMembers.find(u => u.id !== userData.id) || {})} className="w-9 h-9 text-xs" />
+            <UserAvatar name={otherUser?.name || "退会"} url={(otherUser as any)?.photoURL} isExternal={isExt} presenceState={effectivePresence?.currentState} className="w-9 h-9 text-xs" />
           ) : (
             <div className={`w-9 h-9 rounded-full flex items-center justify-center text-white flex-shrink-0 shadow-sm relative ${room.iconURL ? 'bg-transparent border border-gray-200' : roomConfig?.color || 'bg-gray-700'}`}>
               {room.iconURL ? (
@@ -140,8 +191,6 @@ export default function ChatRoomHeader({
           {room.type === "direct" && onOpenProfile && !isExternalMode && (
             <button 
               onClick={() => {
-                const otherId = room.members.find(id => id !== userData.id);
-                const otherUser = roomMembers.find(u => u.id === otherId);
                 if (otherUser) onOpenProfile(otherUser);
               }}
               className="p-2 text-gray-400 hover:bg-gray-100 hover:text-indigo-600 rounded-lg transition-colors" 
@@ -165,7 +214,6 @@ export default function ChatRoomHeader({
             <Search className="w-4 h-4" />
           </button>
 
-          {/* ★ 三点リーダーとドロップダウンメニュー */}
           {room.type !== "direct" && (
             <div className="relative" ref={menuRef}>
               <button 

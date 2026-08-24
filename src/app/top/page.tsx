@@ -22,6 +22,7 @@ export type SystemApp = {
   path: string;
   isActive: boolean;
   order: number;
+  defaultRoles: Record<string, boolean>;
 };
 
 export type UserData = {
