@@ -9,7 +9,7 @@ type AppBadges = {
   chat?: { unread: number; mention: boolean };
   equipment?: { active: number; overdue: boolean };
   board?: { unread: number };
-  surveys?: { unread: number }; // ★ 追加
+  surveys?: { unread: number };
 };
 
 type AppConfig = { name: string; icon: string; color: string; };
@@ -19,7 +19,7 @@ type Props = {
   handleLogout: () => void;
   appMeta?: AppConfig;
   showBackButton?: boolean;
-  appBadges?: AppBadges; // ★ Propsに追加
+  appBadges?: AppBadges;
 };
 
 export default function ExtHeader({ schoolData, handleLogout, appMeta, showBackButton = false, appBadges }: Props) {
@@ -31,13 +31,13 @@ export default function ExtHeader({ schoolData, handleLogout, appMeta, showBackB
     (appBadges?.chat?.unread ?? 0) > 0 || 
     (appBadges?.equipment?.overdue ?? false) || 
     (appBadges?.board?.unread ?? 0) > 0 ||
-    (appBadges?.surveys?.unread ?? 0) > 0; // ★ 追加
+    (appBadges?.surveys?.unread ?? 0) > 0;
 
   return (
     <>
       <header className="bg-white border-b border-gray-200 shrink-0 sticky top-0 z-50 shadow-sm">
         <div className="flex items-center justify-between px-4 py-3 h-14">
-          <div className="flex items-center gap-3 min-w-0">
+          <div className="flex items-center gap-2.5 sm:gap-3 min-w-0">
             {showBackButton && (
               <button 
                 onClick={() => router.push("/ext-top")} 
@@ -50,6 +50,19 @@ export default function ExtHeader({ schoolData, handleLogout, appMeta, showBackB
               </button>
             )}
             
+            {/* ★ テナントロゴの表示（スマホでも表示対応） */}
+            {schoolData?.logoURL ? (
+              <img 
+                src={schoolData.logoURL} 
+                alt="Logo" 
+                className="w-7 h-7 sm:w-8 sm:h-8 rounded-md object-cover border border-gray-200 shadow-sm shrink-0 bg-white" 
+              />
+            ) : (
+              <div className="w-7 h-7 sm:w-8 sm:h-8 rounded-md bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center text-white text-[10px] sm:text-xs font-black shrink-0 shadow-sm">
+                {schoolData?.name ? schoolData.name.charAt(0) : "G"}
+              </div>
+            )}
+
             <div className="flex flex-col min-w-0">
               {appMeta ? (
                 <>

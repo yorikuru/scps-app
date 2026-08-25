@@ -144,7 +144,7 @@ export default function SurveySuccess({ survey, currentUser, submittedAnswers, m
                   onClick={() => router.push("/ext-top")} 
                   className="w-full inline-flex justify-center items-center py-3 px-4 rounded-xl shadow-sm text-xs font-black text-white bg-indigo-600 hover:bg-indigo-700 transition-all gap-2"
                 >
-                  <Home className="w-4 h-4" /> 外部ユーザーTOPに戻る
+                  <Home className="w-4 h-4" /> TOPに戻る
                 </button>
               ) : (
                 <button 

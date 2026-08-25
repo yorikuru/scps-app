@@ -280,7 +280,7 @@ export default function ExternalUsersPage() {
               <Globe className="w-5 h-5 sm:w-6 sm:h-6" />
             </div>
             <div>
-              <h1 className="text-base sm:text-lg lg:text-xl font-black text-gray-900 tracking-tight">外部ユーザー・ゲスト管理</h1>
+              <h1 className="text-base sm:text-lg lg:text-xl font-black text-gray-900 tracking-tight">ゲスト・外部連携ユーザー管理</h1>
               <p className="text-[10px] sm:text-xs font-bold text-gray-500 mt-0.5">テナント外のユーザーアカウントを発行・権限管理します</p>
             </div>
           </div>

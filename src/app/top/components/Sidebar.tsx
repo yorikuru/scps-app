@@ -486,7 +486,7 @@ export default function Sidebar({
                   <div className="flex items-center gap-2.5">
                     <div className={`absolute left-0 top-0 bottom-0 w-1 bg-amber-500 transition-transform duration-300 origin-left ${isActive("/top/external-users") ? "scale-x-100" : "scale-x-0"}`}></div>
                     <Globe className={`w-3.5 h-3.5 transition-colors duration-200 ${isActive("/top/external-users") ? "text-amber-400" : "text-gray-500"}`} /> 
-                    ゲスト・外部連携
+                    外部連携ユーザー管理
                   </div>
                 </Link>
               )}
