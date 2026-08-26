@@ -7,9 +7,27 @@ export type UserData = {
   role: string; 
   isITManager?: boolean;
   photoURL?: string; 
+  positionIds?: string[];
+  positionName?: string;
+  systemId?: string;
+};
+
+export type Position = {
+  id: string;
+  schoolId: string;
+  name: string;
+  organizationId: string;
+  isStudent: boolean;
+  isInternal: boolean;
 };
 
 export type Attachment = { name: string; url: string; size?: number; type?: string; };
+
+export type TargetType = "all" | "position" | "individual";
+export type ExtTargetType = "all" | "individual";
+
+// ★ 追加：対応モードの型定義
+export type ActionType = "single" | "all";
 
 export type Announcement = {
   id: string; title: string; content: string; authorName: string; authorId: string;
@@ -18,8 +36,26 @@ export type Announcement = {
   attachments?: Attachment[];
   publishStartDate?: string | null; 
   publishEndDate?: string | null;   
+  
   isExternal?: boolean; 
-  readByExternal?: string[]; // ★追加：外部ユーザーの既読者IDリスト
+  isInternalAlso?: boolean; 
+  
+  targetType?: TargetType;
+  targetPositionIds?: string[];
+  targetUserIds?: string[];
+
+  extTargetType?: ExtTargetType;
+  extTargetUserIds?: string[];
+
+  // ★ 追加：対応を要求するかどうかのフラグ
+  requireAction?: boolean;
+  actionType?: ActionType;
+
+  readByExternal?: any[]; 
+  readByInternal?: any[]; 
+  // ★ 追加：対応済みのユーザーリスト
+  actionByExternal?: any[];
+  actionByInternal?: any[];
 };
 
 export type Category = { id: string; schoolId: string; name: string; color: string; };

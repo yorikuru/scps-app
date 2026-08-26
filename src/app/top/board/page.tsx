@@ -1,19 +1,20 @@
 "use client";
 
 import React, { useEffect, useState } from "react";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useRouter, useSearchParams, usePathname } from "next/navigation";
 import { onAuthStateChanged } from "firebase/auth";
 import { doc, getDoc, getDocs, collection, query, where, orderBy, onSnapshot, addDoc, updateDoc, serverTimestamp, deleteDoc, writeBatch } from "firebase/firestore";
 import { auth, db } from "@/lib/firebase";
 import * as LucideIcons from "lucide-react";
-import { Loader2, AlertTriangle, List, PlusCircle, Settings, Globe } from "lucide-react";
+import { Loader2, AlertTriangle, List, PlusCircle, Settings, Globe, FileStack } from "lucide-react";
 
-import { UserData, Announcement, Category, AppConfig, AlertState, COLOR_MAPPINGS, Attachment } from "./types";
+import { UserData, Announcement, Category, AppConfig, AlertState, COLOR_MAPPINGS, Attachment, Position, TargetType, ExtTargetType, ActionType } from "./types";
 import BoardForm from "./components/BoardForm";
 import BoardList from "./components/BoardList";
+import BoardManagement from "./components/BoardManagement"; 
 import CategoryManager from "./components/CategoryManager"; 
 import { useDialog } from "@/components/DialogContext"; 
-import { ExternalUser } from "@/app/types/external"; // ★ ExternalUser型をインポート
+import { ExternalUser } from "@/app/types/external"; 
 
 const DynamicIcon = ({ name, className }: { name: string, className?: string }) => {
   const IconComponent = (LucideIcons as any)[name] || LucideIcons.Box;
@@ -23,6 +24,7 @@ const DynamicIcon = ({ name, className }: { name: string, className?: string }) 
 export default function BoardPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
+  const pathname = usePathname();
   const { showConfirm } = useDialog(); 
   
   const currentTab = searchParams.get("tab") || "list";
@@ -30,8 +32,8 @@ export default function BoardPage() {
 
   const [userData, setUserData] = useState<UserData | null>(null);
   const [tenantUsers, setTenantUsers] = useState<UserData[]>([]);
-  // ★ 外部ユーザーデータを保持するステート
   const [externalUsers, setExternalUsers] = useState<ExternalUser[]>([]);
+  const [positions, setPositions] = useState<Position[]>([]);
 
   const [appConfig, setAppConfig] = useState<AppConfig>({ name: "連絡事項", icon: "MessageSquareText", color: "indigo" });
   const [hasPermission, setHasPermission] = useState(true);
@@ -44,13 +46,14 @@ export default function BoardPage() {
   const [uiAlert, setUiAlert] = useState<AlertState>({ show: false, type: "success", message: "" });
 
   const editingAnnouncement = editId ? announcements.find(a => a.id === editId) || null : null;
-  const canManageSettings = userData?.role === "admin" || userData?.role === "system_admin" || userData?.isITManager;
+  const canManageSettings = Boolean(userData?.role === "admin" || userData?.role === "system_admin" || userData?.isITManager);
 
   useEffect(() => {
     let unsubAnnouncements: () => void;
     let unsubCategories: () => void;
     let unsubUsers: () => void;
-    let unsubExternalUsers: () => void; // ★ 追加
+    let unsubExternalUsers: () => void; 
+    let unsubPositions: () => void;
 
     const unsubscribeAuth = onAuthStateChanged(auth, async (user) => {
       if (user) {
@@ -101,19 +104,24 @@ export default function BoardPage() {
             setTenantUsers(fetchedUsers);
           });
 
-          // ★ 外部ユーザー（ゲスト）の情報を取得して監視
           const qExtUsers = query(collection(db, "external_users"), where("schoolId", "==", data.schoolId));
           unsubExternalUsers = onSnapshot(qExtUsers, (snapshot) => {
             const fetchedExtUsers: ExternalUser[] = [];
             snapshot.forEach(d => {
               const extData = { id: d.id, ...d.data() } as ExternalUser;
-              // Boardアプリが許可されていて、アカウントが有効なゲストのみを抽出
               const isExpired = extData.expiresAt && (new Date(extData.expiresAt as string).getTime() < Date.now());
               if (extData.status === "active" && !isExpired && extData.allowedModules?.includes("board")) {
                 fetchedExtUsers.push(extData);
               }
             });
             setExternalUsers(fetchedExtUsers);
+          });
+
+          const qPos = query(collection(db, "positions"), where("schoolId", "==", data.schoolId));
+          unsubPositions = onSnapshot(qPos, (snapshot) => {
+            const fetched: Position[] = [];
+            snapshot.forEach(d => fetched.push({ id: d.id, ...d.data() } as Position));
+            setPositions(fetched);
           });
 
           const qAnnouncements = query(collection(db, "announcements"), where("schoolId", "==", data.schoolId), orderBy("createdAt", "desc"));
@@ -135,7 +143,18 @@ export default function BoardPage() {
                 publishStartDate: docData.publishStartDate || null,
                 publishEndDate: docData.publishEndDate || null,
                 isExternal: docData.isExternal || false,
-                readByExternal: docData.readByExternal || [], // ★ 既読者リストを取得
+                isInternalAlso: docData.isInternalAlso !== false,
+                targetType: docData.targetType || "all",
+                targetPositionIds: docData.targetPositionIds || [],
+                targetUserIds: docData.targetUserIds || [],
+                extTargetType: docData.extTargetType || "all",
+                extTargetUserIds: docData.extTargetUserIds || [],
+                requireAction: docData.requireAction || false, 
+                actionType: docData.actionType || "all",       
+                readByExternal: docData.readByExternal || [], 
+                readByInternal: docData.readByInternal || [], 
+                actionByExternal: docData.actionByExternal || [], 
+                actionByInternal: docData.actionByInternal || [], 
               });
             });
             setAnnouncements(fetched);
@@ -158,7 +177,8 @@ export default function BoardPage() {
       if (unsubAnnouncements) unsubAnnouncements();
       if (unsubCategories) unsubCategories();
       if (unsubUsers) unsubUsers();
-      if (unsubExternalUsers) unsubExternalUsers(); // ★ クリーンアップ追加
+      if (unsubExternalUsers) unsubExternalUsers(); 
+      if (unsubPositions) unsubPositions();
     };
   }, [router]);
 
@@ -169,15 +189,22 @@ export default function BoardPage() {
     setTimeout(() => setUiAlert(prev => ({ ...prev, show: false })), 3000);
   };
 
-  const setTab = (tab: "list" | "ext-list" | "form" | "categories", id?: string) => {
-    if (id) {
-      router.push(`/top/board?tab=form&editId=${id}`);
-    } else {
-      router.push(`/top/board?tab=${tab}`);
-    }
+  const setTab = (tab: "list" | "ext-list" | "management" | "form" | "categories", editId?: string, viewId?: string) => {
+    const params = new URLSearchParams();
+    params.set("tab", tab);
+    if (editId) params.set("editId", editId);
+    if (viewId) params.set("id", viewId);
+    router.push(`${pathname}?${params.toString()}`);
   };
 
-  const handlePostSubmit = async (data: { title: string; content: string; categoryId: string; isUrgent: boolean; attachments: Attachment[]; publishStartDate: string; publishEndDate: string | null; isExternal: boolean; }) => {
+  const handlePostSubmit = async (data: { 
+    title: string; content: string; categoryId: string; isUrgent: boolean; 
+    attachments: Attachment[]; publishStartDate: string; publishEndDate: string | null; 
+    isExternal: boolean; isInternalAlso: boolean;
+    targetType: TargetType; targetPositionIds: string[]; targetUserIds: string[];
+    extTargetType: ExtTargetType; extTargetUserIds: string[];
+    requireAction: boolean; actionType: ActionType;
+  }) => {
     if (!userData) return;
     setIsSubmitting(true);
     try {
@@ -190,6 +217,14 @@ export default function BoardPage() {
         publishStartDate: data.publishStartDate,
         publishEndDate: data.publishEndDate,
         isExternal: data.isExternal,
+        isInternalAlso: data.isInternalAlso,
+        targetType: data.targetType,
+        targetPositionIds: data.targetPositionIds,
+        targetUserIds: data.targetUserIds,
+        extTargetType: data.extTargetType,
+        extTargetUserIds: data.extTargetUserIds,
+        requireAction: data.requireAction, 
+        actionType: data.actionType,       
       };
 
       if (editingAnnouncement) {
@@ -200,65 +235,100 @@ export default function BoardPage() {
         const batch = writeBatch(db);
         let batchCount = 0;
 
-        tenantUsers.forEach(user => {
-          if (batchCount >= 490) return;
-          const notifRef = doc(collection(db, "notifications"));
-          batch.set(notifRef, {
-            userId: user.id,
-            schoolId: userData.schoolId,
-            title: payload.isUrgent ? `【緊急・更新】${payload.title}` : `【更新】${payload.title}`,
-            body: `${userData.name}さんが連絡事項の内容を更新しました。`,
-            sourceApp: "board",
-            linkUrl: `/top/board?tab=list`, 
-            isRead: false,
-            isFlagged: false,
-            createdAt: publishDate 
-          });
-          batchCount++;
-        });
+        if (data.isInternalAlso !== false) {
+          tenantUsers.forEach(user => {
+            if (batchCount >= 490) return;
+            
+            let isTarget = false;
+            if (data.targetType === "all") isTarget = true;
+            else if (data.targetType === "individual") {
+              isTarget = data.targetUserIds.includes(user.id);
+            } else if (data.targetType === "position") {
+              const pIds = data.targetPositionIds;
+              if (pIds.includes("sys_admin") && (user.role === "admin" || user.role === "system_admin" || user.isITManager)) isTarget = true;
+              else if (pIds.includes("sys_student") && user.role === "student") isTarget = true;
+              else if (pIds.includes("sys_teacher") && user.role === "teacher") isTarget = true;
+              else if (user.positionIds?.some(pid => pIds.includes(pid))) isTarget = true;
+            }
 
-        if (batchCount > 0) {
-          await batch.commit();
+            if (!isTarget) return;
+
+            const notifRef = doc(collection(db, "notifications"));
+            batch.set(notifRef, {
+              userId: user.id,
+              schoolId: userData.schoolId,
+              title: payload.isUrgent ? `【緊急・更新】${payload.title}` : `【更新】${payload.title}`,
+              body: `${userData.name}さんが連絡事項の内容を更新しました。`,
+              sourceApp: "board",
+              linkUrl: `/top/board?tab=list&id=${editingAnnouncement.id}`, 
+              isRead: false,
+              isFlagged: false,
+              createdAt: publishDate 
+            });
+            batchCount++;
+          });
         }
+
+        if (batchCount > 0) await batch.commit();
+        setTab("management", undefined, editingAnnouncement.id);
+
       } else {
-        await addDoc(collection(db, "announcements"), {
+        const docRef = await addDoc(collection(db, "announcements"), {
           ...payload, 
           schoolId: userData.schoolId, 
           authorName: userData.name,
           authorId: userData.id, 
           authorPhotoURL: userData.photoURL || null, 
           createdAt: serverTimestamp(),
-          readByExternal: [], // ★ 初期化
+          readByExternal: [], 
+          readByInternal: [], 
+          actionByExternal: [], 
+          actionByInternal: [], 
         });
         showToast("success", "新しい連絡事項を配信しました。");
+        const newId = docRef.id;
 
         const publishDate = data.publishStartDate ? new Date(data.publishStartDate) : new Date();
         const batch = writeBatch(db);
         let batchCount = 0;
 
-        tenantUsers.forEach(user => {
-          if (batchCount >= 490) return; 
+        if (data.isInternalAlso !== false) {
+          tenantUsers.forEach(user => {
+            if (batchCount >= 490) return; 
 
-          const notifRef = doc(collection(db, "notifications"));
-          batch.set(notifRef, {
-            userId: user.id,
-            schoolId: userData.schoolId,
-            title: payload.isUrgent ? `【緊急】${payload.title}` : payload.title,
-            body: `${userData.name}さんが新しい連絡事項を配信しました。`,
-            sourceApp: "board",
-            linkUrl: `/top/board?tab=list`, 
-            isRead: false,
-            isFlagged: false,
-            createdAt: publishDate 
+            let isTarget = false;
+            if (data.targetType === "all") isTarget = true;
+            else if (data.targetType === "individual") {
+              isTarget = data.targetUserIds.includes(user.id);
+            } else if (data.targetType === "position") {
+              const pIds = data.targetPositionIds;
+              if (pIds.includes("sys_admin") && (user.role === "admin" || user.role === "system_admin" || user.isITManager)) isTarget = true;
+              else if (pIds.includes("sys_student") && user.role === "student") isTarget = true;
+              else if (pIds.includes("sys_teacher") && user.role === "teacher") isTarget = true;
+              else if (user.positionIds?.some(pid => pIds.includes(pid))) isTarget = true;
+            }
+
+            if (!isTarget) return;
+
+            const notifRef = doc(collection(db, "notifications"));
+            batch.set(notifRef, {
+              userId: user.id,
+              schoolId: userData.schoolId,
+              title: payload.isUrgent ? `【緊急】${payload.title}` : payload.title,
+              body: `${userData.name}さんが新しい連絡事項を配信しました。`,
+              sourceApp: "board",
+              linkUrl: `/top/board?tab=list&id=${newId}`, 
+              isRead: false,
+              isFlagged: false,
+              createdAt: publishDate 
+            });
+            batchCount++;
           });
-          batchCount++;
-        });
-
-        if (batchCount > 0) {
-          await batch.commit();
         }
+
+        if (batchCount > 0) await batch.commit();
+        setTab("management", undefined, newId); 
       }
-      setTab(data.isExternal ? "ext-list" : "list");
     } catch (error) { 
       showToast("error", "保存に失敗しました。"); 
     } finally { 
@@ -270,7 +340,7 @@ export default function BoardPage() {
     try {
       await deleteDoc(doc(db, "announcements", id));
       showToast("success", "投稿を削除しました。");
-      if (editingAnnouncement?.id === id) setTab("list");
+      if (editingAnnouncement?.id === id) setTab("management");
     } catch (error) {
       showToast("error", "削除に失敗しました。");
     }
@@ -338,72 +408,98 @@ export default function BoardPage() {
             </div>
           </div>
 
-          <div className="flex bg-gray-200/60 p-1 rounded-xl w-fit shadow-inner overflow-x-auto custom-scrollbar">
-            <button 
-              onClick={() => setTab("list")} 
-              className={`flex items-center whitespace-nowrap px-3 sm:px-4 py-1.5 sm:py-2 text-[11px] sm:text-xs font-bold rounded-lg transition-all ${currentTab === "list" && !editId ? "bg-white shadow-sm text-gray-900" : "text-gray-500 hover:text-gray-700"}`}
-            >
-              <List className="w-3.5 h-3.5 mr-1.5" /> 内部連絡一覧
-            </button>
-            <button 
-              onClick={() => setTab("ext-list")} 
-              className={`flex items-center whitespace-nowrap px-3 sm:px-4 py-1.5 sm:py-2 text-[11px] sm:text-xs font-bold rounded-lg transition-all ${currentTab === "ext-list" && !editId ? "bg-white shadow-sm text-blue-700" : "text-gray-500 hover:text-gray-700"}`}
-            >
-              <Globe className="w-3.5 h-3.5 mr-1.5 text-blue-500" /> 外部配信一覧
-            </button>
+          <div className="flex items-center shrink-0">
             <button 
               onClick={() => setTab("form")} 
-              className={`flex items-center whitespace-nowrap px-3 sm:px-4 py-1.5 sm:py-2 text-[11px] sm:text-xs font-bold rounded-lg transition-all ${currentTab === "form" ? "bg-white shadow-sm text-gray-900" : "text-gray-500 hover:text-gray-700"}`}
+              className={`px-4 py-2 sm:py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs sm:text-sm font-bold shadow-md transition-all flex items-center justify-center gap-2 hover:-translate-y-0.5 whitespace-nowrap`}
             >
-              <PlusCircle className="w-3.5 h-3.5 mr-1.5" /> {editId ? "連絡を編集" : "新しく配信"}
+              <PlusCircle className="w-3.5 h-3.5 sm:w-4 sm:h-4" /> 新しく配信
+            </button>
+          </div>
+        </div>
+
+        {/* タブメニュー（スマホで2カラムのグリッド化） */}
+        {currentTab !== "form" && (
+          <div className="grid grid-cols-2 md:flex bg-gray-200/60 p-1 rounded-xl w-full md:w-fit shadow-inner mb-3 sm:mb-4 shrink-0 gap-1">
+            <button 
+              onClick={() => setTab("list")} 
+              className={`flex items-center justify-center px-2 sm:px-4 py-2 text-[10px] sm:text-xs font-bold rounded-lg transition-all ${currentTab === "list" ? "bg-white shadow-sm text-gray-900" : "text-gray-500 hover:text-gray-700 hover:bg-gray-200/50"}`}
+            >
+              <List className="w-3.5 h-3.5 mr-1.5" /> <span className="truncate">あなたへの連絡</span>
+            </button>
+            {canManageSettings && (
+              <button 
+                onClick={() => setTab("ext-list")} 
+                className={`flex items-center justify-center px-2 sm:px-4 py-2 text-[10px] sm:text-xs font-bold rounded-lg transition-all ${currentTab === "ext-list" ? "bg-white shadow-sm text-blue-700" : "text-gray-500 hover:text-gray-700 hover:bg-gray-200/50"}`}
+              >
+                <Globe className="w-3.5 h-3.5 mr-1.5 text-blue-500" /> <span className="truncate">外部ユーザー配信</span>
+              </button>
+            )}
+            <button 
+              onClick={() => setTab("management")} 
+              className={`flex items-center justify-center px-2 sm:px-4 py-2 text-[10px] sm:text-xs font-bold rounded-lg transition-all ${currentTab === "management" ? "bg-white shadow-sm text-amber-600" : "text-gray-500 hover:text-gray-700 hover:bg-gray-200/50"}`}
+            >
+              <FileStack className="w-3.5 h-3.5 mr-1.5 text-amber-500" /> <span className="truncate">配信管理</span>
             </button>
             {canManageSettings && (
               <button 
                 onClick={() => setTab("categories")} 
-                className={`flex items-center whitespace-nowrap px-3 sm:px-4 py-1.5 sm:py-2 text-[11px] sm:text-xs font-bold rounded-lg transition-all ${currentTab === "categories" ? "bg-white shadow-sm text-gray-900" : "text-gray-500 hover:text-gray-700"}`}
+                className={`flex items-center justify-center px-2 sm:px-4 py-2 text-[10px] sm:text-xs font-bold rounded-lg transition-all ${currentTab === "categories" ? "bg-white shadow-sm text-gray-900" : "text-gray-500 hover:text-gray-700 hover:bg-gray-200/50"}`}
               >
-                <Settings className="w-3.5 h-3.5 mr-1.5" /> カテゴリ管理
+                <Settings className="w-3.5 h-3.5 mr-1.5" /> <span className="truncate">カテゴリ管理</span>
               </button>
             )}
           </div>
-        </div>
+        )}
 
         <div className="flex-1 flex flex-col min-h-0 relative bg-white rounded-2xl shadow-sm border border-gray-200 overflow-hidden">
+          
           {currentTab === "list" && !editId && (
             <BoardList 
-              announcements={announcements} 
+              announcements={announcements.filter(a => !a.isExternal || a.isInternalAlso !== false)} 
               categories={categories} 
               userData={userData}
               tenantUsers={tenantUsers} 
               appConfig={appConfig} 
-              onEdit={(a) => setTab("form", a.id)} 
-              onDelete={handleDelete}
               isExternalTab={false}
+              externalUsers={externalUsers}
             />
           )}
 
-          {currentTab === "ext-list" && !editId && (
+          {currentTab === "ext-list" && !editId && canManageSettings && (
             <BoardList 
               announcements={announcements.filter(a => a.isExternal)} 
               categories={categories} 
               userData={userData}
               tenantUsers={tenantUsers} 
               appConfig={appConfig} 
+              isExternalTab={true}
+              externalUsers={externalUsers}
+            />
+          )}
+
+          {currentTab === "management" && !editId && (
+            <BoardManagement 
+              announcements={announcements} 
+              categories={categories} 
+              userData={userData}
+              tenantUsers={tenantUsers} 
+              externalUsers={externalUsers}
+              appConfig={appConfig} 
               onEdit={(a) => setTab("form", a.id)} 
               onDelete={handleDelete}
-              isExternalTab={true}
-              // ★ 外部ユーザー（ゲスト）のリストを渡す
-              externalUsers={externalUsers}
+              canManageAll={canManageSettings}
             />
           )}
           
           {currentTab === "form" && (
-            <div className="flex-1 overflow-y-auto custom-scrollbar p-2 sm:p-4 pb-20">
+            <div className="flex-1 overflow-y-auto custom-scrollbar p-2 sm:p-4 pb-20 bg-gray-50/50">
               <div className="max-w-4xl w-full mx-auto h-full">
                 <BoardForm 
                   appConfig={appConfig} categories={categories} editingAnnouncement={editingAnnouncement}
                   uiAlert={uiAlert} isSubmitting={isSubmitting} schoolId={userData?.schoolId || ""}
-                  onSubmit={handlePostSubmit} onCancelEdit={() => setTab("list")}
+                  tenantUsers={tenantUsers} externalUsers={externalUsers} positions={positions}
+                  onSubmit={handlePostSubmit} onCancelEdit={() => setTab("management")}
                 />
               </div>
             </div>

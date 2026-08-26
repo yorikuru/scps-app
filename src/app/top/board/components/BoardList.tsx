@@ -1,10 +1,14 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo } from "react";
+import { useRouter, useSearchParams, usePathname } from "next/navigation";
 import * as LucideIcons from "lucide-react";
-import { Search, Edit2, Trash2, AlertOctagon, AlertCircle, Paperclip, Download, FileIcon, MessageSquareText, Calendar, ArrowDownUp, Clock, ChevronLeft, Globe, Eye, Check, X } from "lucide-react";
+import { Search, AlertOctagon, Paperclip, Download, FileIcon, MessageSquareText, Calendar, ArrowDownUp, Clock, ChevronLeft, Globe, Check, Users, BookOpen, XCircle, CheckSquare, AlertCircle } from "lucide-react";
+import { doc, updateDoc } from "firebase/firestore";
+import { db } from "@/lib/firebase";
 import { Announcement, Category, UserData, AppConfig, COLOR_MAPPINGS } from "../types";
 import { ExternalUser } from "@/app/types/external";
+import CustomSelect from "@/components/CustomSelect"; // ★ CustomSelectをインポート
 
 const DynamicIcon = ({ name, className }: { name: string, className?: string }) => {
   const IconComponent = (LucideIcons as any)[name] || LucideIcons.Box;
@@ -27,47 +31,37 @@ type Props = {
   userData: UserData | null;
   tenantUsers: UserData[]; 
   appConfig: AppConfig;
-  onEdit: (announcement: Announcement) => void;
-  onDelete: (id: string) => Promise<void>;
   isExternalTab: boolean; 
-  // ★ 親から外部ユーザーデータ全体を受け取る（既読率計算・一覧表示のため）
   externalUsers?: ExternalUser[];
 };
 
-export default function BoardList({ announcements, categories, userData, tenantUsers, appConfig, onEdit, onDelete, isExternalTab, externalUsers = [] }: Props) {
+export default function BoardList({ announcements, categories, userData, tenantUsers, appConfig, isExternalTab, externalUsers = [] }: Props) {
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  const pathname = usePathname();
+  const urlId = searchParams.get("id");
+
   const [searchQuery, setSearchQuery] = useState("");
   const [filterCategory, setFilterCategory] = useState<string>("all");
   const [filterUrgent, setFilterUrgent] = useState(false);
+  const [filterRequireAction, setFilterRequireAction] = useState(false);
+  const [filterActionStatus, setFilterActionStatus] = useState<"all" | "completed" | "incomplete">("all");
+  const [filterReadStatus, setFilterReadStatus] = useState<"all" | "read" | "unread">("all");
+  
+  const [sortBy, setSortBy] = useState<"urgent_first" | "date">("urgent_first");
   const [sortOrder, setSortOrder] = useState<"desc" | "asc">("desc");
 
-  const [selectedId, setSelectedId] = useState<string | null>(null);
-  const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
-  
+  const [selectedId, setSelectedId] = useState<string | null>(urlId || null);
   const [showMobileDetail, setShowMobileDetail] = useState(false);
-  
-  // ★ 既読者・未読者一覧のポップアップ表示用ステート
-  const [showReadStatusModal, setShowReadStatusModal] = useState<string | null>(null);
 
   const c = COLOR_MAPPINGS[appConfig.color] || COLOR_MAPPINGS.default;
-
-  const canManage = (a: Announcement) => {
-    if (!userData) return false;
-    return a.authorId === userData.id || userData.role === "admin" || userData.role === "system_admin" || userData.isITManager;
-  };
-
-  const isAuthor = (a: Announcement) => {
-    if (!userData) return false;
-    return a.authorId === userData.id;
-  };
-
   const now = new Date().getTime();
-  
-  const shouldDisplay = (a: Announcement) => {
-    const start = a.publishStartDate ? new Date(a.publishStartDate).getTime() : new Date(a.createdAt).getTime();
-    if (start <= now) return true; 
-    if (isAuthor(a)) return true; 
-    return false; 
-  };
+
+  useEffect(() => {
+    if (urlId && urlId !== selectedId) {
+      setSelectedId(urlId);
+    }
+  }, [urlId]);
 
   const isActive = (a: Announcement) => {
     const start = a.publishStartDate ? new Date(a.publishStartDate).getTime() : new Date(a.createdAt).getTime();
@@ -75,80 +69,174 @@ export default function BoardList({ announcements, categories, userData, tenantU
     return start <= now && (!end || end >= now);
   };
 
-  const getStatusBadge = (a: Announcement) => {
-    const start = a.publishStartDate ? new Date(a.publishStartDate).getTime() : new Date(a.createdAt).getTime();
-    const end = a.publishEndDate ? new Date(a.publishEndDate).getTime() : null;
-    const badges = [];
+  const isTargetUser = (a: Announcement) => {
+    if (!userData) return false;
+    const isExtUser = "category" in userData;
+    
+    if (isExtUser) {
+      if (!a.isExternal) return false;
+      if (a.extTargetType === "individual") return a.extTargetUserIds?.includes(userData.id) || false;
+      return true;
+    } else {
+      if (a.isInternalAlso === false) return false;
+      if (a.targetType === "individual") return a.targetUserIds?.includes(userData.id) || false;
+      
+      if (a.targetType === "position") {
+        const u = userData as UserData;
+        const myU = tenantUsers.find(tu => tu.id === u.id); 
+        const pIds = a.targetPositionIds || [];
+        
+        if (pIds.includes("sys_admin") && (u.role === "admin" || u.role === "system_admin" || u.isITManager)) return true;
+        if (pIds.includes("sys_student") && u.role === "student") return true;
+        if (pIds.includes("sys_teacher") && u.role === "teacher") return true;
+        if (myU?.positionIds?.some(pid => pIds.includes(pid))) return true;
+        
+        return false;
+      }
+      return true; 
+    }
+  };
 
+  const isReadForMe = (a: Announcement | undefined) => {
+    if (!a || !userData) return false;
+    const isExtUser = "category" in userData;
+    const list = isExtUser ? a.readByExternal : a.readByInternal;
+    return list?.some((r: any) => (typeof r === 'string' ? r : r.userId) === userData.id) || false;
+  };
+
+  const isActionedForMe = (a: Announcement | undefined) => {
+    if (!a || !userData) return false;
+    if (!a.requireAction) return true;
+    const isExtUser = "category" in userData;
+    const list = isExtUser ? a.actionByExternal : a.actionByInternal;
+    const iActioned = list?.some((r: any) => (typeof r === 'string' ? r : r.userId) === userData.id) || false;
+    if (iActioned) return true;
+    
+    if (a.actionType === "single") {
+      const intActioned = (a.actionByInternal?.length || 0) > 0;
+      const extActioned = (a.actionByExternal?.length || 0) > 0;
+      if (intActioned || extActioned) return true;
+    }
+    return false;
+  };
+
+  const getStatusBadge = (a: Announcement) => {
+    const badges = [];
+    if (a.requireAction) {
+      if (isActionedForMe(a)) {
+        badges.push(<span key="action" className="px-1.5 py-0.5 rounded text-[8px] font-bold bg-indigo-100 text-indigo-700 flex items-center mr-1"><CheckSquare className="w-2.5 h-2.5 mr-0.5" />対応済</span>);
+      } else {
+        badges.push(<span key="action" className="px-1.5 py-0.5 rounded text-[8px] font-bold bg-rose-100 text-rose-700 flex items-center mr-1"><AlertCircle className="w-2.5 h-2.5 mr-0.5" />要対応</span>);
+      }
+    }
     if (!isExternalTab && a.isExternal) {
       badges.push(<span key="ext" className="px-1.5 py-0.5 rounded text-[8px] font-bold bg-blue-100 text-blue-700 flex items-center mr-1"><Globe className="w-2.5 h-2.5 mr-0.5" />外部公開</span>);
     }
-
-    if (start > now) badges.push(<span key="wait" className="px-1.5 py-0.5 rounded text-[8px] font-bold bg-amber-100 text-amber-700 flex items-center mr-1"><Clock className="w-2.5 h-2.5 mr-0.5" />予約中・待機中</span>);
-    else if (end && end < now) badges.push(<span key="end" className="px-1.5 py-0.5 rounded text-[8px] font-bold bg-gray-100 text-gray-500 mr-1">掲載終了</span>);
-    
+    if (isExternalTab && a.isInternalAlso !== false) {
+      badges.push(<span key="int" className="px-1.5 py-0.5 rounded text-[8px] font-bold bg-indigo-100 text-indigo-700 flex items-center mr-1"><Users className="w-2.5 h-2.5 mr-0.5" />メンバーにも公開</span>);
+    }
     return badges.length > 0 ? <div className="flex items-center">{badges}</div> : null;
   };
 
   const filteredAndSorted = announcements
-    .filter(a => shouldDisplay(a)) 
-    .filter(a => isActive(a) || canManage(a))
+    .filter(a => isActive(a)) 
+    .filter(a => isTargetUser(a)) 
     .filter(a => filterCategory === "all" || a.categoryId === filterCategory)
     .filter(a => !filterUrgent || a.isUrgent)
+    .filter(a => !filterRequireAction || a.requireAction)
+    .filter(a => {
+      if (filterActionStatus === "all") return true;
+      if (!a.requireAction) return false;
+      const completed = isActionedForMe(a);
+      if (filterActionStatus === "completed") return completed;
+      if (filterActionStatus === "incomplete") return !completed;
+      return true;
+    })
+    .filter(a => {
+      if (filterReadStatus === "all") return true;
+      const read = isReadForMe(a);
+      if (filterReadStatus === "read") return read;
+      if (filterReadStatus === "unread") return !read;
+      return true;
+    })
     .filter(a => a.title.toLowerCase().includes(searchQuery.toLowerCase()) || a.content.toLowerCase().includes(searchQuery.toLowerCase()) || a.authorName.toLowerCase().includes(searchQuery.toLowerCase()))
     .sort((a, b) => {
-      if (a.isUrgent && !b.isUrgent) return -1;
-      if (!a.isUrgent && b.isUrgent) return 1;
+      if (sortBy === "urgent_first") {
+        if (a.isUrgent && !b.isUrgent) return -1;
+        if (!a.isUrgent && b.isUrgent) return 1;
+      }
       const timeA = a.publishStartDate ? new Date(a.publishStartDate).getTime() : new Date(a.createdAt).getTime();
       const timeB = b.publishStartDate ? new Date(b.publishStartDate).getTime() : new Date(b.createdAt).getTime();
       return sortOrder === "desc" ? timeB - timeA : timeA - timeB;
     });
 
+  const handleSelectAnnouncement = (id: string) => {
+    setSelectedId(id);
+    const params = new URLSearchParams(searchParams.toString());
+    params.set("id", id);
+    router.replace(`${pathname}?${params.toString()}`, { scroll: false });
+    if (window.innerWidth < 1024) {
+      setShowMobileDetail(true);
+    }
+  };
+
   useEffect(() => {
     const isMobile = window.innerWidth < 1024;
-    if (!isMobile && !selectedId && filteredAndSorted.length > 0) {
-      setSelectedId(filteredAndSorted[0].id);
+    if (!isMobile && filteredAndSorted.length > 0) {
+      if (!selectedId || !filteredAndSorted.find(a => a.id === selectedId)) {
+         handleSelectAnnouncement(filteredAndSorted[0].id);
+      }
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [filteredAndSorted, selectedId]);
+
+  const selectedAnnouncement = filteredAndSorted.find(a => a.id === selectedId);
+
+  const toggleReadStatus = async (markAsRead: boolean) => {
+    if (!selectedAnnouncement || !userData) return;
+    const isExtUser = "category" in userData;
+    const field = isExtUser ? "readByExternal" : "readByInternal";
+    const currentList = selectedAnnouncement[field as keyof Announcement] as any[] || [];
+    
+    let newList;
+    if (markAsRead) {
+      const newRecord = { userId: userData.id, readAt: new Date().toISOString() };
+      newList = [...currentList.filter((r: any) => (typeof r === 'string' ? r : r.userId) !== userData.id), newRecord];
+    } else {
+      newList = currentList.filter((r: any) => (typeof r === 'string' ? r : r.userId) !== userData.id);
+    }
+    try { await updateDoc(doc(db, "announcements", selectedAnnouncement.id), { [field]: newList }); } 
+    catch (e) { console.error(e); }
+  };
+
+  const toggleActionStatus = async (markAsActioned: boolean) => {
+    if (!selectedAnnouncement || !userData) return;
+    const isExtUser = "category" in userData;
+    const field = isExtUser ? "actionByExternal" : "actionByInternal";
+    const currentList = selectedAnnouncement[field as keyof Announcement] as any[] || [];
+    
+    let newList;
+    if (markAsActioned) {
+      const newRecord = { userId: userData.id, actionAt: new Date().toISOString() };
+      newList = [...currentList.filter((r: any) => (typeof r === 'string' ? r : r.userId) !== userData.id), newRecord];
+    } else {
+      newList = currentList.filter((r: any) => (typeof r === 'string' ? r : r.userId) !== userData.id);
+    }
+    try { await updateDoc(doc(db, "announcements", selectedAnnouncement.id), { [field]: newList }); } 
+    catch (e) { console.error(e); }
+  };
+
+  const isRead = useMemo(() => isReadForMe(selectedAnnouncement), [selectedAnnouncement, userData]);
+  const isActioned = useMemo(() => isActionedForMe(selectedAnnouncement), [selectedAnnouncement, userData]);
+
+  const isTaskCompletedBySomeone = selectedAnnouncement?.actionType === "single" && 
+                                   (((selectedAnnouncement.actionByInternal?.length || 0) > 0) || ((selectedAnnouncement.actionByExternal?.length || 0) > 0));
 
   const formatTimeCompact = (dateStr: string) => {
     const d = new Date(dateStr);
     const today = new Date();
     if (d.toDateString() === today.toDateString()) return `${d.getHours()}:${String(d.getMinutes()).padStart(2, '0')}`;
     return `${d.getMonth()+1}/${d.getDate()}`;
-  };
-
-  const executeDelete = async () => {
-    if (deleteConfirmId) {
-      await onDelete(deleteConfirmId);
-      setDeleteConfirmId(null);
-      setShowMobileDetail(false);
-    }
-  };
-
-  const handleSelectAnnouncement = (id: string) => {
-    setSelectedId(id);
-    if (window.innerWidth < 1024) {
-      setShowMobileDetail(true);
-    }
-  };
-
-  const selectedAnnouncement = filteredAndSorted.find(a => a.id === selectedId);
-  const selectedCategory = categories.find(cat => cat.id === selectedAnnouncement?.categoryId);
-  const selectedAuthorUser = tenantUsers.find(u => u.id === selectedAnnouncement?.authorId);
-  const selectedAvatarUrl = selectedAuthorUser?.photoURL;
-
-  // ★ 既読者・未読者を判定する関数
-  const getReadStatusData = (a: Announcement) => {
-    const readIds = a.readByExternal || [];
-    const readUsers = externalUsers.filter(u => readIds.includes(u.id));
-    const unreadUsers = externalUsers.filter(u => !readIds.includes(u.id));
-    return {
-      readCount: readUsers.length,
-      totalCount: externalUsers.length,
-      readUsers,
-      unreadUsers
-    };
   };
 
   const renderDetailView = () => {
@@ -164,7 +252,9 @@ export default function BoardList({ announcements, categories, userData, tenantU
       );
     }
 
-    const { readCount, totalCount } = getReadStatusData(selectedAnnouncement);
+    const selectedCategory = categories.find(cat => cat.id === selectedAnnouncement?.categoryId);
+    const selectedAuthorUser = tenantUsers.find(u => u.id === selectedAnnouncement?.authorId);
+    const selectedAvatarUrl = selectedAuthorUser?.photoURL;
 
     return (
       <div className="flex-1 overflow-y-auto custom-scrollbar flex flex-col h-full bg-white relative">
@@ -184,12 +274,6 @@ export default function BoardList({ announcements, categories, userData, tenantU
               {getStatusBadge(selectedAnnouncement)}
               <span className="ml-1">{selectedAnnouncement.title}</span>
             </h2>
-            {canManage(selectedAnnouncement) && (
-              <div className="flex items-center gap-1.5 flex-shrink-0">
-                <button onClick={() => onEdit(selectedAnnouncement)} className="p-2 text-gray-400 hover:text-amber-700 hover:bg-amber-50 rounded-lg transition-colors border border-transparent hover:border-amber-200" title="編集"><Edit2 className="w-4 h-4" /></button>
-                <button onClick={() => setDeleteConfirmId(selectedAnnouncement.id)} className="p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors border border-transparent hover:border-red-200" title="削除"><Trash2 className="w-4 h-4" /></button>
-              </div>
-            )}
           </div>
 
           <div className="flex items-center justify-between flex-wrap gap-4">
@@ -202,27 +286,9 @@ export default function BoardList({ announcements, categories, userData, tenantU
                 </div>
                 <div className="flex items-center gap-1.5 text-[10px] font-bold text-gray-400 mt-0.5">
                   <Calendar className="w-3 h-3" /> 掲載: {new Date(selectedAnnouncement.publishStartDate || selectedAnnouncement.createdAt).toLocaleString('ja-JP')}
-                  {selectedAnnouncement.publishEndDate && ` 〜 ${new Date(selectedAnnouncement.publishEndDate).toLocaleString('ja-JP')}`}
                 </div>
               </div>
             </div>
-
-            {/* ★ 外部ユーザー（ゲスト）の既読状況をコンパクトに表示 */}
-            {selectedAnnouncement.isExternal && (
-              <button 
-                onClick={() => setShowReadStatusModal(selectedAnnouncement.id)}
-                className="flex items-center gap-2 bg-blue-50/50 hover:bg-blue-100 transition-colors border border-blue-100 rounded-xl px-3 py-1.5 group"
-                title="既読状況の詳細を見る"
-              >
-                <Eye className="w-4 h-4 text-blue-500 group-hover:text-blue-600" />
-                <div className="flex flex-col text-left">
-                  <span className="text-[9px] font-black text-blue-800 leading-tight">外部公開（ゲスト対象）</span>
-                  <span className="text-xs font-bold text-blue-600 font-mono leading-none mt-0.5">
-                    {readCount} <span className="text-[10px] text-gray-400">/ {totalCount > 0 ? totalCount : "全員"} 既読</span>
-                  </span>
-                </div>
-              </button>
-            )}
           </div>
         </div>
 
@@ -252,6 +318,61 @@ export default function BoardList({ announcements, categories, userData, tenantU
             </div>
           </div>
         )}
+
+        {/* 外部タブ（プレビュー用）の場合はアクションボタンを表示しない */}
+        {!isExternalTab && (
+          <div className="p-4 sm:p-6 border-t border-gray-100 bg-white mt-auto shrink-0">
+            <div className="flex flex-col sm:flex-row gap-4 items-stretch justify-center max-w-2xl mx-auto">
+              {/* 既読ブロック */}
+              <div className="flex-1 bg-gray-50 rounded-xl p-4 flex flex-col items-center justify-center border border-gray-200 shadow-sm">
+                <span className="text-[10px] font-black text-gray-500 mb-2.5 uppercase tracking-wider">確認状況</span>
+                {isRead ? (
+                  <div className="flex flex-col items-center gap-2">
+                    <span className="text-xs font-black text-emerald-600 flex items-center gap-1.5 bg-emerald-50 px-4 py-2 rounded-full border border-emerald-100">
+                      <Check className="w-4 h-4" /> 既読です（確認済み）
+                    </span>
+                    <button onClick={() => toggleReadStatus(false)} className="text-[10px] font-bold text-gray-400 hover:text-gray-600 flex items-center gap-1 transition-colors mt-1">
+                      <XCircle className="w-3 h-3" /> 未読に戻す
+                    </button>
+                  </div>
+                ) : (
+                  <button onClick={() => toggleReadStatus(true)} className={`w-full max-w-[200px] px-4 py-3 text-white rounded-xl text-sm font-black shadow-md transition-transform hover:-translate-y-0.5 flex items-center justify-center gap-2 ${c.bg} ${c.hover}`}>
+                    <BookOpen className="w-5 h-5" /> 内容を確認して既読にする
+                  </button>
+                )}
+              </div>
+
+              {/* 対応ブロック */}
+              {selectedAnnouncement.requireAction && (
+                <div className="flex-1 bg-indigo-50/50 rounded-xl p-4 flex flex-col items-center justify-center border border-indigo-100 shadow-sm relative overflow-hidden">
+                  {selectedAnnouncement.actionType === "single" && <div className="absolute top-0 right-0 bg-indigo-500 text-white text-[8px] font-black px-2 py-0.5 rounded-bl-lg">1人が対応すれば完了</div>}
+                  <span className="text-[10px] font-black text-indigo-400 mb-2.5 uppercase tracking-wider">タスク状況</span>
+                  
+                  {isActioned ? (
+                    <div className="flex flex-col items-center gap-2">
+                      <span className="text-xs font-black text-indigo-600 flex items-center gap-1.5 bg-indigo-100 px-4 py-2 rounded-full border border-indigo-200">
+                        <CheckSquare className="w-4 h-4"/> あなたが対応済みです
+                      </span>
+                      <button onClick={() => toggleActionStatus(false)} className="text-[10px] font-bold text-indigo-300 hover:text-indigo-500 flex items-center gap-1 transition-colors mt-1">
+                        <XCircle className="w-3 h-3"/> 未対応に戻す
+                      </button>
+                    </div>
+                  ) : (isTaskCompletedBySomeone ? (
+                    <div className="flex flex-col items-center gap-2">
+                      <span className="text-xs font-black text-gray-500 flex items-center gap-1.5 bg-gray-100 px-4 py-2 rounded-full border border-gray-200">
+                        <CheckSquare className="w-4 h-4"/> 他のメンバーが対応しました
+                      </span>
+                    </div>
+                  ) : (
+                    <button onClick={() => toggleActionStatus(true)} className="w-full max-w-[200px] px-4 py-3 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-sm font-black shadow-md transition-transform hover:-translate-y-0.5 flex items-center justify-center gap-2">
+                      <CheckSquare className="w-5 h-5" /> 対応済みにする
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        )}
       </div>
     );
   };
@@ -265,7 +386,7 @@ export default function BoardList({ announcements, categories, userData, tenantU
           <div className="bg-blue-50 p-3 border-b border-blue-100 shrink-0 flex items-center gap-2.5">
             <Globe className="w-5 h-5 text-blue-600 shrink-0" />
             <p className="text-[10px] font-bold text-blue-800 leading-relaxed">
-              ここは外部ユーザー（ゲスト）のダッシュボードに配信されている連絡事項の一覧です。
+              ここは外部ユーザー（ゲスト）のダッシュボードに配信されている連絡事項の一覧です。（プレビュー専用）
             </p>
           </div>
         )}
@@ -278,18 +399,59 @@ export default function BoardList({ announcements, categories, userData, tenantU
               className={`w-full pl-8 pr-2 py-1.5 bg-white border border-gray-200 rounded-lg text-xs font-bold focus:outline-none focus:ring-2 ${isExternalTab ? 'focus:ring-blue-500' : c.ring} shadow-2xs`}
             />
           </div>
-          <div className="flex items-center gap-1.5 text-[10px]">
-            <select 
-              value={filterCategory} onChange={e => setFilterCategory(e.target.value)}
-              className="flex-1 bg-white border border-gray-200 rounded-md px-2 py-1 text-gray-600 focus:outline-none font-bold"
-            >
-              <option value="all">全カテゴリ</option>
-              {categories.map(cat => <option key={cat.id} value={cat.id}>{cat.name}</option>)}
-            </select>
-            <button onClick={() => setFilterUrgent(!filterUrgent)} className={`p-1 border rounded-md transition-colors ${filterUrgent ? 'bg-red-50 border-red-200 text-red-600' : 'bg-white border-gray-200 text-gray-400 hover:bg-gray-50'}`} title="緊急のみ表示">
+          
+          {/* ★ CustomSelect を利用したフィルター群 */}
+          <div className="flex flex-wrap items-center gap-1.5 text-[10px]">
+            <div className="flex-1 min-w-[95px]">
+              <CustomSelect 
+                value={filterReadStatus} onChange={val => setFilterReadStatus(val as any)}
+                options={[
+                  { value: "all", label: "既読状況: 全て" },
+                  { value: "unread", label: "未読のみ" },
+                  { value: "read", label: "既読のみ" }
+                ]}
+                buttonClassName="w-full flex items-center justify-between bg-white border border-gray-200 rounded-lg px-2 py-1.5 text-gray-700 font-bold shadow-2xs focus:ring-2 focus:ring-indigo-500 text-[10px]"
+              />
+            </div>
+            <div className="flex-1 min-w-[95px]">
+              <CustomSelect 
+                value={filterActionStatus} onChange={val => setFilterActionStatus(val as any)}
+                options={[
+                  { value: "all", label: "対応状況: 全て" },
+                  { value: "incomplete", label: "未対応のみ" },
+                  { value: "completed", label: "対応済のみ" }
+                ]}
+                buttonClassName="w-full flex items-center justify-between bg-white border border-gray-200 rounded-lg px-2 py-1.5 text-gray-700 font-bold shadow-2xs focus:ring-2 focus:ring-indigo-500 text-[10px]"
+              />
+            </div>
+            <div className="flex-1 min-w-[95px]">
+              <CustomSelect 
+                value={filterCategory} onChange={setFilterCategory}
+                options={[
+                  { value: "all", label: "全カテゴリ" },
+                  ...categories.map(cat => ({ value: cat.id, label: cat.name }))
+                ]}
+                buttonClassName="w-full flex items-center justify-between bg-white border border-gray-200 rounded-lg px-2 py-1.5 text-gray-700 font-bold shadow-2xs focus:ring-2 focus:ring-indigo-500 text-[10px]"
+              />
+            </div>
+            <div className="flex-1 min-w-[95px]">
+              <CustomSelect 
+                value={sortBy} onChange={val => setSortBy(val as any)}
+                options={[
+                  { value: "urgent_first", label: "緊急を優先" },
+                  { value: "date", label: "掲載日時順" }
+                ]}
+                buttonClassName="w-full flex items-center justify-between bg-white border border-gray-200 rounded-lg px-2 py-1.5 text-gray-700 font-bold shadow-2xs focus:ring-2 focus:ring-indigo-500 text-[10px]"
+              />
+            </div>
+            
+            <button onClick={() => setFilterRequireAction(!filterRequireAction)} className={`p-1.5 border rounded-lg transition-colors flex items-center justify-center shadow-2xs ${filterRequireAction ? 'bg-indigo-50 border-indigo-200 text-indigo-600' : 'bg-white border-gray-200 text-gray-400 hover:bg-gray-50'}`} title="要対応のみ表示">
+              <CheckSquare className="w-3.5 h-3.5" />
+            </button>
+            <button onClick={() => setFilterUrgent(!filterUrgent)} className={`p-1.5 border rounded-lg transition-colors flex items-center justify-center shadow-2xs ${filterUrgent ? 'bg-red-50 border-red-200 text-red-600' : 'bg-white border-gray-200 text-gray-400 hover:bg-gray-50'}`} title="緊急のみ表示">
               <AlertOctagon className="w-3.5 h-3.5" />
             </button>
-            <button onClick={() => setSortOrder(sortOrder === "desc" ? "asc" : "desc")} className="p-1 bg-white border border-gray-200 text-gray-400 rounded-md hover:bg-gray-50 transition-colors" title="並び替え">
+            <button onClick={() => setSortOrder(sortOrder === "desc" ? "asc" : "desc")} className="p-1.5 bg-white border border-gray-200 text-gray-400 rounded-lg hover:bg-gray-50 transition-colors flex items-center justify-center shadow-2xs" title="並び替え">
               <ArrowDownUp className="w-3.5 h-3.5" />
             </button>
           </div>
@@ -310,19 +472,21 @@ export default function BoardList({ announcements, categories, userData, tenantU
               const avatarUrl = authorUser?.photoURL;
               const statusBadge = getStatusBadge(a);
 
+              const isReadMark = isReadForMe(a);
+
               return (
                 <div 
                   key={a.id} onClick={() => handleSelectAnnouncement(a.id)}
-                  className={`px-3 py-2 cursor-pointer flex items-center gap-2.5 min-w-0 transition-colors group ${isSelected && window.innerWidth >= 1024 ? (isUr ? 'bg-red-600 text-white' : (isExternalTab ? 'bg-blue-600 text-white shadow-inner' : `${c.bg} text-white shadow-inner`)) : (!isActive(a) ? 'bg-gray-50 opacity-70' : 'hover:bg-gray-50 text-gray-900')}`}
+                  className={`px-3 py-2 cursor-pointer flex items-center gap-2.5 min-w-0 transition-colors group ${isSelected && window.innerWidth >= 1024 ? (isUr ? 'bg-red-600 text-white' : (isExternalTab ? 'bg-blue-600 text-white shadow-inner' : `${c.bg} text-white shadow-inner`)) : 'hover:bg-gray-50 text-gray-900'}`}
                 >
                   <div className="relative flex-shrink-0">
-                    <UserAvatar name={a.authorName} url={avatarUrl} className={`w-7 h-7 text-[10px] ${!isActive(a) ? 'grayscale' : ''}`} />
+                    <UserAvatar name={a.authorName} url={avatarUrl} className={`w-7 h-7 text-[10px]`} />
                     {isUr && <div className={`absolute -top-1 -right-1 w-2.5 h-2.5 rounded-full border border-white ${isSelected && window.innerWidth >= 1024 ? 'bg-white' : 'bg-red-500'}`}></div>}
                   </div>
 
                   <div className="flex-1 min-w-0 flex flex-col justify-center">
                     <div className="flex items-center gap-1.5">
-                      <h4 className={`text-xs font-bold truncate flex-1 ${isSelected && window.innerWidth >= 1024 ? 'text-white' : (statusBadge ? 'text-gray-500' : 'text-gray-900')}`}>{a.title}</h4>
+                      <h4 className={`text-xs font-bold truncate flex-1 ${isSelected && window.innerWidth >= 1024 ? 'text-white' : (!isReadMark && !isExternalTab ? 'text-gray-900 font-black' : 'text-gray-600 font-medium')}`}>{a.title}</h4>
                       {statusBadge}
                       {a.attachments && a.attachments.length > 0 && <Paperclip className={`w-3 h-3 flex-shrink-0 ${isSelected && window.innerWidth >= 1024 ? 'text-white/70' : 'text-gray-400'}`} />}
                     </div>
@@ -332,8 +496,9 @@ export default function BoardList({ announcements, categories, userData, tenantU
                     </div>
                   </div>
 
-                  <div className={`w-12 text-right flex-shrink-0 text-[10px] font-medium ${isSelected && window.innerWidth >= 1024 ? 'text-white/90' : 'text-gray-400'}`}>
+                  <div className={`w-12 text-right flex-shrink-0 text-[10px] font-medium flex flex-col items-end gap-1 ${isSelected && window.innerWidth >= 1024 ? 'text-white/90' : 'text-gray-400'}`}>
                     {formatTimeCompact(a.publishStartDate || a.createdAt)}
+                    {!isReadMark && !isExternalTab && <span className="w-2 h-2 rounded-full bg-blue-500 shadow-sm animate-pulse"></span>}
                   </div>
                 </div>
               );
@@ -345,82 +510,6 @@ export default function BoardList({ announcements, categories, userData, tenantU
       <div className={`flex-1 w-full h-full min-w-0 bg-white ${showMobileDetail ? 'block absolute inset-0 z-20' : 'hidden lg:flex flex-col'}`}>
         {renderDetailView()}
       </div>
-
-      {/* 削除確認モーダル */}
-      {deleteConfirmId && (
-        <div className="absolute inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4 animate-fade-in">
-          <div className="bg-white border border-gray-200 rounded-2xl shadow-2xl w-full max-w-sm flex flex-col overflow-hidden">
-            <div className="p-5 flex items-start gap-3">
-              <div className="p-2 bg-red-100 text-red-600 rounded-full flex-shrink-0"><AlertCircle className="w-5 h-5" /></div>
-              <div>
-                <h3 className="text-sm font-black text-gray-900 mb-1">投稿を削除しますか？</h3>
-                <p className="text-xs font-medium text-gray-500 leading-relaxed">この操作は取り消せません。本当にこの連絡事項を削除してもよろしいですか？</p>
-              </div>
-            </div>
-            <div className="p-3 bg-gray-50 border-t border-gray-100 flex justify-end gap-2">
-              <button onClick={() => setDeleteConfirmId(null)} className="px-4 py-2 text-xs font-bold text-gray-600 bg-white border border-gray-200 hover:bg-gray-100 rounded-xl transition-colors shadow-2xs">キャンセル</button>
-              <button onClick={executeDelete} className="px-4 py-2 text-xs font-bold text-white bg-red-600 hover:bg-red-700 rounded-xl shadow-md transition-colors">削除する</button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* ★ 既読者・未読者一覧のポップアップモーダル */}
-      {showReadStatusModal && (
-        <div className="absolute inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4 animate-fade-in" onClick={() => setShowReadStatusModal(null)}>
-          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm flex flex-col overflow-hidden max-h-[80vh]" onClick={e => e.stopPropagation()}>
-            <div className="p-3 border-b border-gray-100 flex justify-between items-center bg-gray-50">
-              <h3 className="text-xs font-black text-gray-900 flex items-center gap-1.5"><Eye className="w-4 h-4 text-blue-500" /> 外部ユーザーの既読状況</h3>
-              <button onClick={() => setShowReadStatusModal(null)} className="p-1.5 hover:bg-gray-200 rounded-md text-gray-500"><X className="w-3.5 h-3.5"/></button>
-            </div>
-            <div className="p-4 overflow-y-auto space-y-5 custom-scrollbar bg-white">
-              {(() => {
-                const targetAnnounce = announcements.find(a => a.id === showReadStatusModal);
-                if (!targetAnnounce) return null;
-                const { readCount, totalCount, readUsers, unreadUsers } = getReadStatusData(targetAnnounce);
-
-                return (
-                  <>
-                    <div className="bg-blue-50 rounded-xl p-3 border border-blue-100 flex items-center justify-between">
-                      <span className="text-xs font-black text-blue-900">配信対象のゲスト総数</span>
-                      <span className="text-sm font-black text-blue-700">{totalCount} 名</span>
-                    </div>
-
-                    <div>
-                      <h4 className="text-[10px] font-black text-emerald-700 mb-2 border-b border-emerald-100 pb-1 flex items-center gap-1">
-                        <Check className="w-3.5 h-3.5" /> 既読 <span className="bg-emerald-100 text-emerald-800 px-1.5 py-0.5 rounded-full text-[8px]">{readCount}</span>
-                      </h4>
-                      <div className="flex flex-wrap gap-1.5">
-                        {readUsers.length > 0 ? readUsers.map(u => (
-                          <div key={u.id} className="flex items-center gap-1.5 bg-emerald-50/50 px-2.5 py-1.5 rounded-lg border border-emerald-100 shadow-sm">
-                            <span className="text-[10px] font-bold text-gray-800">{u.name}</span>
-                            <span className="text-[8px] text-gray-400 font-mono truncate max-w-[50px]">{u.affiliation}</span>
-                          </div>
-                        )) : <span className="text-[9px] text-gray-400">まだ既読にしたゲストはいません</span>}
-                      </div>
-                    </div>
-
-                    <div>
-                      <h4 className="text-[10px] font-black text-red-700 mb-2 border-b border-red-100 pb-1 flex items-center gap-1">
-                        <AlertCircle className="w-3.5 h-3.5" /> 未読 <span className="bg-red-100 text-red-800 px-1.5 py-0.5 rounded-full text-[8px]">{unreadUsers.length}</span>
-                      </h4>
-                      <div className="flex flex-wrap gap-1.5">
-                        {unreadUsers.length > 0 ? unreadUsers.map(u => (
-                          <div key={u.id} className="flex items-center gap-1.5 bg-gray-50 px-2.5 py-1.5 rounded-lg border border-gray-200 shadow-sm opacity-75">
-                            <span className="text-[10px] font-bold text-gray-600">{u.name}</span>
-                            <span className="text-[8px] text-gray-400 font-mono truncate max-w-[50px]">{u.affiliation}</span>
-                          </div>
-                        )) : <span className="text-[9px] text-gray-400">全員既読です</span>}
-                      </div>
-                    </div>
-                  </>
-                );
-              })()}
-            </div>
-          </div>
-        </div>
-      )}
-
     </div>
   );
 }

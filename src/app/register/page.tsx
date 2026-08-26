@@ -4,6 +4,9 @@ import React, { useState, useEffect } from "react";
 import { createUserWithEmailAndPassword, signOut } from "firebase/auth";
 import { collection, query, where, getDocs, doc, setDoc, serverTimestamp, orderBy } from "firebase/firestore";
 import { auth, db } from "@/lib/firebase";
+import CustomSelect from "@/components/CustomSelect";
+import { CheckCircle2, AlertTriangle, KeyRound, Building2, UserCog, BookOpen, MapPin } from "lucide-react";
+import Link from "next/link";
 
 type Position = {
   id: string;
@@ -19,7 +22,6 @@ type AlertState = {
 };
 
 export default function RegisterPage() {
-  // ▼変更：SCPS- を固定し、数字8桁だけをステートで管理する
   const [schoolCodeDigits, setSchoolCodeDigits] = useState("");
   
   const [allPositions, setAllPositions] = useState<Position[]>([]);
@@ -193,224 +195,231 @@ export default function RegisterPage() {
   };
 
   return (
-    <div className="min-h-screen bg-gray-50 flex flex-col justify-center py-12 px-4 sm:px-6 lg:px-8">
-      <div className="sm:mx-auto sm:w-full sm:max-w-2xl text-center mb-8">
-        <h2 className="text-3xl font-extrabold text-gray-900">SCPS アカウント登録</h2>
-        <p className="mt-2 text-sm text-gray-600">プロフィール情報を入力してアカウントの利用申請を行います。</p>
+    <div className="min-h-screen bg-gray-50 flex flex-col justify-center py-8 sm:py-12 px-4 sm:px-6 lg:px-8 font-sans">
+      <div className="max-w-3xl mx-auto w-full text-center mb-6 sm:mb-8">
+        <h2 className="text-2xl sm:text-3xl font-black text-gray-900 tracking-tight">アカウント利用申請</h2>
+        <p className="mt-2 text-[11px] sm:text-sm font-bold text-gray-500">プロフィール情報を入力して、システムの利用を申請します。</p>
       </div>
 
-      <div className="sm:mx-auto sm:w-full sm:max-w-3xl bg-white py-8 px-4 shadow sm:rounded-lg sm:px-10">
+      <div className="max-w-3xl mx-auto w-full bg-white p-4 sm:p-8 shadow-sm rounded-2xl sm:rounded-3xl border border-gray-100">
+        
         {alert.show && (
-          <div className={`mb-6 p-4 rounded-md text-sm font-medium ${alert.type === "success" ? "bg-green-50 text-green-800 border border-green-200" : "bg-red-50 text-red-800 border border-red-200"}`}>
+          <div className={`mb-5 p-3 rounded-xl text-xs sm:text-sm font-bold flex items-center shadow-sm animate-fade-in ${alert.type === "success" ? "bg-green-50 text-green-700 border border-green-200" : "bg-red-50 text-red-700 border border-red-200"}`}>
+            {alert.type === "success" ? <CheckCircle2 className="w-4 h-4 mr-2" /> : <AlertTriangle className="w-4 h-4 mr-2" />}
             {alert.message}
           </div>
         )}
 
         {isRegistered ? (
-          <div className="text-center py-8">
-            <div className="mx-auto flex items-center justify-center h-16 w-16 rounded-full bg-yellow-100 mb-6">
-              <svg className="h-8 w-8 text-yellow-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-              </svg>
+          <div className="text-center py-6 sm:py-8 animate-fade-in">
+            <div className="mx-auto flex items-center justify-center h-14 w-14 sm:h-16 sm:w-16 rounded-full bg-yellow-100 mb-5 sm:mb-6 shadow-sm border border-yellow-200">
+              <CheckCircle2 className="h-6 w-6 sm:h-8 sm:w-8 text-yellow-600" />
             </div>
-            <h3 className="text-2xl font-bold text-gray-900 mb-2">利用申請を受け付けました</h3>
-            <p className="text-gray-600 mb-6">現在、アカウント管理者の承認待ちです。<br />承認されるまでシステムにはログインできません。</p>
+            <h3 className="text-xl sm:text-2xl font-black text-gray-900 mb-2">利用申請を受け付けました</h3>
+            <p className="text-xs sm:text-sm font-bold text-gray-600 mb-6 leading-relaxed">
+              現在、アカウント管理者の承認待ちです。<br />承認されるまでシステムにはログインできません。
+            </p>
             
-            <div className="bg-blue-50 border border-blue-200 rounded-md p-6 mb-8 inline-block text-left w-full max-w-sm">
-              <p className="text-sm text-blue-800 font-bold mb-1">あなたのログインID</p>
-              <p className="text-xl font-mono text-blue-900 bg-white px-3 py-2 border border-blue-100 rounded">{generatedLoginId}</p>
-              <p className="text-xs text-blue-600 mt-2">※承認後、このIDとパスワードでログインしてください。</p>
+            <div className="bg-blue-50 border border-blue-200 rounded-xl p-4 sm:p-6 mb-8 inline-block text-left w-full max-w-sm shadow-sm">
+              <p className="text-[11px] sm:text-xs text-blue-800 font-bold mb-1 flex items-center gap-1.5"><KeyRound className="w-3.5 h-3.5" /> あなたのログインID</p>
+              <p className="text-lg sm:text-xl font-mono font-black text-blue-900 bg-white px-3 py-2 border border-blue-100 rounded-lg text-center tracking-wider">{generatedLoginId}</p>
+              <p className="text-[10px] text-blue-600 mt-2 font-bold text-center">※承認後、このIDとパスワードでログインしてください。</p>
             </div>
 
             <button
               onClick={() => window.location.href = '/login'}
-              className="w-full sm:w-auto flex justify-center py-3 px-8 border border-transparent rounded-md shadow-sm text-base font-medium text-white bg-blue-600 hover:bg-blue-700"
+              className="w-full sm:w-auto flex justify-center mx-auto py-3 px-8 rounded-xl shadow-md text-sm font-black text-white bg-indigo-600 hover:bg-indigo-700 transition-transform hover:-translate-y-0.5"
             >
               ログイン画面へ戻る
             </button>
           </div>
         ) : (
-          <form className="space-y-8" onSubmit={handleSubmit}>
+          <form className="space-y-6 sm:space-y-8" onSubmit={handleSubmit}>
             
             {/* 1. システム設定 */}
-            <div className="bg-gray-50 p-6 rounded-md border border-gray-200">
-              <h3 className="text-lg font-bold text-gray-900 border-b border-gray-300 pb-2 mb-4">1. システム設定（必須）</h3>
-              <div className="grid grid-cols-1 gap-y-6 gap-x-4 sm:grid-cols-2">
+            <div className="bg-indigo-50/50 p-4 sm:p-5 rounded-2xl border border-indigo-100">
+              <h3 className="text-xs sm:text-sm font-black text-indigo-900 border-b border-indigo-100 pb-2 mb-3 sm:mb-4 flex items-center gap-1.5">
+                <Building2 className="w-4 h-4 text-indigo-600" /> 1. システム設定（必須）
+              </h3>
+              <div className="grid grid-cols-1 gap-y-4 sm:gap-y-5 sm:grid-cols-2 sm:gap-x-4">
                 <div className="sm:col-span-2">
-                  <label className="block text-sm font-bold text-gray-700">学校コード <span className="text-red-500">*</span></label>
-                  {/* ▼変更：SCPS-を固定したUI */}
-                  <div className="mt-1 flex rounded-md shadow-sm">
-                    <span className="inline-flex items-center px-4 rounded-l-md border border-r-0 border-gray-300 bg-gray-100 text-gray-600 sm:text-sm font-mono font-bold">
+                  <label className="block text-[10px] sm:text-xs font-bold text-gray-700 mb-1">学校コード <span className="text-red-500">*</span></label>
+                  <div className="flex rounded-xl shadow-sm">
+                    <span className="inline-flex items-center px-3 sm:px-4 rounded-l-xl border border-r-0 border-gray-300 bg-gray-100 text-gray-600 text-[11px] sm:text-sm font-mono font-black">
                       SCPS -
                     </span>
                     <input 
-                      type="text" 
-                      required 
-                      maxLength={8}
-                      value={schoolCodeDigits} 
+                      type="text" required maxLength={8} value={schoolCodeDigits} 
                       onChange={(e) => {
-                        // 数字以外を除外
                         const val = e.target.value.replace(/[^0-9]/g, '');
                         setSchoolCodeDigits(val);
-                        if (val.length === 8) {
-                          fetchPositionsByCode(`SCPS-${val}`);
-                        } else {
-                          setAllPositions([]);
-                        }
+                        if (val.length === 8) fetchPositionsByCode(`SCPS-${val}`);
+                        else setAllPositions([]);
                       }} 
-                      className="flex-1 min-w-0 block w-full px-3 py-2 rounded-none rounded-r-md focus:ring-blue-500 focus:border-blue-500 sm:text-sm border-gray-300 font-mono tracking-widest text-lg" 
+                      className="flex-1 min-w-0 block w-full px-3 py-2 rounded-none rounded-r-xl border border-gray-300 focus:ring-2 focus:ring-indigo-500 outline-none font-mono font-bold tracking-widest text-sm sm:text-base bg-white" 
                       placeholder="12345678" 
                     />
                   </div>
-                  <p className="mt-1 text-xs text-gray-500">※管理者から共有された8桁の数字を入力してください。</p>
+                  <p className="mt-1 text-[9px] sm:text-[10px] text-gray-500 font-bold">※管理者から共有された8桁の数字を入力してください。</p>
                 </div>
                 
                 <div className="sm:col-span-2">
-                  <label className="block text-sm font-bold text-gray-700 mb-2">認証方法の選択 <span className="text-red-500">*</span></label>
-                  <div className="flex flex-col sm:flex-row space-y-2 sm:space-y-0 sm:space-x-6">
-                    <label className="flex items-center">
-                      <input type="radio" name="authMethod" checked={authMethod === "email"} onChange={() => setAuthMethod("email")} className="focus:ring-blue-500 h-4 w-4 text-blue-600 border-gray-300" />
-                      <span className="ml-2 text-sm text-gray-700">メールアドレスで登録</span>
+                  <label className="block text-[10px] sm:text-xs font-bold text-gray-700 mb-1.5">認証方法の選択 <span className="text-red-500">*</span></label>
+                  <div className="flex flex-col sm:flex-row gap-2.5">
+                    <label className="flex items-center bg-white border border-gray-200 px-3 py-2 rounded-xl cursor-pointer hover:bg-gray-50 transition-colors">
+                      <input type="radio" name="authMethod" checked={authMethod === "email"} onChange={() => setAuthMethod("email")} className="w-4 h-4 text-indigo-600 border-gray-300 focus:ring-indigo-500" />
+                      <span className="ml-2 text-[11px] sm:text-xs font-bold text-gray-700">メールアドレスで登録</span>
                     </label>
-                    <label className="flex items-center">
-                      <input type="radio" name="authMethod" checked={authMethod === "studentId"} onChange={() => setAuthMethod("studentId")} className="focus:ring-blue-500 h-4 w-4 text-blue-600 border-gray-300" />
-                      <span className="ml-2 text-sm text-gray-700">学籍番号で登録（メール不要）</span>
+                    <label className="flex items-center bg-white border border-gray-200 px-3 py-2 rounded-xl cursor-pointer hover:bg-gray-50 transition-colors">
+                      <input type="radio" name="authMethod" checked={authMethod === "studentId"} onChange={() => setAuthMethod("studentId")} className="w-4 h-4 text-indigo-600 border-gray-300 focus:ring-indigo-500" />
+                      <span className="ml-2 text-[11px] sm:text-xs font-bold text-gray-700">学籍番号で登録（メール不要）</span>
                     </label>
                   </div>
                 </div>
 
                 {authMethod === "email" ? (
                   <div className="sm:col-span-2">
-                    <label className="block text-sm font-bold text-gray-700">メールアドレス <span className="text-red-500">*</span></label>
-                    <input type="email" required={authMethod === "email"} value={email} onChange={(e) => setEmail(e.target.value)} className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:ring-blue-500 focus:border-blue-500 sm:text-sm text-gray-900" placeholder="例: user@example.com" />
+                    <label className="block text-[10px] sm:text-xs font-bold text-gray-700 mb-1">メールアドレス <span className="text-red-500">*</span></label>
+                    <input type="email" required={authMethod === "email"} value={email} onChange={(e) => setEmail(e.target.value)} className="block w-full border border-gray-300 rounded-xl py-2 px-3 text-[11px] sm:text-xs focus:ring-2 focus:ring-indigo-500 outline-none shadow-sm font-bold" placeholder="例: user@example.com" />
                   </div>
                 ) : (
                   <div className="sm:col-span-2">
-                    <p className="text-xs text-blue-600 bg-blue-50 p-2 rounded border border-blue-100">※学籍番号を選択した場合、後述の「学籍番号」欄がログインIDとして使用されます。</p>
+                    <p className="text-[10px] sm:text-xs text-indigo-700 bg-indigo-50/80 p-2.5 rounded-lg border border-indigo-200 font-bold">※学籍番号を選択した場合、後述の「学籍番号」欄に入力したものがログインIDとして使用されます。</p>
                   </div>
                 )}
 
                 <div className="sm:col-span-2">
-                  <label className="block text-sm font-bold text-gray-700">パスワード <span className="text-red-500">*</span></label>
-                  <input type="password" required minLength={6} value={password} onChange={(e) => setPassword(e.target.value)} className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:ring-blue-500 focus:border-blue-500 sm:text-sm text-gray-900" placeholder="6文字以上" />
+                  <label className="block text-[10px] sm:text-xs font-bold text-gray-700 mb-1">パスワード <span className="text-red-500">*</span></label>
+                  <input type="password" required minLength={6} value={password} onChange={(e) => setPassword(e.target.value)} className="block w-full border border-gray-300 rounded-xl py-2 px-3 text-[11px] sm:text-xs focus:ring-2 focus:ring-indigo-500 outline-none shadow-sm font-bold" placeholder="6文字以上" />
                 </div>
               </div>
             </div>
 
             {/* 2. 基本情報 */}
             <div>
-              <h3 className="text-lg font-bold text-gray-900 border-b border-gray-200 pb-2 mb-4">2. 基本情報</h3>
-              <div className="grid grid-cols-1 gap-y-6 gap-x-4 sm:grid-cols-2">
+              <h3 className="text-xs sm:text-sm font-black text-gray-900 border-b border-gray-200 pb-1.5 mb-3 flex items-center gap-1.5">
+                <UserCog className="w-4 h-4 text-gray-500" /> 2. 基本情報
+              </h3>
+              <div className="grid grid-cols-1 gap-y-4 gap-x-4 sm:grid-cols-2">
                 <div>
-                  <label className="block text-sm font-medium text-gray-700">氏名 <span className="text-red-500">*</span></label>
-                  <input type="text" required value={name} onChange={(e) => setName(e.target.value)} className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:ring-blue-500 focus:border-blue-500 sm:text-sm text-gray-900" placeholder="例: 熊本 太郎" />
+                  <label className="block text-[10px] sm:text-xs font-bold text-gray-700 mb-1">氏名 <span className="text-red-500">*</span></label>
+                  <input type="text" required value={name} onChange={(e) => setName(e.target.value)} className="block w-full border border-gray-300 rounded-xl py-2 px-3 text-[11px] sm:text-xs focus:ring-2 focus:ring-indigo-500 outline-none shadow-sm font-bold" placeholder="例: 熊本 太郎" />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700">ふりがな</label>
-                  <input type="text" value={nameKana} onChange={(e) => setNameKana(e.target.value)} className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:ring-blue-500 focus:border-blue-500 sm:text-sm text-gray-900" placeholder="例: くまもと たろう" />
+                  <label className="block text-[10px] sm:text-xs font-bold text-gray-700 mb-1">ふりがな</label>
+                  <input type="text" value={nameKana} onChange={(e) => setNameKana(e.target.value)} className="block w-full border border-gray-300 rounded-xl py-2 px-3 text-[11px] sm:text-xs focus:ring-2 focus:ring-indigo-500 outline-none shadow-sm font-bold" placeholder="例: くまもと たろう" />
                 </div>
                 
                 <div>
-                  <label className="block text-sm font-medium text-gray-700">区分 <span className="text-red-500">*</span></label>
-                  <select value={userType} onChange={(e) => setUserType(e.target.value)} className="mt-1 block w-full bg-white border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm text-gray-900">
-                    <option value="student">一般生徒 (外部委員会や部活)</option>
-                    <option value="officer">生徒会役員</option>
-                    <option value="teacher">教員</option>
-                    <option value="admin_staff">管理職員</option>
-                  </select>
+                  <label className="block text-[10px] sm:text-xs font-bold text-gray-700 mb-1">区分 <span className="text-red-500">*</span></label>
+                  <CustomSelect
+                    value={userType}
+                    onChange={setUserType}
+                    options={[
+                      { value: "student", label: "一般生徒 (外部委員会や部活)" },
+                      { value: "officer", label: "生徒会役員" },
+                      { value: "teacher", label: "教員" },
+                      { value: "admin_staff", label: "管理職員" },
+                    ]}
+                  />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700">システム利用番号（役員番号等）</label>
-                  <input type="text" value={systemId} onChange={(e) => setSystemId(e.target.value)} className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:ring-blue-500 focus:border-blue-500 sm:text-sm text-gray-900" placeholder="任意の管理番号" />
+                  <label className="block text-[10px] sm:text-xs font-bold text-gray-700 mb-1">システム利用番号（役員番号等）</label>
+                  <input type="text" value={systemId} onChange={(e) => setSystemId(e.target.value)} className="block w-full border border-gray-300 rounded-xl py-2 px-3 text-[11px] sm:text-xs focus:ring-2 focus:ring-indigo-500 outline-none shadow-sm font-bold font-mono" placeholder="任意の管理番号" />
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium text-gray-700">性別</label>
-                  <select value={gender} onChange={(e) => setGender(e.target.value)} className="mt-1 block w-full bg-white border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm text-gray-900">
-                    <option value="">選択しない</option>
-                    <option value="male">男性</option>
-                    <option value="female">女性</option>
-                    <option value="other">その他</option>
-                  </select>
+                  <label className="block text-[10px] sm:text-xs font-bold text-gray-700 mb-1">性別</label>
+                  <CustomSelect
+                    value={gender}
+                    onChange={setGender}
+                    options={[
+                      { value: "", label: "選択しない" },
+                      { value: "male", label: "男性" },
+                      { value: "female", label: "女性" },
+                      { value: "other", label: "その他" },
+                    ]}
+                  />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700">生年月日</label>
-                  <input type="date" value={birthDate} onChange={(e) => setBirthDate(e.target.value)} className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:ring-blue-500 focus:border-blue-500 sm:text-sm text-gray-900" />
+                  <label className="block text-[10px] sm:text-xs font-bold text-gray-700 mb-1">生年月日</label>
+                  <input type="date" value={birthDate} onChange={(e) => setBirthDate(e.target.value)} className="block w-full border border-gray-300 rounded-xl py-2 px-3 text-[11px] sm:text-xs focus:ring-2 focus:ring-indigo-500 outline-none shadow-sm font-bold" />
                 </div>
               </div>
             </div>
 
             {/* 3. 学校・所属情報 */}
             <div>
-              <h3 className="text-lg font-bold text-gray-900 border-b border-gray-200 pb-2 mb-4">3. 学校・所属情報</h3>
-              <div className="grid grid-cols-1 gap-y-6 gap-x-4 sm:grid-cols-6">
+              <h3 className="text-xs sm:text-sm font-black text-gray-900 border-b border-gray-200 pb-1.5 mb-3 flex items-center gap-1.5">
+                <BookOpen className="w-4 h-4 text-gray-500" /> 3. 学校・所属情報
+              </h3>
+              <div className="grid grid-cols-1 gap-y-4 gap-x-4 sm:grid-cols-6">
                 
                 <div className="sm:col-span-3">
-                  <label className="block text-sm font-medium text-gray-700">
+                  <label className="block text-[10px] sm:text-xs font-bold text-gray-700 mb-1">
                     学籍番号 {authMethod === "studentId" && <span className="text-red-500">*</span>}
                   </label>
-                  <input type="text" required={authMethod === "studentId"} value={studentId} onChange={(e) => setStudentId(e.target.value)} className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:ring-blue-500 focus:border-blue-500 sm:text-sm text-gray-900 font-mono" placeholder="例: 20261234" />
+                  <input type="text" required={authMethod === "studentId"} value={studentId} onChange={(e) => setStudentId(e.target.value)} className="block w-full border border-gray-300 rounded-xl py-2 px-3 text-[11px] sm:text-xs focus:ring-2 focus:ring-indigo-500 outline-none shadow-sm font-bold font-mono" placeholder="例: 20261234" />
                 </div>
                 <div className="sm:col-span-3">
-                  <label className="block text-sm font-medium text-gray-700">出身学校</label>
-                  <input type="text" value={previousSchool} onChange={(e) => setPreviousSchool(e.target.value)} className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:ring-blue-500 focus:border-blue-500 sm:text-sm text-gray-900" placeholder="例: ○○中学校" />
+                  <label className="block text-[10px] sm:text-xs font-bold text-gray-700 mb-1">出身学校</label>
+                  <input type="text" value={previousSchool} onChange={(e) => setPreviousSchool(e.target.value)} className="block w-full border border-gray-300 rounded-xl py-2 px-3 text-[11px] sm:text-xs focus:ring-2 focus:ring-indigo-500 outline-none shadow-sm font-bold" placeholder="例: ○○中学校" />
                 </div>
 
-                <div className="sm:col-span-2">
-                  <label className="block text-sm font-medium text-gray-700">学年</label>
-                  <input type="text" value={grade} onChange={(e) => setGrade(e.target.value)} className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:ring-blue-500 focus:border-blue-500 sm:text-sm text-gray-900" placeholder="例: 2" />
-                </div>
-                <div className="sm:col-span-2">
-                  <label className="block text-sm font-medium text-gray-700">組（クラス）</label>
-                  <input type="text" value={classNumber} onChange={(e) => setClassNumber(e.target.value)} className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:ring-blue-500 focus:border-blue-500 sm:text-sm text-gray-900" placeholder="例: A" />
-                </div>
-                <div className="sm:col-span-2">
-                  <label className="block text-sm font-medium text-gray-700">出席番号</label>
-                  <input type="text" value={attendanceNumber} onChange={(e) => setAttendanceNumber(e.target.value)} className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:ring-blue-500 focus:border-blue-500 sm:text-sm text-gray-900" placeholder="例: 15" />
+                <div className="sm:col-span-6 grid grid-cols-3 gap-2 sm:gap-4">
+                  <div>
+                    <label className="block text-[10px] sm:text-xs font-bold text-gray-700 mb-1">学年</label>
+                    <input type="text" value={grade} onChange={(e) => setGrade(e.target.value)} className="block w-full border border-gray-300 rounded-xl py-2 px-3 text-[11px] sm:text-xs focus:ring-2 focus:ring-indigo-500 outline-none shadow-sm font-bold" placeholder="例: 2" />
+                  </div>
+                  <div>
+                    <label className="block text-[10px] sm:text-xs font-bold text-gray-700 mb-1">組</label>
+                    <input type="text" value={classNumber} onChange={(e) => setClassNumber(e.target.value)} className="block w-full border border-gray-300 rounded-xl py-2 px-3 text-[11px] sm:text-xs focus:ring-2 focus:ring-indigo-500 outline-none shadow-sm font-bold" placeholder="例: A" />
+                  </div>
+                  <div>
+                    <label className="block text-[10px] sm:text-xs font-bold text-gray-700 mb-1">出席番号</label>
+                    <input type="text" value={attendanceNumber} onChange={(e) => setAttendanceNumber(e.target.value)} className="block w-full border border-gray-300 rounded-xl py-2 px-3 text-[11px] sm:text-xs focus:ring-2 focus:ring-indigo-500 outline-none shadow-sm font-bold" placeholder="例: 15" />
+                  </div>
                 </div>
 
                 <div className="sm:col-span-3">
-                  <label className="block text-sm font-medium text-gray-700">所属部署・コース</label>
-                  <input type="text" value={department} onChange={(e) => setDepartment(e.target.value)} className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:ring-blue-500 focus:border-blue-500 sm:text-sm text-gray-900" placeholder="例: 普通科 理数コース" />
+                  <label className="block text-[10px] sm:text-xs font-bold text-gray-700 mb-1">所属部署・コース</label>
+                  <input type="text" value={department} onChange={(e) => setDepartment(e.target.value)} className="block w-full border border-gray-300 rounded-xl py-2 px-3 text-[11px] sm:text-xs focus:ring-2 focus:ring-indigo-500 outline-none shadow-sm font-bold" placeholder="例: 普通科" />
                 </div>
                 <div className="sm:col-span-3">
-                  <label className="block text-sm font-medium text-gray-700">部活・クラブ</label>
-                  <input type="text" value={club} onChange={(e) => setClub(e.target.value)} className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:ring-blue-500 focus:border-blue-500 sm:text-sm text-gray-900" placeholder="例: バスケットボール部" />
+                  <label className="block text-[10px] sm:text-xs font-bold text-gray-700 mb-1">部活・クラブ</label>
+                  <input type="text" value={club} onChange={(e) => setClub(e.target.value)} className="block w-full border border-gray-300 rounded-xl py-2 px-3 text-[11px] sm:text-xs focus:ring-2 focus:ring-indigo-500 outline-none shadow-sm font-bold" placeholder="例: 野球部" />
                 </div>
 
                 <div className="sm:col-span-4">
-                  <label className="block text-sm font-medium text-gray-700 mb-1">役職の選択 <span className="text-red-500">*</span></label>
+                  <label className="block text-[10px] sm:text-xs font-bold text-gray-700 mb-1">役職の選択 <span className="text-red-500">*</span></label>
                   {allPositions.length === 0 ? (
-                    <div className="text-sm text-gray-500 bg-gray-50 p-3 rounded border border-gray-200">
+                    <div className="text-[10px] sm:text-xs font-bold text-gray-500 bg-gray-50 p-2.5 rounded-lg border border-gray-200">
                       ※ 上部で正しい学校コードを入力すると、選択可能な役職が表示されます。
                     </div>
                   ) : (
-                    <select 
-                      value={selectedPosition} 
-                      onChange={(e) => setSelectedPosition(e.target.value)}
-                      required
-                      className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 bg-white focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm text-gray-900"
-                    >
-                      <option value="">-- 区分に合致する役職から選択してください --</option>
-                      {filteredPositions.map((pos) => (
-                        <option key={pos.id} value={pos.name}>{pos.name}</option>
-                      ))}
-                    </select>
+                    <CustomSelect
+                      value={selectedPosition}
+                      onChange={setSelectedPosition}
+                      options={[
+                        { value: "", label: "-- 区分に合致する役職から選択してください --" },
+                        ...filteredPositions.map(pos => ({ value: pos.name, label: pos.name }))
+                      ]}
+                    />
                   )}
                   {filteredPositions.length === 0 && allPositions.length > 0 && (
-                     <p className="text-xs text-red-500 mt-1">※現在の「区分」で選択できる役職がマスタに登録されていません。</p>
+                     <p className="text-[9px] sm:text-[10px] font-bold text-red-500 mt-1.5">※現在の「区分」で選択できる役職がマスタに登録されていません。</p>
                   )}
                 </div>
 
-                <div className="sm:col-span-2 flex items-end pb-2">
-                  <label className="flex items-center">
+                <div className="sm:col-span-2 flex items-center pt-2 sm:pt-6">
+                  <label className="flex items-center cursor-pointer bg-gray-50 border border-gray-200 px-3 py-1.5 rounded-lg hover:bg-gray-100 transition-colors">
                     <input 
                       type="checkbox" 
                       checked={isITManager} 
                       onChange={(e) => setIsITManager(e.target.checked)} 
-                      className="focus:ring-blue-500 h-5 w-5 text-blue-600 border-gray-300 rounded" 
+                      className="focus:ring-indigo-500 h-4 w-4 text-indigo-600 border-gray-300 rounded" 
                     />
-                    <span className="ml-2 text-sm font-bold text-gray-800">IT担当者</span>
+                    <span className="ml-2 text-[11px] sm:text-xs font-bold text-gray-800">IT担当者</span>
                   </label>
                 </div>
               </div>
@@ -418,31 +427,33 @@ export default function RegisterPage() {
 
             {/* 4. 連絡先・その他 */}
             <div>
-              <h3 className="text-lg font-bold text-gray-900 border-b border-gray-200 pb-2 mb-4">4. 連絡先・その他</h3>
-              <div className="grid grid-cols-1 gap-y-6 gap-x-4 sm:grid-cols-2">
+              <h3 className="text-xs sm:text-sm font-black text-gray-900 border-b border-gray-200 pb-1.5 mb-3 flex items-center gap-1.5">
+                <MapPin className="w-4 h-4 text-gray-500" /> 4. 連絡先・その他
+              </h3>
+              <div className="grid grid-cols-1 gap-y-4 gap-x-4 sm:grid-cols-2">
                 {authMethod === "studentId" && (
                   <div className="sm:col-span-2">
-                    <label className="block text-sm font-medium text-gray-700">個人のメールアドレス（任意）</label>
-                    <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:ring-blue-500 focus:border-blue-500 sm:text-sm text-gray-900" placeholder="連絡用アドレスがある場合" />
+                    <label className="block text-[10px] sm:text-xs font-bold text-gray-700 mb-1">個人のメールアドレス（任意）</label>
+                    <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} className="block w-full border border-gray-300 rounded-xl py-2 px-3 text-[11px] sm:text-xs focus:ring-2 focus:ring-indigo-500 outline-none shadow-sm font-bold" placeholder="連絡用アドレスがある場合" />
                   </div>
                 )}
                 <div className="sm:col-span-2">
-                  <label className="block text-sm font-medium text-gray-700">電話番号</label>
-                  <input type="tel" value={phoneNumber} onChange={(e) => setPhoneNumber(e.target.value)} className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:ring-blue-500 focus:border-blue-500 sm:text-sm text-gray-900" placeholder="例: 090-1234-5678" />
+                  <label className="block text-[10px] sm:text-xs font-bold text-gray-700 mb-1">電話番号</label>
+                  <input type="tel" value={phoneNumber} onChange={(e) => setPhoneNumber(e.target.value)} className="block w-full border border-gray-300 rounded-xl py-2 px-3 text-[11px] sm:text-xs focus:ring-2 focus:ring-indigo-500 outline-none shadow-sm font-bold" placeholder="例: 090-1234-5678" />
                 </div>
                 <div className="sm:col-span-2">
-                  <label className="block text-sm font-medium text-gray-700">所属組織の住所</label>
-                  <input type="text" value={organizationAddress} onChange={(e) => setOrganizationAddress(e.target.value)} className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:ring-blue-500 focus:border-blue-500 sm:text-sm text-gray-900" placeholder="キャンパスや分校が異なる場合に入力" />
+                  <label className="block text-[10px] sm:text-xs font-bold text-gray-700 mb-1">所属組織の住所</label>
+                  <input type="text" value={organizationAddress} onChange={(e) => setOrganizationAddress(e.target.value)} className="block w-full border border-gray-300 rounded-xl py-2 px-3 text-[11px] sm:text-xs focus:ring-2 focus:ring-indigo-500 outline-none shadow-sm font-bold" placeholder="キャンパスや分校が異なる場合に入力" />
                 </div>
               </div>
             </div>
 
-            <div className="pt-6">
+            <div className="pt-4 sm:pt-6">
               <button
                 type="submit"
                 disabled={isLoading || (filteredPositions.length > 0 && !selectedPosition)}
-                className={`w-full flex justify-center py-3 px-4 border border-transparent rounded-md shadow-sm text-base font-bold text-white ${
-                  isLoading || (filteredPositions.length > 0 && !selectedPosition) ? "bg-blue-400 cursor-not-allowed" : "bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+                className={`w-full flex justify-center py-3.5 px-4 border border-transparent rounded-xl shadow-md text-sm sm:text-base font-black text-white transition-transform ${
+                  isLoading || (filteredPositions.length > 0 && !selectedPosition) ? "bg-indigo-300 cursor-not-allowed" : "bg-indigo-600 hover:bg-indigo-700 hover:-translate-y-0.5"
                 }`}
               >
                 {isLoading ? "処理中..." : "この内容で申請する"}
@@ -450,6 +461,17 @@ export default function RegisterPage() {
             </div>
           </form>
         )}
+      </div>
+
+      <div className="flex flex-col gap-1.5 text-[10px] font-bold text-gray-400 text-center mt-8 pb-8">
+        <div className="flex flex-wrap items-center justify-center gap-x-3 gap-y-1.5">
+          <Link href="/legal/terms" className="hover:text-gray-600 transition-colors">利用規約</Link>
+          <Link href="/legal/privacy" className="hover:text-gray-600 transition-colors">プライバシー</Link>
+          <Link href="/legal/commercial" className="hover:text-gray-600 transition-colors">特定商取引法</Link>
+        </div>
+        <div className="text-[9px] text-gray-500 mt-1">
+          &copy; {new Date().getFullYear()} YORIKURU / 生徒会ポータルシステム
+        </div>
       </div>
     </div>
   );

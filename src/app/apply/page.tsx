@@ -5,7 +5,8 @@ import { collection, doc, setDoc, serverTimestamp } from "firebase/firestore";
 import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
 import { db, storage } from "@/lib/firebase";
 import Link from "next/link";
-import { Loader2, Search, MapPin, Camera, Building, Upload } from "lucide-react";
+import { Loader2, Search, MapPin, Camera, Building, Upload,AlertTriangle,Users } from "lucide-react";
+import CustomSelect from "@/components/CustomSelect";
 
 type AlertState = {
   show: boolean;
@@ -132,7 +133,7 @@ export default function ApplyPage() {
       const applicationRef = doc(collection(db, "tenant_applications"));
       const appId = applicationRef.id;
 
-      // 3. テナント写真のBlobが存在する場合は一時保存用にアップロード（または本登録時に渡すパス・URLとして処理）
+      // 3. テナント写真のBlobが存在する場合は一時保存用にアップロード
       let uploadedPhotoUrl = null;
       if (photoBlob) {
         const storagePath = `avatars/temp_${appId}/tenant_logo.jpg`;
@@ -141,7 +142,7 @@ export default function ApplyPage() {
         uploadedPhotoUrl = await getDownloadURL(storageRef);
       }
 
-      // 4. 申請データを一時保存（本登録画面で引き継ぐため）
+      // 4. 申請データを一時保存
       await setDoc(applicationRef, {
         schoolName: schoolName.trim(),
         schoolType: schoolType,
@@ -178,82 +179,91 @@ export default function ApplyPage() {
 
     } catch (error: any) {
       console.error("Apply error: ", error);
-      setAlert({ show: true, type: "error", message: "メールの送信に失敗しました。ターミナル（コンソール）のエラーを確認してください。" });
+      setAlert({ show: true, type: "error", message: "メールの送信に失敗しました。時間をおいて再度お試しください。" });
     } finally {
       setIsLoading(false);
     }
   };
 
   return (
-    <div className="min-h-screen bg-gray-50 flex flex-col justify-center py-12 px-4 sm:px-6 lg:px-8">
-      <div className="sm:mx-auto sm:w-full sm:max-w-2xl text-center mb-8">
-        <h2 className="text-3xl font-extrabold text-gray-900">生徒会ポータルシステム<br/>利用申請</h2>
-        <br/>
-        <p className="mt-2 text-sm text-gray-600">このページでは<br/>あなたの学校の専用ポータルサイトを新規作成します</p>
+    <div className="min-h-screen bg-gray-50 flex flex-col justify-center py-8 sm:py-12 px-4 sm:px-6 lg:px-8">
+      <div className="sm:mx-auto sm:w-full sm:max-w-2xl text-center mb-6 sm:mb-8">
+        <h2 className="text-2xl sm:text-3xl font-extrabold text-gray-900 tracking-tight">生徒会ポータルシステム<br className="hidden sm:block"/>利用申請</h2>
+        <p className="mt-2 text-xs sm:text-sm font-bold text-gray-500">あなたの学校の専用ポータルサイトを新規作成します</p>
       </div>
 
-      <div className="sm:mx-auto sm:w-full sm:max-w-xl bg-white py-8 px-4 shadow sm:rounded-lg sm:px-10">
+      <div className="sm:mx-auto sm:w-full sm:max-w-xl bg-white py-6 sm:py-8 px-4 sm:px-10 shadow-sm border border-gray-200 sm:rounded-2xl">
         {alert.show && (
-          <div className={`mb-6 p-4 rounded-md text-sm font-medium ${alert.type === "success" ? "bg-green-50 text-green-800 border border-green-200" : "bg-red-50 text-red-800 border border-red-200"}`}>
+          <div className={`mb-5 sm:mb-6 p-3 sm:p-4 rounded-xl text-xs sm:text-sm font-bold flex items-center shadow-sm animate-fade-in ${alert.type === "success" ? "bg-green-50 text-green-700 border border-green-200" : "bg-red-50 text-red-700 border border-red-200"}`}>
+            {alert.type === "error" && <AlertTriangle className="w-4 h-4 mr-2 flex-shrink-0" />}
             {alert.message}
           </div>
         )}
 
         {isSuccess ? (
-          <div className="text-center py-8">
-            <div className="mx-auto flex items-center justify-center h-16 w-16 rounded-full bg-green-100 mb-6">
-              <svg className="h-8 w-8 text-green-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+          <div className="text-center py-6 sm:py-8 animate-fade-in">
+            <div className="mx-auto flex items-center justify-center h-14 w-14 sm:h-16 sm:w-16 rounded-full bg-green-100 mb-5 sm:mb-6 shadow-sm border border-green-200">
+              <svg className="h-6 w-6 sm:h-8 sm:w-8 text-green-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" />
               </svg>
             </div>
-            <h3 className="text-2xl font-bold text-gray-900 mb-2">確認メールを送信しました</h3>
-            <p className="text-gray-600 mb-6">
-              ご入力いただいたメールアドレスに<br/>本登録用のリンクを送信しました<br/><br/>
-              メール内のリンクをクリックして<br/>初期セットアップを完了させてください
+            <h3 className="text-xl sm:text-2xl font-black text-gray-900 mb-2">確認メールを送信しました</h3>
+            <p className="text-xs sm:text-sm font-bold text-gray-600 mb-6 leading-relaxed">
+              ご入力いただいたメールアドレスに<br/>本登録用のリンクを送信しました。<br/><br/>
+              メール内のリンクをクリックして<br/>初期セットアップを完了させてください。
             </p>
-            <p className="text-xs text-gray-400">※メールが届かない場合は、迷惑メールフォルダもご確認ください。</p>
+            <p className="text-[10px] sm:text-xs font-bold text-gray-400 bg-gray-50 p-2 rounded-lg border border-gray-100">※メールが届かない場合は、迷惑メールフォルダもご確認ください。</p>
           </div>
         ) : (
-          <form className="space-y-6" onSubmit={handleSubmit}>
+          <form className="space-y-6 sm:space-y-8" onSubmit={handleSubmit}>
             
             {/* 学校情報 */}
             <div>
-              <h3 className="text-lg font-bold text-gray-900 border-b border-gray-200 pb-2 mb-4">学校情報</h3>
-              <div className="space-y-4">
+              <h3 className="text-sm sm:text-base font-black text-indigo-900 border-b-2 border-indigo-100 pb-2 mb-4 flex items-center gap-1.5">
+                <Building className="w-4 h-4 text-indigo-500" /> 学校情報
+              </h3>
+              <div className="space-y-4 sm:space-y-5">
                 <div>
-                  <label className="block text-sm font-bold text-gray-700">学校名 <span className="text-red-500">*</span></label>
-                  <input type="text" required value={schoolName} onChange={(e) => setSchoolName(e.target.value)} className="mt-1 block w-full border border-gray-300 rounded-md py-2 px-3 focus:ring-blue-500 focus:border-blue-500 sm:text-sm text-gray-900" placeholder="例: 〇〇県立〇〇高等学校" />
-                  <p className="mt-1 text-xs text-red-500 font-bold">※必ず学校の「正式名称」でご記入ください。略称は使用しないでください。</p>
+                  <label className="block text-xs font-bold text-gray-700 mb-1.5">学校名 <span className="text-red-500">*</span></label>
+                  <input type="text" required value={schoolName} onChange={(e) => setSchoolName(e.target.value)} className="w-full px-3 py-2 border border-gray-300 rounded-xl text-sm font-bold focus:ring-2 focus:ring-indigo-500 outline-none shadow-sm transition-shadow" placeholder="例: 〇〇県立〇〇高等学校" />
+                  <p className="mt-1.5 text-[10px] text-gray-500 font-bold">※必ず学校の「正式名称」でご記入ください。</p>
                 </div>
                 <div>
-                  <label className="block text-sm font-bold text-gray-700">学校区分 <span className="text-red-500">*</span></label>
-                  <select required value={schoolType} onChange={(e) => setSchoolType(e.target.value)} className="mt-1 block w-full border border-gray-300 rounded-md py-2 px-3 bg-white focus:ring-blue-500 focus:border-blue-500 sm:text-sm text-gray-900">
-                    <option value="elementary">小学校</option>
-                    <option value="junior_high">中学校</option>
-                    <option value="high_school">高等学校</option>
-                    <option value="combined">中高一貫校</option>
-                    <option value="university">大学・短大</option>
-                    <option value="other">その他</option>
-                  </select>
+                  <label className="block text-xs font-bold text-gray-700 mb-1.5">学校区分 <span className="text-red-500">*</span></label>
+                  {/* ★ CustomSelect を使用 */}
+                  <CustomSelect
+                    value={schoolType}
+                    onChange={setSchoolType}
+                    options={[
+                      { value: "elementary", label: "小学校" },
+                      { value: "junior_high", label: "中学校" },
+                      { value: "high_school", label: "高等学校" },
+                      { value: "combined", label: "中高一貫校" },
+                      { value: "university", label: "大学・短大" },
+                      { value: "other", label: "その他" },
+                    ]}
+                    buttonClassName="w-full flex items-center justify-between border border-gray-300 rounded-xl px-3 py-2 text-sm font-bold bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500 shadow-sm transition-shadow text-gray-900"
+                  />
                 </div>
 
-                {/* 住所・郵便番号（自動補完つき） */}
+                {/* 住所・郵便番号 */}
                 <div>
-                  <label className="block text-sm font-bold text-gray-700 mb-1">学校の所在地情報</label>
-                  <div className="flex flex-col sm:flex-row gap-2">
-                    <div className="flex w-full sm:w-44 gap-1">
+                  <label className="block text-xs font-bold text-gray-700 mb-1.5">学校の所在地情報</label>
+                  <div className="flex flex-col sm:flex-row gap-2.5 sm:gap-3">
+                    <div className="flex w-full sm:w-48 gap-1.5">
                       <input 
                         type="text" 
-                        placeholder="郵便番号 (例: 8620901)" 
+                        placeholder="郵便番号 (ハイフンなし可)" 
                         value={postalCode} 
                         onChange={e => setPostalCode(e.target.value)} 
-                        className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:ring-blue-500 focus:border-blue-500 outline-none" 
+                        className="w-full px-3 py-2 border border-gray-300 rounded-xl text-sm font-bold focus:ring-2 focus:ring-indigo-500 outline-none shadow-sm transition-shadow" 
                       />
                       <button 
                         type="button" 
                         onClick={handleZipcodeSearch}
                         disabled={isSearchingZip || !postalCode}
-                        className="px-3 bg-gray-100 border border-gray-300 rounded-md hover:bg-gray-200 transition-colors text-xs font-bold text-gray-600 flex items-center justify-center whitespace-nowrap disabled:opacity-50"
+                        className="px-3.5 bg-indigo-50 border border-indigo-200 rounded-xl hover:bg-indigo-100 transition-colors text-indigo-700 flex items-center justify-center disabled:opacity-50 shadow-sm"
+                        title="住所を検索"
                       >
                         {isSearchingZip ? <Loader2 className="w-4 h-4 animate-spin" /> : <Search className="w-4 h-4" />}
                       </button>
@@ -265,26 +275,26 @@ export default function ApplyPage() {
                         value={location} 
                         onChange={e => setLocation(e.target.value)} 
                         placeholder="例: 熊本県熊本市東区" 
-                        className="w-full pl-9 pr-3 py-2 border border-gray-300 rounded-md text-sm focus:ring-blue-500 focus:border-blue-500 outline-none" 
+                        className="w-full pl-9 pr-3 py-2 border border-gray-300 rounded-xl text-sm font-bold focus:ring-2 focus:ring-indigo-500 outline-none shadow-sm transition-shadow" 
                       />
                     </div>
                   </div>
-                  <p className="mt-1 text-xs text-gray-500">※郵便番号を入力して検索ボタンを押すと、自動で住所が補完されます。</p>
+                  <p className="mt-1.5 text-[10px] text-gray-500 font-bold">※郵便番号を入力して検索ボタンを押すと、自動で住所が補完されます。</p>
                 </div>
 
-                {/* テナント写真・シンボルマーク設定 */}
-                <div>
-                  <label className="block text-sm font-bold text-gray-700 mb-2">テナント写真・シンボルマーク</label>
+                {/* テナント写真 */}
+                <div className="bg-gray-50/50 p-3 sm:p-4 rounded-xl border border-gray-100">
+                  <label className="block text-xs font-bold text-gray-700 mb-2.5">テナント写真・シンボルマーク</label>
                   <div className="flex items-center gap-4">
-                    <div className="w-16 h-16 rounded-xl bg-gray-100 border-2 border-gray-200 flex items-center justify-center overflow-hidden flex-shrink-0 relative group shadow-sm">
+                    <div className="w-14 h-14 sm:w-16 sm:h-16 rounded-2xl bg-white border border-gray-200 flex items-center justify-center overflow-hidden flex-shrink-0 relative group shadow-sm">
                       {photoUrl ? (
                         <img src={photoUrl} alt="Tenant Logo" className="w-full h-full object-cover" />
                       ) : (
-                        <Building className="w-7 h-7 text-gray-300" />
+                        <Building className="w-6 h-6 sm:w-7 sm:h-7 text-gray-300" />
                       )}
                       <div 
                         onClick={() => fileInputRef.current?.click()} 
-                        className="absolute inset-0 bg-black/40 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer"
+                        className="absolute inset-0 bg-black/50 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer backdrop-blur-sm"
                       >
                         <Upload className="w-4 h-4 text-white" />
                       </div>
@@ -298,15 +308,15 @@ export default function ApplyPage() {
                       className="hidden" 
                     />
 
-                    <div>
+                    <div className="flex-1 min-w-0">
                       <button 
                         type="button" 
                         onClick={() => fileInputRef.current?.click()} 
-                        className="px-3 py-2 bg-white border border-gray-300 text-gray-700 text-xs font-bold rounded-lg hover:bg-gray-50 transition-colors flex items-center gap-1.5 shadow-2xs"
+                        className="px-3 sm:px-4 py-2 bg-white border border-gray-200 text-gray-700 text-xs font-bold rounded-xl hover:bg-gray-50 transition-colors flex items-center gap-1.5 shadow-sm"
                       >
-                        <Camera className="w-3.5 h-3.5 text-blue-600" /> 画像を選択
+                        <Camera className="w-4 h-4 text-indigo-600" /> 画像を選択
                       </button>
-                      <p className="text-[10px] text-gray-400 mt-1">※ヘッダーやシンボルマークとして使用されます（任意）。</p>
+                      <p className="text-[9px] sm:text-[10px] font-bold text-gray-400 mt-1.5 leading-tight">※ヘッダーやシンボルマークとして使用されます（任意）。</p>
                     </div>
                   </div>
                 </div>
@@ -316,52 +326,61 @@ export default function ApplyPage() {
 
             {/* 代表者情報 */}
             <div>
-              <h3 className="text-lg font-bold text-gray-900 border-b border-gray-200 pb-2 mb-4">代表者（テナント管理者）情報</h3>
-              <div className="space-y-4">
+              <h3 className="text-sm sm:text-base font-black text-indigo-900 border-b-2 border-indigo-100 pb-2 mb-4 flex items-center gap-1.5">
+                <Users className="w-4 h-4 text-indigo-500" /> 代表者（テナント管理者）情報
+              </h3>
+              <div className="space-y-4 sm:space-y-5">
                 <div>
-                  <label className="block text-sm font-bold text-gray-700">氏名 <span className="text-red-500">*</span></label>
-                  <input type="text" required value={repName} onChange={(e) => setRepName(e.target.value)} className="mt-1 block w-full border border-gray-300 rounded-md py-2 px-3 focus:ring-blue-500 focus:border-blue-500 sm:text-sm text-gray-900" placeholder="例: 山田 太郎" />
+                  <label className="block text-xs font-bold text-gray-700 mb-1.5">氏名 <span className="text-red-500">*</span></label>
+                  <input type="text" required value={repName} onChange={(e) => setRepName(e.target.value)} className="w-full px-3 py-2 border border-gray-300 rounded-xl text-sm font-bold focus:ring-2 focus:ring-indigo-500 outline-none shadow-sm transition-shadow" placeholder="例: 山田 太郎" />
                 </div>
                 <div>
-                  <label className="block text-sm font-bold text-gray-700">代表者の区分 <span className="text-red-500">*</span></label>
-                  <select required value={repRole} onChange={(e) => setRepRole(e.target.value)} className="mt-1 block w-full border border-gray-300 rounded-md py-2 px-3 bg-white focus:ring-blue-500 focus:border-blue-500 sm:text-sm text-gray-900">
-                    <option value="officer">生徒会役員</option>
-                    <option value="teacher">教員</option>
-                    <option value="admin_staff">管理職員</option>
-                    <option value="student">一般生徒</option>
-                  </select>
-                  {repRole === "student" && <p className="mt-1 text-xs text-red-500 font-bold">エラー：一般生徒はテナントを作成できません。</p>}
+                  <label className="block text-xs font-bold text-gray-700 mb-1.5">代表者の区分 <span className="text-red-500">*</span></label>
+                  {/* ★ CustomSelect を使用 */}
+                  <CustomSelect
+                    value={repRole}
+                    onChange={setRepRole}
+                    options={[
+                      { value: "officer", label: "生徒会役員" },
+                      { value: "teacher", label: "教員" },
+                      { value: "admin_staff", label: "管理職員" },
+                      { value: "student", label: "一般生徒" },
+                    ]}
+                    buttonClassName="w-full flex items-center justify-between border border-gray-300 rounded-xl px-3 py-2 text-sm font-bold bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500 shadow-sm transition-shadow text-gray-900"
+                  />
+                  {repRole === "student" && <p className="mt-1.5 text-[10px] text-red-500 font-bold bg-red-50 p-1.5 rounded-lg border border-red-100 inline-block">エラー：一般生徒はテナントを作成できません。</p>}
                 </div>
                 <div>
-                  <label className="block text-sm font-bold text-gray-700">メールアドレス <span className="text-red-500">*</span></label>
-                  <input type="email" required value={email} onChange={(e) => setEmail(e.target.value)} className="mt-1 block w-full border border-gray-300 rounded-md py-2 px-3 focus:ring-blue-500 focus:border-blue-500 sm:text-sm text-gray-900" placeholder="連絡がつく有効なアドレス" />
-                  <p className="mt-1 text-xs text-gray-500">※申請後、このアドレス宛に本登録用のリンクをお送りします。</p>
+                  <label className="block text-xs font-bold text-gray-700 mb-1.5">メールアドレス <span className="text-red-500">*</span></label>
+                  <input type="email" required value={email} onChange={(e) => setEmail(e.target.value)} className="w-full px-3 py-2 border border-gray-300 rounded-xl text-sm font-bold focus:ring-2 focus:ring-indigo-500 outline-none shadow-sm transition-shadow" placeholder="連絡がつく有効なアドレス" />
+                  <p className="mt-1.5 text-[10px] font-bold text-gray-500">※申請後、このアドレス宛に本登録用のリンクをお送りします。</p>
                 </div>
               </div>
             </div>
 
-            <div className="pt-4">
+            <div className="pt-2 sm:pt-4">
               <button
                 type="submit"
                 disabled={isLoading || repRole === "student"}
-                className={`w-full flex justify-center py-3 px-4 border border-transparent rounded-md shadow-sm text-base font-bold text-white ${
-                  isLoading || repRole === "student" ? "bg-blue-400 cursor-not-allowed" : "bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+                className={`w-full flex items-center justify-center py-3.5 px-4 border border-transparent rounded-xl shadow-md text-sm sm:text-base font-black text-white transition-transform ${
+                  isLoading || repRole === "student" ? "bg-indigo-300 cursor-not-allowed" : "bg-indigo-600 hover:bg-indigo-700 hover:-translate-y-0.5"
                 }`}
               >
-                {isLoading ? "送信中..." : "認証メールを送信する"}
+                {isLoading ? <><Loader2 className="w-5 h-5 animate-spin mr-2" /> 送信中...</> : "認証メールを送信する"}
               </button>
             </div>
           </form>
         )}
       </div>
       
-      <div className="flex flex-col gap-1.5 text-[9px] font-bold text-gray-500 text-center mt-6">
-        <div className="flex flex-wrap items-center justify-center gap-x-3 gap-y-1.5">
-          <Link href="/legal/terms" className="hover:text-gray-300 transition-colors">利用規約</Link>
-          <Link href="/legal/privacy" className="hover:text-gray-300 transition-colors">プライバシー</Link>
-          <Link href="/legal/commercial" className="hover:text-gray-300 transition-colors">特定商取引法</Link>
+      {/* フッターリンク群 */}
+      <div className="flex flex-col gap-2 mt-8">
+        <div className="flex flex-wrap items-center justify-center gap-x-4 gap-y-2 text-[10px] sm:text-xs font-bold text-gray-500">
+          <Link href="/legal/terms" className="hover:text-indigo-600 transition-colors">利用規約</Link>
+          <Link href="/legal/privacy" className="hover:text-indigo-600 transition-colors">プライバシーポリシー</Link>
+          <Link href="/legal/commercial" className="hover:text-indigo-600 transition-colors">特定商取引法に基づく表記</Link>
         </div>
-        <div className="text-[8px] text-gray-600 mt-0.5">
+        <div className="text-[9px] font-bold text-gray-400 text-center mt-1">
           &copy; {new Date().getFullYear()} YORIKURU / 生徒会ポータルシステム
         </div>
       </div>
