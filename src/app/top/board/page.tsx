@@ -378,11 +378,11 @@ export default function BoardPage() {
     );
   };
 
-  if (isLoading) return <div className="h-[100dvh] flex justify-center items-center bg-gray-50"><Loader2 className="w-8 h-8 animate-spin text-indigo-600" /></div>;
+  if (isLoading) return <div className="h-full flex justify-center items-center"><Loader2 className="w-8 h-8 animate-spin text-indigo-600" /></div>;
 
   if (!hasPermission) {
     return (
-      <div className="h-[100dvh] flex flex-col items-center justify-center text-gray-900 p-4 text-center bg-gray-50">
+      <div className="h-full flex flex-col items-center justify-center text-gray-900 p-4 text-center bg-gray-50">
         <AlertTriangle className="w-12 h-12 text-red-500 mb-4" />
         <h1 className="text-xl font-black mb-2">アクセス権限がありません</h1>
         <p className="text-xs font-bold text-gray-500 mb-6">このアプリは現在システムで停止されているか、あなたの役職では利用が許可されていません。</p>
@@ -394,8 +394,8 @@ export default function BoardPage() {
   }
 
   return (
-    // ★ h-[100dvh] overflow-hidden により画面全体を固定。スクロールは内部の flex-1 overflow-y-auto で行う。
-    <div className="h-[100dvh] w-full flex flex-col min-h-0 font-sans text-gray-900 bg-[#F9FAFB] relative overflow-hidden">
+    // ★ overscroll-none を追加し、h-full flex-1 に変更して画面全体のバウンス（プルリフレッシュ）を防止します
+    <div className="flex-1 h-full w-full flex flex-col min-h-0 font-sans text-gray-900 bg-[#F9FAFB] relative overflow-hidden overscroll-none">
       <main className="flex-1 w-full max-w-7xl mx-auto p-2 sm:p-4 lg:p-6 flex flex-col min-h-0">
         
         {/* ヘッダーエリア (固定) */}

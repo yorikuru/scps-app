@@ -302,8 +302,8 @@ export default function TaskDetailPage() {
   const hasReported = isAllRequirement && task.completedBy.includes(userData?.id || "");
 
   return (
-    // ★ h-[100dvh] overflow-hidden に固定。中のmainタグでスクロールさせる
-    <div className="h-[100dvh] w-full bg-[#F9FAFB] font-sans flex flex-col text-gray-900 overflow-hidden relative">
+    // ★ flex-1 h-full と overscroll-none を追加
+    <div className="flex-1 h-full w-full bg-[#F9FAFB] font-sans flex flex-col text-gray-900 overflow-hidden relative min-h-0 overscroll-none">
 
       {toast.show && (
         <div className="absolute top-4 right-4 z-[100] animate-fade-in w-fit max-w-sm">
@@ -528,7 +528,7 @@ export default function TaskDetailPage() {
                 <textarea rows={4} value={formDesc} onChange={e => setFormDesc(e.target.value)} placeholder="タスクの具体的な内容や備考を記入..." className="w-full bg-gray-50 border border-gray-200 rounded-lg sm:rounded-xl px-2.5 sm:px-3 py-2 sm:py-3 text-[11px] sm:text-xs font-medium text-gray-900 focus:bg-white outline-none focus:ring-2 focus:ring-indigo-500 resize-none custom-scrollbar shadow-2xs transition-colors" />
               </div>
 
-              <div className="pt-3 border-t border-gray-100 flex justify-end gap-2 sm:gap-3 pb-6 sm:pb-8">
+              <div className="pt-3 border-t border-gray-100 flex justify-end gap-2 sm:gap-3 pb-4 sm:pb-6">
                 <button type="button" onClick={() => { setIsEditing(false); setFormValues(task); }} className="w-full sm:w-auto px-4 sm:px-5 py-2 sm:py-2.5 text-[11px] sm:text-xs font-bold text-gray-600 bg-white border border-gray-200 hover:bg-gray-100 rounded-lg sm:rounded-xl transition-colors shadow-2xs">キャンセル</button>
                 <button type="submit" disabled={isSubmitting} className="w-full sm:w-auto justify-center px-5 sm:px-6 py-2 sm:py-2.5 disabled:opacity-50 text-white text-[11px] sm:text-xs font-bold rounded-lg sm:rounded-xl shadow-sm bg-amber-600 hover:bg-amber-700 transition-all hover:-translate-y-0.5 flex items-center">
                   {isSubmitting ? <Loader2 className="w-3.5 h-3.5 sm:w-4 sm:h-4 mr-1.5 animate-spin" /> : <CheckCircle2 className="w-3.5 h-3.5 sm:w-4 sm:h-4 mr-1.5" />} 保存して完了

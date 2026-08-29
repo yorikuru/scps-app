@@ -301,12 +301,12 @@ export default function ChatPage() {
   };
 
   if (isLoading || !userData) {
-    return <div className="h-[100dvh] flex justify-center items-center"><Loader2 className="w-8 h-8 animate-spin text-emerald-500" /></div>;
+    return <div className="h-full flex justify-center items-center"><Loader2 className="w-8 h-8 animate-spin text-emerald-500" /></div>;
   }
 
   if (!hasPermission) {
     return (
-      <div className="h-[100dvh] flex flex-col items-center justify-center bg-gray-50 text-gray-900 p-4 text-center font-sans">
+      <div className="h-full flex flex-col items-center justify-center bg-gray-50 text-gray-900 p-4 text-center font-sans">
         <Lock className="w-16 h-16 text-gray-300 mb-6" />
         <h1 className="text-xl font-black mb-2 tracking-tight">チャット機能は制限されています</h1>
         <p className="text-sm font-bold text-gray-500 max-w-md leading-relaxed">
@@ -319,8 +319,8 @@ export default function ChatPage() {
   const activeRoom = chatRooms.find(r => r.id === activeRoomId);
 
   return (
-    // ★ h-[100dvh] overflow-hidden を設定し、全体のスクロールを固定。内部の各ペインでスクロールさせる
-    <div className="h-[100dvh] w-full flex flex-col min-h-0 font-sans text-gray-900 bg-[#F9FAFB] relative overflow-hidden">
+    // ★ flex-1 h-full と overscroll-none を追加し、画面全体のバウンスやプルリフレッシュを防止します。
+    <div className="flex-1 h-full w-full flex flex-col min-h-0 font-sans text-gray-900 bg-[#F9FAFB] relative overflow-hidden overscroll-none">
       <main className="flex-1 w-full max-w-7xl mx-auto p-2 sm:p-4 lg:p-6 flex flex-col min-h-0">
         
         {/* ヘッダー部分は固定 */}
