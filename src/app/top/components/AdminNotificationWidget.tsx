@@ -31,7 +31,6 @@ export type ExtendedSystemMessage = Omit<SystemMessage, "targetType"> & {
   attachments?: { name: string; url: string; size?: number; type?: string }[];
 };
 
-// ★ 修正点：各独自アイコンコンポーネントが className を受け取れるように型定義を追加
 function InfoIcon({ className }: { className?: string }) { return <svg className={className || "w-2.5 h-2.5 sm:w-3 sm:h-3"} fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>; }
 function WrenchIcon({ className }: { className?: string }) { return <svg className={className || "w-2.5 h-2.5 sm:w-3 sm:h-3"} fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /></svg>; }
 function RefreshIcon({ className }: { className?: string }) { return <svg className={className || "w-2.5 h-2.5 sm:w-3 sm:h-3"} fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" /></svg>; }
@@ -199,7 +198,7 @@ export default function AdminNotificationWidget({ userData, messages, tenantUser
 
   return (
     <>
-      <div className="bg-white border border-gray-200 rounded-2xl shadow-2xs overflow-hidden flex flex-col min-w-0">
+      <div className="bg-white border border-gray-200 rounded-xl shadow-sm flex flex-col min-w-0">
         <div className="px-3.5 py-2.5 border-b border-gray-100 flex justify-between items-center bg-gray-50/50">
           <div className="flex items-center gap-1.5">
             <h2 className="text-xs sm:text-sm font-black text-gray-900 flex items-center gap-1.5">
@@ -215,7 +214,7 @@ export default function AdminNotificationWidget({ userData, messages, tenantUser
           )}
         </div>
 
-        <div className="divide-y divide-gray-50 max-h-[350px] overflow-y-auto custom-scrollbar">
+        <div className="divide-y divide-gray-50 max-h-[300px] overflow-y-auto custom-scrollbar">
           {visibleMessages.length === 0 ? (
             <p className="text-[10px] sm:text-xs text-gray-400 text-center py-5 font-bold">通知はありません</p>
           ) : (
@@ -227,18 +226,18 @@ export default function AdminNotificationWidget({ userData, messages, tenantUser
               const catInfo = CATEGORIES[msg.category || "info"] || CATEGORIES.info;
 
               return (
-                <div key={msg.id} onClick={() => setSelectedMessage(msg)} className="p-2 sm:p-2.5 hover:bg-blue-50/50 cursor-pointer transition-colors flex items-center justify-between group min-w-0">
+                <div key={msg.id} onClick={() => setSelectedMessage(msg)} className="p-1.5 sm:p-2 hover:bg-blue-50/50 cursor-pointer transition-colors flex items-center justify-between group min-w-0">
                   <div className="flex items-center gap-1.5 overflow-hidden mr-2 min-w-0 flex-1">
                     <span className={`px-1.5 py-0.5 rounded text-[7px] sm:text-[8px] font-bold border flex-shrink-0 flex items-center gap-0.5 ${catInfo.bgColor} ${catInfo.color}`}>
                       {catInfo.label}
                     </span>
                     
-                    {msg.isImportant && <span className="px-1 py-0.5 sm:px-1.5 rounded text-[7px] sm:text-[8px] font-bold bg-red-100 text-red-700 flex-shrink-0 flex items-center"><Pin className="w-2 h-2 mr-0.5" />緊急</span>}
-                    {msg.subBadge === "update1" && <span className="px-1 py-0.5 sm:px-1.5 rounded text-[7px] sm:text-[8px] font-bold bg-yellow-100 text-yellow-800 border border-yellow-200 flex-shrink-0">更新①</span>}
-                    {msg.subBadge === "update2" && <span className="px-1 py-0.5 sm:px-1.5 rounded text-[7px] sm:text-[8px] font-bold bg-orange-100 text-orange-800 border border-orange-200 flex-shrink-0">更新②</span>}
+                    {msg.isImportant && <span className="px-1 py-0.5 rounded text-[7px] sm:text-[8px] font-bold bg-red-100 text-red-700 shrink-0 flex items-center"><Pin className="w-2 h-2 mr-0.5" />緊急</span>}
+                    {msg.subBadge === "update1" && <span className="px-1 py-0.5 rounded text-[7px] sm:text-[8px] font-bold bg-yellow-100 text-yellow-800 border border-yellow-200 shrink-0">更新①</span>}
+                    {msg.subBadge === "update2" && <span className="px-1 py-0.5 rounded text-[7px] sm:text-[8px] font-bold bg-orange-100 text-orange-800 border border-orange-200 shrink-0">更新②</span>}
                     
                     {msg.attachments && msg.attachments.length > 0 && (
-                      <Paperclip className="w-3 h-3 text-gray-400 flex-shrink-0 hidden sm:block" />
+                      <Paperclip className="w-2.5 h-2.5 text-gray-400 flex-shrink-0 hidden sm:block" />
                     )}
                     
                     <p className="text-[10px] sm:text-[11px] font-bold text-gray-900 truncate group-hover:text-indigo-600 transition-colors ml-0.5 flex-1">{msg.title}</p>
@@ -247,13 +246,13 @@ export default function AdminNotificationWidget({ userData, messages, tenantUser
                   <div className="flex items-center gap-1.5 flex-shrink-0">
                     {msg.requireResponse && (
                       isCompleted ? (
-                        <span className="px-1 py-0.5 sm:px-1.5 rounded text-[7px] sm:text-[8px] font-black bg-blue-100 text-blue-800 border border-blue-200 shadow-sm flex items-center"><CheckSquare className="w-2 h-2 mr-0.5"/>完了</span>
+                        <span className="px-1.5 py-0.5 rounded text-[7px] sm:text-[8px] font-black bg-blue-100 text-blue-800 border border-blue-200 shadow-sm flex items-center"><CheckSquare className="w-2 h-2 mr-0.5"/>完了</span>
                       ) : (
-                        <span className="px-1 py-0.5 sm:px-1.5 rounded text-[7px] sm:text-[8px] font-bold bg-red-50 text-red-700 border border-red-100">未対応</span>
+                        <span className="px-1.5 py-0.5 rounded text-[7px] sm:text-[8px] font-bold bg-red-50 text-red-700 border border-red-100">未対応</span>
                       )
                     )}
                     <span className="text-[8px] sm:text-[9px] font-bold text-gray-400 ml-1">
-                      {msg.startAt ? msg.startAt.split("T")[0].replace(/-/g, '/') : new Date(msg.createdAt).toLocaleDateString('ja-JP', {month: 'numeric', day: 'numeric'})}
+                      {msg.startAt ? msg.startAt.split("T")[0].replace(/-/g, '/').slice(5) : new Date(msg.createdAt).toLocaleDateString('ja-JP', {month: 'numeric', day: 'numeric'})}
                     </span>
                   </div>
                 </div>
