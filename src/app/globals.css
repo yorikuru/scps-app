@@ -10,10 +10,12 @@
   --background-end-rgb: 255, 255, 255;
 }
 
-/* ★ 変更：position: fixed; を削除し、入力時のバグを防ぎつつスクロールロックを維持 */
 html, body {
   height: 100%;
   width: 100%;
+  /* ★ 追加: ブラウザ全体のスクロールと、iOS特有の「引っ張って更新(バウンス)」を完全禁止 */
+  overflow: hidden !important;
+  overscroll-behavior: none !important;
   -webkit-overflow-scrolling: touch;
 }
 

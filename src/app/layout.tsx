@@ -16,10 +16,10 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    // ★ overflow-hidden を削除し、自然な h-full にします
-    <html lang="ja" className="h-full">
-      <body className="h-full antialiased">
-        <div className="h-full w-full flex flex-col">
+    // ★ html と body に overflow-hidden と overscroll-none を強制適用し、ブラウザのバウンスを禁止
+    <html lang="ja" className="h-full overflow-hidden overscroll-none">
+      <body className="h-full overflow-hidden overscroll-none antialiased">
+        <div className="h-full w-full flex flex-col overflow-hidden">
           <DialogProvider>
             {children}
           </DialogProvider>
