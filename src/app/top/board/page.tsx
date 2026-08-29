@@ -394,7 +394,7 @@ export default function BoardPage() {
   }
 
   return (
-    // ★ h-[100dvh] に固定し、このコンポーネント全体が画面いっぱいに広がるように設定。
+    // ★ h-[100dvh] overflow-hidden により画面全体を固定。スクロールは内部の flex-1 overflow-y-auto で行う。
     <div className="h-[100dvh] w-full flex flex-col min-h-0 font-sans text-gray-900 bg-[#F9FAFB] relative overflow-hidden">
       <main className="flex-1 w-full max-w-7xl mx-auto p-2 sm:p-4 lg:p-6 flex flex-col min-h-0">
         

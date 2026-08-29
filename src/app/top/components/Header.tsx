@@ -170,7 +170,6 @@ export default function Header({
       else currentAppName = "テナント管理";
     }
     else if (currentAppId === "notice") currentAppName = "インボックス通知";
-    // ★ 追加：external-users への対応
     else if (currentAppId === "external-users") currentAppName = "外部連携ユーザー管理";
     else {
       const conf = getAppConfig(currentAppId);

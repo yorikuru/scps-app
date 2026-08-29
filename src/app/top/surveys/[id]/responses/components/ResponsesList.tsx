@@ -1,10 +1,10 @@
 "use client";
 
 import React, { useState, useMemo } from "react";
-import { MessageSquare, Clock, User, UserX, Trash2, Globe, Lock, Shield, Users, Download, ArrowLeft, ChevronLeft, ChevronRight, FileText, CheckCircle2, Paperclip, AlertCircle, ArrowUpDown, Mail } from "lucide-react";
+import { MessageSquare, Clock, User, UserX, Trash2, Download, ArrowLeft, ChevronLeft, ChevronRight, CheckCircle2, Paperclip, ArrowUpDown, Mail } from "lucide-react";
 import { Survey, Question } from "../../../types";
 import { ResponseData } from "../page";
-import CustomSelect from "@/components/CustomSelect"; // ★ CustomSelect をインポート
+import CustomSelect from "@/components/CustomSelect"; 
 
 type Props = {
   survey: Survey | null;
@@ -141,23 +141,23 @@ export default function ResponsesList({ survey, responses, onDeleteRequest }: Pr
     const scoreInfo = calculateScore(response);
 
     const renderAnswerValue = (q: Question, val: any) => {
-      if (val === undefined || val === null || val === "") return <p className="text-[11px] sm:text-xs font-bold text-gray-400 italic">未回答</p>;
+      if (val === undefined || val === null || val === "") return <p className="text-[10px] sm:text-[11px] font-bold text-gray-400 italic">未回答</p>;
 
       if (q.type === "file") {
-        if (!Array.isArray(val) || val.length === 0) return <p className="text-[11px] sm:text-xs font-bold text-gray-400 italic">ファイルなし</p>;
+        if (!Array.isArray(val) || val.length === 0) return <p className="text-[10px] sm:text-[11px] font-bold text-gray-400 italic">ファイルなし</p>;
         return (
           <div className="flex flex-col gap-1.5 sm:gap-2">
-            <button onClick={() => downloadAllFiles(val)} className="self-start text-[10px] sm:text-xs font-bold text-purple-600 bg-purple-50 border border-purple-200 px-2.5 sm:px-3 py-1 sm:py-1.5 rounded-lg flex items-center gap-1 hover:bg-purple-100 transition-colors shadow-2xs">
+            <button onClick={() => downloadAllFiles(val)} className="self-start text-[9px] sm:text-[10px] font-bold text-purple-600 bg-purple-50 border border-purple-200 px-2 sm:px-2.5 py-1 sm:py-1.5 rounded-md sm:rounded-lg flex items-center gap-1 hover:bg-purple-100 transition-colors shadow-2xs">
               <Download className="w-3 h-3 sm:w-3.5 sm:h-3.5"/> すべてダウンロード
             </button>
-            <div className="space-y-1.5 sm:space-y-2 mt-1 sm:mt-2">
+            <div className="space-y-1 sm:space-y-1.5 mt-1 sm:mt-1.5">
               {val.map((url: string, i: number) => (
-                <a key={i} href={url} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 sm:gap-3 p-2 sm:p-2.5 bg-gray-50 border border-gray-200 rounded-lg sm:rounded-xl hover:bg-gray-100 transition-colors group shadow-2xs">
-                  <div className="w-6 h-6 sm:w-8 sm:h-8 rounded-md sm:rounded-lg bg-blue-100 text-blue-600 flex items-center justify-center shrink-0">
-                    <Paperclip className="w-3 h-3 sm:w-4 sm:h-4"/>
+                <a key={i} href={url} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 sm:gap-2.5 p-1.5 sm:p-2 bg-gray-50 border border-gray-200 rounded-lg sm:rounded-xl hover:bg-gray-100 transition-colors group shadow-2xs">
+                  <div className="w-6 h-6 sm:w-7 sm:h-7 rounded-md sm:rounded-lg bg-blue-100 text-blue-600 flex items-center justify-center shrink-0">
+                    <Paperclip className="w-3 h-3 sm:w-3.5 sm:h-3.5"/>
                   </div>
-                  <span className="text-[11px] sm:text-xs font-bold text-gray-700 truncate flex-1 group-hover:text-blue-600 transition-colors">{extractFileName(url)}</span>
-                  <Download className="w-3 h-3 sm:w-4 sm:h-4 text-gray-400 shrink-0"/>
+                  <span className="text-[10px] sm:text-[11px] font-bold text-gray-700 truncate flex-1 group-hover:text-blue-600 transition-colors">{extractFileName(url)}</span>
+                  <Download className="w-3 h-3 sm:w-3.5 sm:h-3.5 text-gray-400 shrink-0"/>
                 </a>
               ))}
             </div>
@@ -167,11 +167,11 @@ export default function ResponsesList({ survey, responses, onDeleteRequest }: Pr
 
       if (q.type === "ranking") {
         const arr = Array.isArray(val) ? val : [];
-        if (arr.length === 0) return <p className="text-[11px] sm:text-xs font-bold text-gray-400 italic">未回答</p>;
+        if (arr.length === 0) return <p className="text-[10px] sm:text-[11px] font-bold text-gray-400 italic">未回答</p>;
         return (
           <div className="space-y-1 sm:space-y-1.5">
             {arr.map((item, i) => (
-              <div key={i} className="flex items-center gap-2 sm:gap-3 text-[11px] sm:text-xs font-bold text-gray-800 bg-gray-50 p-1.5 sm:p-2 rounded-lg border border-gray-100">
+              <div key={i} className="flex items-center gap-2 sm:gap-3 text-[10px] sm:text-[11px] font-bold text-gray-800 bg-gray-50 p-1.5 sm:p-2 rounded-lg border border-gray-100">
                 <span className="w-5 sm:w-6 text-center text-gray-400 font-black">{i+1}</span>
                 <span className="flex-1">{item}</span>
               </div>
@@ -181,10 +181,10 @@ export default function ResponsesList({ survey, responses, onDeleteRequest }: Pr
       }
 
       if (q.type === "grid_radio" || q.type === "grid_checkbox") {
-        if (typeof val !== "object" || Object.keys(val).length === 0) return <p className="text-[11px] sm:text-xs font-bold text-gray-400 italic">未回答</p>;
+        if (typeof val !== "object" || Object.keys(val).length === 0) return <p className="text-[10px] sm:text-[11px] font-bold text-gray-400 italic">未回答</p>;
         return (
           <div className="overflow-x-auto rounded-lg sm:rounded-xl border border-gray-200 custom-scrollbar">
-            <table className="w-full text-[10px] sm:text-[11px] text-left whitespace-nowrap">
+            <table className="w-full text-[9px] sm:text-[10px] text-left whitespace-nowrap">
               <thead className="bg-gray-50">
                 <tr><th className="p-1.5 sm:p-2.5 border-b border-gray-200"></th>{(q.gridCols||[]).map(c=><th key={c} className="p-1.5 sm:p-2.5 border-b border-gray-200 font-bold text-gray-600 text-center">{c}</th>)}</tr>
               </thead>
@@ -198,7 +198,7 @@ export default function ResponsesList({ survey, responses, onDeleteRequest }: Pr
                         const isChecked = q.type === "grid_radio" ? ans === c : (Array.isArray(ans) && ans.includes(c));
                         return (
                           <td key={c} className="p-1.5 sm:p-2.5 text-center">
-                            {isChecked ? <div className="w-3 h-3 sm:w-3.5 sm:h-3.5 mx-auto bg-purple-600 rounded-sm flex items-center justify-center"><CheckCircle2 className="w-2 h-2 sm:w-2.5 sm:h-2.5 text-white"/></div> : <span className="text-gray-200">-</span>}
+                            {isChecked ? <div className="w-2.5 h-2.5 sm:w-3 sm:h-3 mx-auto bg-purple-600 rounded-sm flex items-center justify-center"><CheckCircle2 className="w-2 h-2 sm:w-2.5 sm:h-2.5 text-white"/></div> : <span className="text-gray-200">-</span>}
                           </td>
                         )
                       })}
@@ -214,19 +214,20 @@ export default function ResponsesList({ survey, responses, onDeleteRequest }: Pr
       if (Array.isArray(val)) {
         return (
           <ul className="list-disc list-inside space-y-0.5 sm:space-y-1">
-            {val.map((item, i) => <li key={i} className="text-[11px] sm:text-xs font-medium text-gray-800">{item}</li>)}
+            {val.map((item, i) => <li key={i} className="text-[10px] sm:text-[11px] font-medium text-gray-800">{item}</li>)}
           </ul>
         );
       }
 
-      return <p className="text-[11px] sm:text-xs text-gray-800 whitespace-pre-wrap font-medium leading-relaxed">{String(val)}</p>;
+      return <p className="text-[10px] sm:text-[11px] text-gray-800 whitespace-pre-wrap font-medium leading-relaxed">{String(val)}</p>;
     };
 
     return (
-      <div className="animate-fade-in space-y-4 sm:space-y-6 max-w-4xl mx-auto w-full">
+      // ★ h-full flex flex-col min-h-0 を付与してスクロール可能に
+      <div className="animate-fade-in flex flex-col h-full min-h-0 space-y-3 sm:space-y-4 max-w-4xl mx-auto w-full">
         
-        <div className="bg-white rounded-lg sm:rounded-xl shadow-sm border border-gray-200 p-2.5 sm:p-4 flex flex-col sm:flex-row items-center justify-between gap-3 sm:gap-4 sticky top-[100px] sm:top-[120px] z-30">
-          <button onClick={() => setSelectedId(null)} className="flex items-center text-[11px] sm:text-xs font-bold text-gray-500 hover:text-gray-800 transition-colors w-full sm:w-auto justify-center sm:justify-start bg-gray-50 sm:bg-transparent py-1.5 sm:py-0 rounded-lg sm:rounded-none">
+        <div className="bg-white rounded-lg sm:rounded-xl shadow-sm border border-gray-200 p-2.5 sm:p-4 flex flex-col sm:flex-row items-center justify-between gap-3 sm:gap-4 shrink-0 z-30">
+          <button onClick={() => setSelectedId(null)} className="flex items-center text-[10px] sm:text-xs font-bold text-gray-500 hover:text-gray-800 transition-colors w-full sm:w-auto justify-center sm:justify-start bg-gray-50 sm:bg-transparent py-1.5 sm:py-0 rounded-lg sm:rounded-none">
             <ArrowLeft className="w-3.5 h-3.5 sm:w-4 sm:h-4 mr-1 sm:mr-1.5" /> 一覧に戻る
           </button>
 
@@ -252,94 +253,96 @@ export default function ResponsesList({ survey, responses, onDeleteRequest }: Pr
             </button>
           </div>
 
-          <button onClick={() => onDeleteRequest(response.id)} className="flex items-center justify-center w-full sm:w-auto text-[10px] sm:text-xs font-bold text-red-500 hover:text-red-700 transition-colors bg-red-50 sm:bg-transparent py-1.5 sm:py-0 rounded-lg sm:rounded-none">
+          <button onClick={() => onDeleteRequest(response.id)} className="flex items-center justify-center w-full sm:w-auto text-[10px] sm:text-[11px] font-bold text-red-500 hover:text-red-700 transition-colors bg-red-50 sm:bg-transparent py-1.5 sm:py-0 rounded-lg sm:rounded-none">
             <Trash2 className="w-3.5 h-3.5 sm:w-4 sm:h-4 mr-1 sm:mr-1.5" /> 削除
           </button>
         </div>
 
-        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4 sm:p-6 flex flex-col md:flex-row justify-between items-start md:items-center gap-4 sm:gap-6">
-          <div className="flex items-center gap-3 sm:gap-4 w-full md:w-auto">
-            <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-full bg-purple-100 text-purple-600 flex items-center justify-center shrink-0">
-              {response.respondentName === "匿名" || response.respondentName === "ゲスト" ? <UserX className="w-5 h-5 sm:w-6 sm:h-6" /> : <User className="w-5 h-5 sm:w-6 sm:h-6" />}
-            </div>
-            <div className="min-w-0">
-              <h2 className="text-base sm:text-lg font-black text-gray-900 truncate">{response.respondentName}</h2>
-              {response.email && <p className="text-[10px] sm:text-xs font-bold text-gray-500 mt-0.5 truncate"><Mail className="w-2.5 h-2.5 sm:w-3 sm:h-3 inline mr-1" />{response.email}</p>}
-            </div>
-          </div>
-          
-          <div className="flex gap-4 sm:gap-6 md:border-l md:border-gray-100 md:pl-6 w-full md:w-auto bg-gray-50 md:bg-transparent p-3 md:p-0 rounded-lg md:rounded-none">
-            <div>
-              <p className="text-[9px] sm:text-[10px] font-black text-gray-400 mb-0.5 sm:mb-1">回答日時</p>
-              <p className="text-[11px] sm:text-xs font-bold text-gray-800 flex items-center gap-1"><Clock className="w-3 h-3 sm:w-3.5 sm:h-3.5" />{formatDate(response.createdAt)}</p>
-            </div>
-            <div>
-              <p className="text-[9px] sm:text-[10px] font-black text-gray-400 mb-0.5 sm:mb-1">所要時間</p>
-              <p className="text-[11px] sm:text-xs font-bold text-gray-800">{formatTimeTaken(response.timeTaken)}</p>
-            </div>
-            {survey.settings.isQuiz && (
-              <div>
-                <p className="text-[9px] sm:text-[10px] font-black text-purple-400 mb-0.5 sm:mb-1">得点</p>
-                <p className="text-[11px] sm:text-xs font-black text-purple-700 flex items-center gap-1">
-                  {scoreInfo.score} <span className="text-[9px] sm:text-[10px] font-bold text-gray-400">/ {scoreInfo.maxScore}</span>
-                  {scoreInfo.pending > 0 && <span className="text-[8px] sm:text-[9px] text-amber-600 font-bold bg-amber-50 px-1 py-0.5 rounded border border-amber-200">手動採点あり</span>}
-                </p>
+        <div className="flex-1 overflow-y-auto custom-scrollbar space-y-3 sm:space-y-4 pb-20 sm:pb-6">
+          <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4 sm:p-6 flex flex-col md:flex-row justify-between items-start md:items-center gap-4 sm:gap-6">
+            <div className="flex items-center gap-3 sm:gap-4 w-full md:w-auto">
+              <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-full bg-purple-100 text-purple-600 flex items-center justify-center shrink-0">
+                {response.respondentName === "匿名" || response.respondentName === "ゲスト" ? <UserX className="w-5 h-5 sm:w-6 sm:h-6" /> : <User className="w-5 h-5 sm:w-6 sm:h-6" />}
               </div>
-            )}
-          </div>
-        </div>
-
-        <div className="space-y-4 sm:space-y-6">
-          {survey.questions.filter(q => q.type !== "section" && q.type !== "description").map((q, i) => {
-            const ans = response.rawAnswers?.[q.id];
+              <div className="min-w-0">
+                <h2 className="text-base sm:text-lg font-black text-gray-900 truncate">{response.respondentName}</h2>
+                {response.email && <p className="text-[10px] sm:text-xs font-bold text-gray-500 mt-0.5 truncate"><Mail className="w-2.5 h-2.5 sm:w-3 h-3 inline mr-1" />{response.email}</p>}
+              </div>
+            </div>
             
-            let isCorrect = false;
-            let qScore = 0;
-            const isAuto = isAutoGradable(q);
-            const mScore = response.manualScores?.[q.id];
-
-            if (survey.settings.isQuiz) {
-              if (isAuto) {
-                const corrects = q.correctAnswers || [];
-                if (q.type === "radio" || q.type === "select") isCorrect = corrects.length > 0 && corrects[0] === ans;
-                else if (q.type === "checkbox") {
-                  const ansArr = Array.isArray(ans) ? ans : [];
-                  if (q.quizScoringType === "partial_match") isCorrect = ansArr.some(c => corrects.includes(c));
-                  else isCorrect = corrects.length > 0 && corrects.length === ansArr.length && corrects.every(c => ansArr.includes(c));
-                }
-                else if (q.type === "text") {
-                  isCorrect = corrects.some(c => c.trim().toLowerCase() === String(ans || "").trim().toLowerCase());
-                }
-                if (isCorrect) qScore = q.points || 0;
-              } else if (mScore !== undefined) {
-                qScore = mScore;
-                isCorrect = mScore === (q.points || 0);
-              }
-            }
-
-            return (
-              <div key={q.id} className={`bg-white rounded-lg sm:rounded-xl shadow-sm border border-gray-200 p-4 sm:p-6 lg:p-8 relative overflow-hidden`}>
-                {survey.settings.isQuiz && (
-                  <div className={`absolute top-0 left-0 w-1 sm:w-1.5 h-full ${!isAuto && mScore === undefined ? 'bg-amber-400' : isCorrect ? 'bg-green-500' : 'bg-red-500'}`}></div>
-                )}
-                
-                <div className="flex flex-col sm:flex-row justify-between sm:items-start mb-3 sm:mb-4 pb-2.5 sm:pb-3 border-b border-gray-100 gap-2 sm:gap-4">
-                  <h3 className="text-[11px] sm:text-sm font-extrabold text-gray-900 leading-snug">
-                    {i + 1}. {q.title}
-                  </h3>
-                  {survey.settings.isQuiz && (
-                    <span className={`w-fit text-[9px] sm:text-[10px] font-black px-2 sm:px-2.5 py-0.5 sm:py-1 rounded flex-shrink-0 ${!isAuto && mScore === undefined ? 'text-amber-700 bg-amber-100' : isCorrect ? 'text-green-700 bg-green-100' : 'text-red-700 bg-red-100'}`}>
-                      {!isAuto && mScore === undefined ? `採点待ち (配点 ${q.points || 0})` : `${qScore} / ${q.points || 0} 点`}
-                    </span>
-                  )}
-                </div>
-                
-                <div className="pl-1 sm:pl-2">
-                  {renderAnswerValue(q, ans)}
-                </div>
+            <div className="flex gap-4 sm:gap-6 md:border-l md:border-gray-100 md:pl-6 w-full md:w-auto bg-gray-50 md:bg-transparent p-3 md:p-0 rounded-lg md:rounded-none">
+              <div>
+                <p className="text-[9px] sm:text-[10px] font-black text-gray-400 mb-0.5 sm:mb-1">回答日時</p>
+                <p className="text-[11px] sm:text-xs font-bold text-gray-800 flex items-center gap-1"><Clock className="w-3 h-3 sm:w-3.5 sm:h-3.5" />{formatDate(response.createdAt)}</p>
               </div>
-            )
-          })}
+              <div>
+                <p className="text-[9px] sm:text-[10px] font-black text-gray-400 mb-0.5 sm:mb-1">所要時間</p>
+                <p className="text-[11px] sm:text-xs font-bold text-gray-800">{formatTimeTaken(response.timeTaken)}</p>
+              </div>
+              {survey.settings.isQuiz && (
+                <div>
+                  <p className="text-[9px] sm:text-[10px] font-black text-purple-400 mb-0.5 sm:mb-1">得点</p>
+                  <p className="text-[11px] sm:text-xs font-black text-purple-700 flex items-center gap-1">
+                    {scoreInfo.score} <span className="text-[9px] sm:text-[10px] font-bold text-gray-400">/ {scoreInfo.maxScore}</span>
+                    {scoreInfo.pending > 0 && <span className="text-[8px] sm:text-[9px] text-amber-600 font-bold bg-amber-50 px-1 py-0.5 rounded border border-amber-200">手動採点あり</span>}
+                  </p>
+                </div>
+              )}
+            </div>
+          </div>
+
+          <div className="space-y-4 sm:space-y-6">
+            {survey.questions.filter(q => q.type !== "section" && q.type !== "description").map((q, i) => {
+              const ans = response.rawAnswers?.[q.id];
+              
+              let isCorrect = false;
+              let qScore = 0;
+              const isAuto = isAutoGradable(q);
+              const mScore = response.manualScores?.[q.id];
+
+              if (survey.settings.isQuiz) {
+                if (isAuto) {
+                  const corrects = q.correctAnswers || [];
+                  if (q.type === "radio" || q.type === "select") isCorrect = corrects.length > 0 && corrects[0] === ans;
+                  else if (q.type === "checkbox") {
+                    const ansArr = Array.isArray(ans) ? ans : [];
+                    if (q.quizScoringType === "partial_match") isCorrect = ansArr.some(c => corrects.includes(c));
+                    else isCorrect = corrects.length > 0 && corrects.length === ansArr.length && corrects.every(c => ansArr.includes(c));
+                  }
+                  else if (q.type === "text") {
+                    isCorrect = corrects.some(c => c.trim().toLowerCase() === String(ans || "").trim().toLowerCase());
+                  }
+                  if (isCorrect) qScore = q.points || 0;
+                } else if (mScore !== undefined) {
+                  qScore = mScore;
+                  isCorrect = mScore === (q.points || 0);
+                }
+              }
+
+              return (
+                <div key={q.id} className={`bg-white rounded-lg sm:rounded-xl shadow-sm border border-gray-200 p-4 sm:p-5 relative overflow-hidden`}>
+                  {survey.settings.isQuiz && (
+                    <div className={`absolute top-0 left-0 w-1 sm:w-1.5 h-full ${!isAuto && mScore === undefined ? 'bg-amber-400' : isCorrect ? 'bg-green-500' : 'bg-red-500'}`}></div>
+                  )}
+                  
+                  <div className="flex flex-col sm:flex-row justify-between sm:items-start mb-2.5 sm:mb-3 pb-2 sm:pb-2.5 border-b border-gray-100 gap-2 sm:gap-4">
+                    <h3 className="text-[11px] sm:text-sm font-extrabold text-gray-900 leading-snug">
+                      {i + 1}. {q.title}
+                    </h3>
+                    {survey.settings.isQuiz && (
+                      <span className={`w-fit text-[8px] sm:text-[9px] font-black px-1.5 sm:px-2 py-0.5 sm:py-1 rounded flex-shrink-0 ${!isAuto && mScore === undefined ? 'text-amber-700 bg-amber-100' : isCorrect ? 'text-green-700 bg-green-100' : 'text-red-700 bg-red-100'}`}>
+                        {!isAuto && mScore === undefined ? `採点待ち (配点 ${q.points || 0})` : `${qScore} / ${q.points || 0} 点`}
+                      </span>
+                    )}
+                  </div>
+                  
+                  <div className="pl-1 sm:pl-2">
+                    {renderAnswerValue(q, ans)}
+                  </div>
+                </div>
+              )
+            })}
+          </div>
         </div>
 
       </div>
@@ -360,32 +363,33 @@ export default function ResponsesList({ survey, responses, onDeleteRequest }: Pr
   };
 
   return (
-    <div className="animate-fade-in space-y-4 sm:space-y-6">
+    // ★ リスト全体もスクロール可能領域としてラップ
+    <div className="animate-fade-in flex flex-col h-full min-h-0 space-y-3 sm:space-y-4 w-full">
 
       {responses.length === 0 ? (
-        <div className="text-center py-12 sm:py-16 bg-white rounded-xl shadow-sm border border-gray-200">
+        <div className="text-center py-12 sm:py-16 bg-white rounded-xl shadow-sm border border-gray-200 shrink-0">
           <MessageSquare className="h-8 w-8 sm:h-10 sm:w-10 text-gray-300 mx-auto mb-2 sm:mb-3" />
-          <p className="text-[11px] sm:text-xs font-bold text-gray-500">回答はまだ届いていません。</p>
+          <p className="text-[10px] sm:text-[11px] font-bold text-gray-500">回答はまだ届いていません。</p>
         </div>
       ) : (
-        <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
-          <div className="overflow-x-auto custom-scrollbar">
-            <table className="w-full text-left whitespace-nowrap min-w-[500px]">
-              <thead className="bg-gray-50 border-b border-gray-200 text-[9px] sm:text-[10px] font-black text-gray-500 tracking-wider">
+        <div className="flex-1 bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden flex flex-col min-h-0">
+          <div className="flex-1 overflow-auto custom-scrollbar relative">
+            <table className="min-w-full text-left whitespace-nowrap">
+              <thead className="bg-gray-50 border-b border-gray-200 text-[9px] sm:text-[10px] font-black text-gray-500 tracking-wider sticky top-0 z-10 shadow-2xs">
                 <tr>
-                  <th className="p-2 sm:p-3 w-10 sm:w-12 text-center">No.</th>
-                  <th className="p-2 sm:p-3 cursor-pointer hover:bg-gray-100 transition-colors select-none group w-28 sm:w-36" onClick={() => requestSort("date")}>
+                  <th className="p-2 sm:p-3 w-10 sm:w-12 text-center bg-gray-50">No.</th>
+                  <th className="p-2 sm:p-3 cursor-pointer hover:bg-gray-100 transition-colors select-none group w-28 sm:w-36 bg-gray-50" onClick={() => requestSort("date")}>
                     <div className="flex items-center gap-1">回答日時 <ArrowUpDown className="w-2.5 h-2.5 text-gray-400 group-hover:text-gray-600"/></div>
                   </th>
-                  <th className="p-2 sm:p-3">回答者</th>
+                  <th className="p-2 sm:p-3 bg-gray-50">回答者</th>
                   {isQuiz && (
-                    <th className="p-2 sm:p-3 cursor-pointer hover:bg-purple-50 transition-colors select-none group w-20 sm:w-24" onClick={() => requestSort("score")}>
+                    <th className="p-2 sm:p-3 cursor-pointer hover:bg-purple-50 transition-colors select-none group w-20 sm:w-24 bg-gray-50" onClick={() => requestSort("score")}>
                       <div className="flex items-center gap-1 text-purple-600">得点 <ArrowUpDown className="w-2.5 h-2.5 text-purple-400 group-hover:text-purple-600"/></div>
                     </th>
                   )}
-                  <th className="p-2 sm:p-3 w-16 sm:w-20">所要時間</th>
-                  {hasFiles && <th className="p-2 sm:p-3 w-20 sm:w-24">添付ファイル</th>}
-                  <th className="p-2 sm:p-3 text-center w-20 sm:w-24">操作</th>
+                  <th className="p-2 sm:p-3 w-16 sm:w-20 bg-gray-50">所要時間</th>
+                  {hasFiles && <th className="p-2 sm:p-3 w-20 sm:w-24 bg-gray-50">添付ファイル</th>}
+                  <th className="p-2 sm:p-3 text-center w-20 sm:w-24 bg-gray-50">操作</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100 text-[10px] sm:text-[11px]">

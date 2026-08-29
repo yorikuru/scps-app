@@ -9,7 +9,7 @@ import {
   ArrowLeft, CheckCircle2, AlertCircle, Calendar as CalendarIcon, 
   User as UserIcon, Flag, AlertTriangle, Loader2, Star, Trash2, Edit3, X, Search, ChevronRight
 } from "lucide-react";
-import CustomSelect from "@/components/CustomSelect"; // ★ CustomSelect をインポート
+import CustomSelect from "@/components/CustomSelect"; 
 
 type UserData = { id: string; name: string; schoolId: string; role: string; };
 type TaskStatus = "not_started" | "in_progress" | "waiting" | "pending" | "done";
@@ -288,10 +288,10 @@ export default function TaskDetailPage() {
     }
   };
 
-  if (isLoading) return <div className="h-full bg-[#F9FAFB] flex justify-center items-center"><Loader2 className="w-8 h-8 animate-spin text-indigo-600" /></div>;
+  if (isLoading) return <div className="h-[100dvh] bg-[#F9FAFB] flex justify-center items-center"><Loader2 className="w-8 h-8 animate-spin text-indigo-600" /></div>;
 
   if (!task) return (
-    <div className="h-full bg-[#F9FAFB] flex flex-col items-center justify-center p-4">
+    <div className="h-[100dvh] bg-[#F9FAFB] flex flex-col items-center justify-center p-4">
       <AlertCircle className="w-10 h-10 sm:w-12 sm:h-12 text-gray-400 mb-3" />
       <h1 className="text-sm sm:text-base font-black text-gray-800 mb-2">タスクが見つかりませんでした</h1>
       <button onClick={() => router.push("/top/tasks")} className="px-4 py-2 bg-indigo-600 text-white rounded-lg sm:rounded-xl text-[11px] sm:text-xs font-bold shadow-sm">一覧に戻る</button>
@@ -302,7 +302,8 @@ export default function TaskDetailPage() {
   const hasReported = isAllRequirement && task.completedBy.includes(userData?.id || "");
 
   return (
-    <div className="h-full flex-1 w-full bg-[#F9FAFB] font-sans flex flex-col text-gray-900 overflow-hidden relative min-h-0">
+    // ★ h-[100dvh] overflow-hidden に固定。中のmainタグでスクロールさせる
+    <div className="h-[100dvh] w-full bg-[#F9FAFB] font-sans flex flex-col text-gray-900 overflow-hidden relative">
 
       {toast.show && (
         <div className="absolute top-4 right-4 z-[100] animate-fade-in w-fit max-w-sm">
@@ -447,8 +448,8 @@ export default function TaskDetailPage() {
                 </div>
               </div>
 
-              <div className="bg-gray-50/50 p-3 sm:p-4 rounded-xl sm:rounded-2xl border border-gray-200 space-y-3 sm:space-y-4">
-                <label className="block text-[9px] sm:text-[10px] font-bold text-gray-700">担当メンバー・タスク主任の設定</label>
+              <div className="bg-gray-50/50 p-2.5 sm:p-4 rounded-xl sm:rounded-2xl border border-gray-200 space-y-3 sm:space-y-4">
+                <label className="block text-[10px] sm:text-xs font-bold text-gray-700">担当メンバー・タスク主任の設定</label>
                 <div className="relative" ref={userSearchRef}>
                   <Search className="absolute left-2.5 sm:left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-400" />
                   <input 
@@ -524,7 +525,7 @@ export default function TaskDetailPage() {
 
               <div>
                 <label className="block text-[9px] sm:text-[10px] font-bold text-gray-500 mb-1">詳細メモ (任意)</label>
-                <textarea rows={4} value={formDesc} onChange={e => setFormDesc(e.target.value)} className="w-full bg-gray-50 border border-gray-200 rounded-lg sm:rounded-xl px-2.5 sm:px-3 py-2 sm:py-3 text-[11px] sm:text-xs font-medium text-gray-900 focus:bg-white outline-none focus:ring-2 focus:ring-indigo-500 resize-none custom-scrollbar shadow-2xs transition-colors" />
+                <textarea rows={4} value={formDesc} onChange={e => setFormDesc(e.target.value)} placeholder="タスクの具体的な内容や備考を記入..." className="w-full bg-gray-50 border border-gray-200 rounded-lg sm:rounded-xl px-2.5 sm:px-3 py-2 sm:py-3 text-[11px] sm:text-xs font-medium text-gray-900 focus:bg-white outline-none focus:ring-2 focus:ring-indigo-500 resize-none custom-scrollbar shadow-2xs transition-colors" />
               </div>
 
               <div className="pt-3 border-t border-gray-100 flex justify-end gap-2 sm:gap-3 pb-6 sm:pb-8">
@@ -541,18 +542,18 @@ export default function TaskDetailPage() {
       {/* ステータス変更モーダル */}
       {statusModalOpen && task && (
         <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/40 backdrop-blur-sm sm:p-4 animate-fade-in">
-          <div className="bg-white rounded-t-2xl sm:rounded-2xl shadow-2xl w-full max-w-xs flex flex-col overflow-hidden animate-slide-up sm:animate-fade-in">
-            <div className="p-3 sm:p-4 border-b border-gray-100 flex justify-between items-center bg-gray-50/50">
+          <div className="bg-white rounded-t-2xl sm:rounded-2xl shadow-2xl w-full max-w-xs flex flex-col overflow-hidden animate-slide-up sm:animate-fade-in border border-gray-100">
+            <div className="p-3 sm:p-4 border-b border-gray-100 flex justify-between items-center bg-gray-50/80">
               <div>
-                <h3 className="text-xs sm:text-sm font-black text-gray-900">ステータスの変更</h3>
-                <p className="text-[9px] sm:text-[10px] text-gray-500 mt-0.5">現在の状態: {STATUS_CONFIG[task.status].label}</p>
+                <h3 className="text-[11px] sm:text-sm font-black text-gray-900">ステータスの変更</h3>
+                <p className="text-[9px] sm:text-[10px] text-gray-500 mt-0.5 font-bold">現在の状態: <span className="text-gray-700">{STATUS_CONFIG[task.status].label}</span></p>
               </div>
               <button onClick={() => setStatusModalOpen(false)} className="p-1 sm:p-1.5 text-gray-400 hover:bg-gray-200 rounded-lg transition-colors">
                 <X className="w-4 h-4 sm:w-5 sm:h-5" />
               </button>
             </div>
             
-            <div className="p-3 sm:p-4 flex flex-col gap-2">
+            <div className="p-3 sm:p-4 flex flex-col gap-2 sm:gap-2.5 bg-[#FAFAFA]">
               {(Object.keys(STATUS_CONFIG) as TaskStatus[]).map(statusKey => {
                 const conf = STATUS_CONFIG[statusKey];
                 const isCurrent = task.status === statusKey;
@@ -562,15 +563,15 @@ export default function TaskDetailPage() {
                     key={statusKey}
                     onClick={() => changeTaskStatus(statusKey)}
                     disabled={isCurrent}
-                    className={`w-full text-left flex items-center justify-between p-2.5 sm:p-3 rounded-lg sm:rounded-xl border-2 transition-all ${
+                    className={`w-full text-left flex items-center justify-between p-2.5 sm:p-3.5 rounded-lg sm:rounded-xl border-2 transition-all ${
                       isCurrent 
-                        ? `${conf.color.replace('border-', 'border-')} border-current bg-white opacity-50 cursor-default` 
-                        : `border-gray-100 bg-white hover:${conf.color.split(' ')[0]} hover:border-${conf.color.split(' ')[2].split('-')[1]}-300 shadow-sm`
+                        ? `${conf.color.replace('border-', 'border-')} border-current bg-white opacity-50 cursor-default shadow-sm` 
+                        : `border-gray-200 bg-white hover:${conf.color.split(' ')[0]} hover:border-${conf.color.split(' ')[2].split('-')[1]}-300 shadow-sm`
                     }`}
                   >
-                    <div className="flex items-center gap-2 sm:gap-2.5">
+                    <div className="flex items-center gap-2 sm:gap-3">
                       <div className={`w-2.5 h-2.5 sm:w-3 sm:h-3 rounded-full ${conf.iconColor.replace('text-', 'bg-')}`}></div>
-                      <span className={`text-[11px] sm:text-xs font-black ${isCurrent ? 'text-gray-900' : 'text-gray-700'}`}>{conf.label}</span>
+                      <span className={`text-[11px] sm:text-sm font-black ${isCurrent ? 'text-gray-900' : 'text-gray-700'}`}>{conf.label}</span>
                     </div>
                     {isCurrent && <span className="text-[9px] sm:text-[10px] font-bold text-gray-400">現在</span>}
                   </button>
@@ -583,11 +584,11 @@ export default function TaskDetailPage() {
 
       {deleteConfirm && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4">
-          <div className="bg-white rounded-2xl border border-gray-200 p-5 sm:p-6 shadow-2xl max-w-xs sm:max-w-sm w-full space-y-3 sm:space-y-4">
+          <div className="bg-white rounded-xl sm:rounded-2xl border border-gray-100 p-5 sm:p-6 shadow-2xl max-w-xs sm:max-w-sm w-full space-y-3 sm:space-y-4">
             <h3 className="text-xs sm:text-sm font-black text-gray-900">このタスクを削除しますか？</h3>
-            <p className="text-[10px] sm:text-[11px] text-gray-500 font-medium leading-relaxed">削除されたデータは復元できません。</p>
+            <p className="text-[10px] sm:text-[11px] text-gray-500 font-bold leading-relaxed">削除されたデータは復元できません。</p>
             <div className="flex justify-end gap-1.5 sm:gap-2 pt-2">
-              <button onClick={() => setDeleteConfirm(false)} className="px-3 sm:px-4 py-1.5 sm:py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 text-[10px] sm:text-[11px] font-bold rounded-lg sm:rounded-xl transition-colors">キャンセル</button>
+              <button onClick={() => setDeleteConfirm(false)} className="px-3 sm:px-4 py-1.5 sm:py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 text-[10px] sm:text-[11px] font-bold rounded-lg sm:rounded-xl transition-colors shadow-2xs">キャンセル</button>
               <button onClick={handleDelete} className="px-3 sm:px-4 py-1.5 sm:py-2 bg-red-600 hover:bg-red-700 text-white text-[10px] sm:text-[11px] font-bold rounded-lg sm:rounded-xl shadow-sm transition-colors">削除する</button>
             </div>
           </div>
