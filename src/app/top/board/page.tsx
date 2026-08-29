@@ -378,11 +378,11 @@ export default function BoardPage() {
     );
   };
 
-  if (isLoading) return <div className="h-full flex justify-center items-center"><Loader2 className="w-8 h-8 animate-spin text-indigo-600" /></div>;
+  if (isLoading) return <div className="h-[100dvh] flex justify-center items-center bg-gray-50"><Loader2 className="w-8 h-8 animate-spin text-indigo-600" /></div>;
 
   if (!hasPermission) {
     return (
-      <div className="h-full flex flex-col items-center justify-center text-gray-900 p-4 text-center">
+      <div className="h-[100dvh] flex flex-col items-center justify-center text-gray-900 p-4 text-center bg-gray-50">
         <AlertTriangle className="w-12 h-12 text-red-500 mb-4" />
         <h1 className="text-xl font-black mb-2">アクセス権限がありません</h1>
         <p className="text-xs font-bold text-gray-500 mb-6">このアプリは現在システムで停止されているか、あなたの役職では利用が許可されていません。</p>
@@ -394,9 +394,11 @@ export default function BoardPage() {
   }
 
   return (
-    <div className="h-full flex-1 w-full flex flex-col min-h-0 font-sans text-gray-900 bg-[#F9FAFB] relative">
+    // ★ h-[100dvh] に固定し、このコンポーネント全体が画面いっぱいに広がるように設定。
+    <div className="h-[100dvh] w-full flex flex-col min-h-0 font-sans text-gray-900 bg-[#F9FAFB] relative overflow-hidden">
       <main className="flex-1 w-full max-w-7xl mx-auto p-2 sm:p-4 lg:p-6 flex flex-col min-h-0">
         
+        {/* ヘッダーエリア (固定) */}
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 sm:gap-4 mb-3 sm:mb-4 shrink-0">
           <div className="flex items-center gap-2 sm:gap-3">
             <div className={`p-2 sm:p-2.5 ${c.lightBg} ${c.text} rounded-xl shadow-sm`}>
@@ -418,40 +420,41 @@ export default function BoardPage() {
           </div>
         </div>
 
-        {/* タブメニュー（スマホで2カラムのグリッド化） */}
+        {/* タブメニュー (固定・横スクロール可能) */}
         {currentTab !== "form" && (
-          <div className="grid grid-cols-2 md:flex bg-gray-200/60 p-1 rounded-xl w-full md:w-fit shadow-inner mb-3 sm:mb-4 shrink-0 gap-1">
+          <div className="flex overflow-x-auto bg-gray-200/60 p-1 rounded-xl w-full lg:w-fit shadow-inner mb-3 sm:mb-4 shrink-0 gap-1 custom-scrollbar">
             <button 
               onClick={() => setTab("list")} 
-              className={`flex items-center justify-center px-2 sm:px-4 py-2 text-[10px] sm:text-xs font-bold rounded-lg transition-all ${currentTab === "list" ? "bg-white shadow-sm text-gray-900" : "text-gray-500 hover:text-gray-700 hover:bg-gray-200/50"}`}
+              className={`flex-1 min-w-[120px] flex items-center justify-center px-3 sm:px-4 py-2 sm:py-2.5 text-[11px] sm:text-xs font-bold rounded-lg transition-all whitespace-nowrap ${currentTab === "list" ? "bg-white shadow-sm text-gray-900" : "text-gray-500 hover:text-gray-700 hover:bg-gray-200/50"}`}
             >
-              <List className="w-3.5 h-3.5 mr-1.5" /> <span className="truncate">あなたへの連絡</span>
+              <List className="w-4 h-4 mr-1.5 shrink-0" /> あなたへの連絡
             </button>
             {canManageSettings && (
               <button 
                 onClick={() => setTab("ext-list")} 
-                className={`flex items-center justify-center px-2 sm:px-4 py-2 text-[10px] sm:text-xs font-bold rounded-lg transition-all ${currentTab === "ext-list" ? "bg-white shadow-sm text-blue-700" : "text-gray-500 hover:text-gray-700 hover:bg-gray-200/50"}`}
+                className={`flex-1 min-w-[140px] flex items-center justify-center px-3 sm:px-4 py-2 sm:py-2.5 text-[11px] sm:text-xs font-bold rounded-lg transition-all whitespace-nowrap ${currentTab === "ext-list" ? "bg-white shadow-sm text-blue-700" : "text-gray-500 hover:text-gray-700 hover:bg-gray-200/50"}`}
               >
-                <Globe className="w-3.5 h-3.5 mr-1.5 text-blue-500" /> <span className="truncate">外部ユーザー配信</span>
+                <Globe className="w-4 h-4 mr-1.5 shrink-0 text-blue-500" /> 外部ユーザー配信
               </button>
             )}
             <button 
               onClick={() => setTab("management")} 
-              className={`flex items-center justify-center px-2 sm:px-4 py-2 text-[10px] sm:text-xs font-bold rounded-lg transition-all ${currentTab === "management" ? "bg-white shadow-sm text-amber-600" : "text-gray-500 hover:text-gray-700 hover:bg-gray-200/50"}`}
+              className={`flex-1 min-w-[100px] flex items-center justify-center px-3 sm:px-4 py-2 sm:py-2.5 text-[11px] sm:text-xs font-bold rounded-lg transition-all whitespace-nowrap ${currentTab === "management" ? "bg-white shadow-sm text-amber-600" : "text-gray-500 hover:text-gray-700 hover:bg-gray-200/50"}`}
             >
-              <FileStack className="w-3.5 h-3.5 mr-1.5 text-amber-500" /> <span className="truncate">配信管理</span>
+              <FileStack className="w-4 h-4 mr-1.5 shrink-0 text-amber-500" /> 配信管理
             </button>
             {canManageSettings && (
               <button 
                 onClick={() => setTab("categories")} 
-                className={`flex items-center justify-center px-2 sm:px-4 py-2 text-[10px] sm:text-xs font-bold rounded-lg transition-all ${currentTab === "categories" ? "bg-white shadow-sm text-gray-900" : "text-gray-500 hover:text-gray-700 hover:bg-gray-200/50"}`}
+                className={`flex-1 min-w-[110px] flex items-center justify-center px-3 sm:px-4 py-2 sm:py-2.5 text-[11px] sm:text-xs font-bold rounded-lg transition-all whitespace-nowrap ${currentTab === "categories" ? "bg-white shadow-sm text-gray-900" : "text-gray-500 hover:text-gray-700 hover:bg-gray-200/50"}`}
               >
-                <Settings className="w-3.5 h-3.5 mr-1.5" /> <span className="truncate">カテゴリ管理</span>
+                <Settings className="w-4 h-4 mr-1.5 shrink-0" /> カテゴリ管理
               </button>
             )}
           </div>
         )}
 
+        {/* 内部コンテンツ (ここだけスクロールする) */}
         <div className="flex-1 flex flex-col min-h-0 relative bg-white rounded-2xl shadow-sm border border-gray-200 overflow-hidden">
           
           {currentTab === "list" && !editId && (

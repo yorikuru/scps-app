@@ -8,7 +8,7 @@ import { doc, updateDoc } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 import { Announcement, Category, UserData, AppConfig, COLOR_MAPPINGS } from "../types";
 import { ExternalUser } from "@/app/types/external";
-import CustomSelect from "@/components/CustomSelect"; // ★ CustomSelectをインポート
+import CustomSelect from "@/components/CustomSelect";
 
 const DynamicIcon = ({ name, className }: { name: string, className?: string }) => {
   const IconComponent = (LucideIcons as any)[name] || LucideIcons.Box;
@@ -124,16 +124,16 @@ export default function BoardList({ announcements, categories, userData, tenantU
     const badges = [];
     if (a.requireAction) {
       if (isActionedForMe(a)) {
-        badges.push(<span key="action" className="px-1.5 py-0.5 rounded text-[8px] font-bold bg-indigo-100 text-indigo-700 flex items-center mr-1"><CheckSquare className="w-2.5 h-2.5 mr-0.5" />対応済</span>);
+        badges.push(<span key="action" className="px-1 py-0.5 sm:px-1.5 rounded text-[7px] sm:text-[8px] font-bold bg-indigo-100 text-indigo-700 flex items-center mr-1 shadow-2xs"><CheckSquare className="w-2.5 h-2.5 mr-0.5" />対応済</span>);
       } else {
-        badges.push(<span key="action" className="px-1.5 py-0.5 rounded text-[8px] font-bold bg-rose-100 text-rose-700 flex items-center mr-1"><AlertCircle className="w-2.5 h-2.5 mr-0.5" />要対応</span>);
+        badges.push(<span key="action" className="px-1 py-0.5 sm:px-1.5 rounded text-[7px] sm:text-[8px] font-bold bg-rose-100 text-rose-700 flex items-center mr-1 shadow-2xs"><AlertCircle className="w-2.5 h-2.5 mr-0.5" />要対応</span>);
       }
     }
     if (!isExternalTab && a.isExternal) {
-      badges.push(<span key="ext" className="px-1.5 py-0.5 rounded text-[8px] font-bold bg-blue-100 text-blue-700 flex items-center mr-1"><Globe className="w-2.5 h-2.5 mr-0.5" />外部公開</span>);
+      badges.push(<span key="ext" className="px-1 py-0.5 sm:px-1.5 rounded text-[7px] sm:text-[8px] font-bold bg-blue-100 text-blue-700 flex items-center mr-1 shadow-2xs"><Globe className="w-2.5 h-2.5 mr-0.5" />外部公開</span>);
     }
     if (isExternalTab && a.isInternalAlso !== false) {
-      badges.push(<span key="int" className="px-1.5 py-0.5 rounded text-[8px] font-bold bg-indigo-100 text-indigo-700 flex items-center mr-1"><Users className="w-2.5 h-2.5 mr-0.5" />メンバーにも公開</span>);
+      badges.push(<span key="int" className="px-1 py-0.5 sm:px-1.5 rounded text-[7px] sm:text-[8px] font-bold bg-indigo-100 text-indigo-700 flex items-center mr-1 shadow-2xs"><Users className="w-2.5 h-2.5 mr-0.5" />メンバー公開</span>);
     }
     return badges.length > 0 ? <div className="flex items-center">{badges}</div> : null;
   };
@@ -187,7 +187,6 @@ export default function BoardList({ announcements, categories, userData, tenantU
          handleSelectAnnouncement(filteredAndSorted[0].id);
       }
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [filteredAndSorted, selectedId]);
 
   const selectedAnnouncement = filteredAndSorted.find(a => a.id === selectedId);
@@ -257,35 +256,35 @@ export default function BoardList({ announcements, categories, userData, tenantU
     const selectedAvatarUrl = selectedAuthorUser?.photoURL;
 
     return (
-      <div className="flex-1 overflow-y-auto custom-scrollbar flex flex-col h-full bg-white relative">
-        <div className="lg:hidden flex items-center px-4 py-3 border-b border-gray-100 bg-white sticky top-0 z-10 shrink-0">
+      <div className="flex-1 overflow-y-auto custom-scrollbar flex flex-col h-full bg-white relative pb-6 sm:pb-0">
+        <div className="lg:hidden flex items-center px-3 sm:px-4 py-2.5 sm:py-3 border-b border-gray-100 bg-white sticky top-0 z-10 shrink-0">
           <button 
             onClick={() => setShowMobileDetail(false)} 
-            className="flex items-center text-sm font-bold text-gray-500 hover:text-gray-900 transition-colors"
+            className="flex items-center text-[11px] sm:text-sm font-bold text-gray-500 hover:text-gray-900 transition-colors bg-gray-50 px-2 py-1 rounded-lg border border-gray-200"
           >
-            <ChevronLeft className="w-5 h-5 mr-1" /> 戻る
+            <ChevronLeft className="w-4 h-4 mr-0.5" /> 戻る
           </button>
         </div>
 
-        <div className="p-4 sm:p-6 sm:pb-4 border-b border-gray-100 shrink-0">
-          <div className="flex justify-between items-start mb-4 gap-4">
-            <h2 className="text-lg sm:text-xl font-black text-gray-900 leading-snug break-words flex-1">
-              {selectedAnnouncement.isUrgent && <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-black bg-red-600 text-white shadow-xs mr-2 align-middle"><AlertOctagon className="w-3 h-3 mr-0.5" /> 緊急</span>}
+        <div className="p-4 sm:p-6 border-b border-gray-100 shrink-0">
+          <div className="flex justify-between items-start mb-3 sm:mb-4 gap-3 sm:gap-4">
+            <h2 className="text-[15px] sm:text-lg lg:text-xl font-black text-gray-900 leading-snug break-words flex-1">
+              {selectedAnnouncement.isUrgent && <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-black bg-red-600 text-white shadow-2xs mr-1.5 align-middle"><AlertOctagon className="w-3 h-3 mr-0.5" /> 緊急</span>}
               {getStatusBadge(selectedAnnouncement)}
-              <span className="ml-1">{selectedAnnouncement.title}</span>
+              <span className="ml-1 leading-normal">{selectedAnnouncement.title}</span>
             </h2>
           </div>
 
-          <div className="flex items-center justify-between flex-wrap gap-4">
-            <div className="flex items-center gap-3">
-              <UserAvatar name={selectedAnnouncement.authorName} url={selectedAvatarUrl} className="w-10 h-10 text-sm" />
+          <div className="flex items-center justify-between flex-wrap gap-3 sm:gap-4">
+            <div className="flex items-center gap-2.5 sm:gap-3 bg-gray-50 p-2 sm:p-2.5 rounded-xl border border-gray-100 shadow-2xs">
+              <UserAvatar name={selectedAnnouncement.authorName} url={selectedAvatarUrl} className="w-8 h-8 sm:w-10 sm:h-10 text-xs sm:text-sm" />
               <div>
-                <div className="flex items-center gap-2">
-                  <span className="text-sm font-black text-gray-900">{selectedAnnouncement.authorName}</span>
-                  {selectedCategory && <span className={`px-1.5 py-0.5 rounded text-[9px] font-bold border ${selectedCategory.color}`}>{selectedCategory.name}</span>}
+                <div className="flex items-center gap-1.5 sm:gap-2">
+                  <span className="text-[11px] sm:text-sm font-black text-gray-900">{selectedAnnouncement.authorName}</span>
+                  {selectedCategory && <span className={`px-1.5 py-0.5 rounded text-[8px] sm:text-[9px] font-bold border ${selectedCategory.color}`}>{selectedCategory.name}</span>}
                 </div>
-                <div className="flex items-center gap-1.5 text-[10px] font-bold text-gray-400 mt-0.5">
-                  <Calendar className="w-3 h-3" /> 掲載: {new Date(selectedAnnouncement.publishStartDate || selectedAnnouncement.createdAt).toLocaleString('ja-JP')}
+                <div className="flex items-center gap-1 sm:gap-1.5 text-[9px] sm:text-[10px] font-bold text-gray-400 mt-0.5">
+                  <Calendar className="w-2.5 h-2.5 sm:w-3 sm:h-3" /> 掲載: {new Date(selectedAnnouncement.publishStartDate || selectedAnnouncement.createdAt).toLocaleString('ja-JP', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
                 </div>
               </div>
             </div>
@@ -294,25 +293,25 @@ export default function BoardList({ announcements, categories, userData, tenantU
 
         <div className="p-4 sm:p-6 flex-1">
           <div 
-            className="text-sm text-gray-800 leading-loose break-words [&_a]:text-blue-600 [&_a]:underline [&_b]:font-black [&_i]:italic [&_u]:underline [&_font[size='2']]:text-xs [&_font[size='3']]:text-sm [&_font[size='5']]:text-xl [&_font[size='7']]:text-3xl [&_span[style*='background-color']]:px-1.5 [&_span[style*='background-color']]:py-0.5 [&_span[style*='background-color']]:rounded-md"
+            className="text-[13px] sm:text-sm text-gray-800 leading-relaxed sm:leading-loose break-words [&_a]:text-blue-600 [&_a]:underline [&_b]:font-black [&_i]:italic [&_u]:underline [&_font[size='2']]:text-[10px] sm:[&_font[size='2']]:text-xs [&_font[size='3']]:text-xs sm:[&_font[size='3']]:text-sm [&_font[size='5']]:text-lg sm:[&_font[size='5']]:text-xl [&_font[size='7']]:text-2xl sm:[&_font[size='7']]:text-3xl [&_span[style*='background-color']]:px-1.5 [&_span[style*='background-color']]:py-0.5 [&_span[style*='background-color']]:rounded-md"
             dangerouslySetInnerHTML={{ __html: selectedAnnouncement.content }}
           />
         </div>
 
         {selectedAnnouncement.attachments && selectedAnnouncement.attachments.length > 0 && (
-          <div className="p-4 sm:p-6 bg-gray-50/50 border-t border-gray-100 mt-auto shrink-0">
-            <h5 className="text-xs font-black text-gray-600 mb-3 flex items-center"><Paperclip className="w-4 h-4 mr-1.5"/> 添付ファイル</h5>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 max-w-2xl">
+          <div className="p-3 sm:p-4 bg-gray-50/50 border-t border-gray-100 shrink-0">
+            <h5 className="text-[10px] sm:text-xs font-black text-gray-500 mb-2 flex items-center"><Paperclip className="w-3.5 h-3.5 mr-1"/> 添付ファイル</h5>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 sm:gap-3 max-w-2xl">
               {selectedAnnouncement.attachments.map((file, idx) => (
                 <a 
                   key={idx} href={file.url} target="_blank" rel="noopener noreferrer"
-                  className="flex items-center justify-between p-3 bg-white border border-gray-200 rounded-xl hover:border-blue-400 hover:bg-blue-50/30 transition-all group shadow-sm"
+                  className="flex items-center justify-between p-2 sm:p-2.5 bg-white border border-gray-200 rounded-lg sm:rounded-xl hover:border-blue-400 hover:bg-blue-50/30 transition-all group shadow-2xs"
                 >
-                  <div className="flex items-center gap-2.5 overflow-hidden">
-                    <div className="p-2 bg-blue-100 text-blue-700 rounded-lg"><FileIcon className="w-4 h-4" /></div>
-                    <span className="text-[11px] font-bold text-gray-700 group-hover:text-blue-700 truncate">{file.name}</span>
+                  <div className="flex items-center gap-2 overflow-hidden">
+                    <div className="p-1.5 bg-blue-100 text-blue-700 rounded-lg"><FileIcon className="w-3.5 h-3.5" /></div>
+                    <span className="text-[10px] sm:text-[11px] font-bold text-gray-700 group-hover:text-blue-700 truncate">{file.name}</span>
                   </div>
-                  <Download className="w-4 h-4 text-gray-300 group-hover:text-blue-600 flex-shrink-0 ml-2 transition-colors" />
+                  <Download className="w-3.5 h-3.5 text-gray-300 group-hover:text-blue-600 flex-shrink-0 ml-1.5 transition-colors" />
                 </a>
               ))}
             </div>
@@ -321,51 +320,50 @@ export default function BoardList({ announcements, categories, userData, tenantU
 
         {/* 外部タブ（プレビュー用）の場合はアクションボタンを表示しない */}
         {!isExternalTab && (
-          <div className="p-4 sm:p-6 border-t border-gray-100 bg-white mt-auto shrink-0">
-            <div className="flex flex-col sm:flex-row gap-4 items-stretch justify-center max-w-2xl mx-auto">
+          <div className="p-3 sm:p-5 border-t border-gray-100 bg-gray-50/30 mt-auto shrink-0 z-10 sticky bottom-0">
+            <div className="flex flex-col sm:flex-row gap-2 sm:gap-4 items-stretch justify-center max-w-lg mx-auto">
+              
               {/* 既読ブロック */}
-              <div className="flex-1 bg-gray-50 rounded-xl p-4 flex flex-col items-center justify-center border border-gray-200 shadow-sm">
-                <span className="text-[10px] font-black text-gray-500 mb-2.5 uppercase tracking-wider">確認状況</span>
+              <div className="flex-1 bg-white rounded-xl p-2.5 sm:p-3 flex items-center justify-between border border-gray-200 shadow-sm">
+                <span className="text-[9px] sm:text-[10px] font-black text-gray-400 uppercase tracking-wider shrink-0 mr-2">確認状況</span>
                 {isRead ? (
-                  <div className="flex flex-col items-center gap-2">
-                    <span className="text-xs font-black text-emerald-600 flex items-center gap-1.5 bg-emerald-50 px-4 py-2 rounded-full border border-emerald-100">
-                      <Check className="w-4 h-4" /> 既読です（確認済み）
+                  <div className="flex items-center justify-end gap-1.5">
+                    <span className="text-[10px] sm:text-xs font-black text-emerald-600 flex items-center gap-1 bg-emerald-50 px-2.5 py-1 sm:px-3 sm:py-1.5 rounded-lg border border-emerald-100 shadow-2xs">
+                      <Check className="w-3.5 h-3.5" /> 確認済み
                     </span>
-                    <button onClick={() => toggleReadStatus(false)} className="text-[10px] font-bold text-gray-400 hover:text-gray-600 flex items-center gap-1 transition-colors mt-1">
-                      <XCircle className="w-3 h-3" /> 未読に戻す
+                    <button onClick={() => toggleReadStatus(false)} className="p-1 sm:p-1.5 text-gray-400 hover:bg-gray-100 rounded-lg transition-colors border border-transparent hover:border-gray-200" title="未読に戻す">
+                      <XCircle className="w-4 h-4" />
                     </button>
                   </div>
                 ) : (
-                  <button onClick={() => toggleReadStatus(true)} className={`w-full max-w-[200px] px-4 py-3 text-white rounded-xl text-sm font-black shadow-md transition-transform hover:-translate-y-0.5 flex items-center justify-center gap-2 ${c.bg} ${c.hover}`}>
-                    <BookOpen className="w-5 h-5" /> 内容を確認して既読にする
+                  <button onClick={() => toggleReadStatus(true)} className={`w-full sm:w-auto px-4 py-1.5 sm:py-2 text-white rounded-lg text-[10px] sm:text-xs font-black shadow-md transition-transform hover:-translate-y-0.5 flex items-center justify-center gap-1.5 ${c.bg} ${c.hover}`}>
+                    <BookOpen className="w-3.5 h-3.5" /> 既読にする
                   </button>
                 )}
               </div>
 
               {/* 対応ブロック */}
               {selectedAnnouncement.requireAction && (
-                <div className="flex-1 bg-indigo-50/50 rounded-xl p-4 flex flex-col items-center justify-center border border-indigo-100 shadow-sm relative overflow-hidden">
-                  {selectedAnnouncement.actionType === "single" && <div className="absolute top-0 right-0 bg-indigo-500 text-white text-[8px] font-black px-2 py-0.5 rounded-bl-lg">1人が対応すれば完了</div>}
-                  <span className="text-[10px] font-black text-indigo-400 mb-2.5 uppercase tracking-wider">タスク状況</span>
+                <div className="flex-1 bg-white rounded-xl p-2.5 sm:p-3 flex items-center justify-between border border-indigo-200 shadow-sm relative overflow-hidden">
+                  {selectedAnnouncement.actionType === "single" && <div className="absolute top-0 right-0 bg-indigo-500 text-white text-[7px] font-black px-1.5 py-0.5 rounded-bl-lg shadow-sm">1人対応で完了</div>}
+                  <span className="text-[9px] sm:text-[10px] font-black text-indigo-400 uppercase tracking-wider shrink-0 mr-2">対応状況</span>
                   
                   {isActioned ? (
-                    <div className="flex flex-col items-center gap-2">
-                      <span className="text-xs font-black text-indigo-600 flex items-center gap-1.5 bg-indigo-100 px-4 py-2 rounded-full border border-indigo-200">
-                        <CheckSquare className="w-4 h-4"/> あなたが対応済みです
+                    <div className="flex items-center justify-end gap-1.5">
+                      <span className="text-[10px] sm:text-xs font-black text-indigo-600 flex items-center gap-1 bg-indigo-50 px-2.5 py-1 sm:px-3 sm:py-1.5 rounded-lg border border-indigo-200 shadow-2xs">
+                        <CheckSquare className="w-3.5 h-3.5"/> 対応済み
                       </span>
-                      <button onClick={() => toggleActionStatus(false)} className="text-[10px] font-bold text-indigo-300 hover:text-indigo-500 flex items-center gap-1 transition-colors mt-1">
-                        <XCircle className="w-3 h-3"/> 未対応に戻す
+                      <button onClick={() => toggleActionStatus(false)} className="p-1 sm:p-1.5 text-indigo-300 hover:bg-indigo-50 hover:text-indigo-500 rounded-lg transition-colors border border-transparent hover:border-indigo-100" title="未対応に戻す">
+                        <XCircle className="w-4 h-4"/>
                       </button>
                     </div>
                   ) : (isTaskCompletedBySomeone ? (
-                    <div className="flex flex-col items-center gap-2">
-                      <span className="text-xs font-black text-gray-500 flex items-center gap-1.5 bg-gray-100 px-4 py-2 rounded-full border border-gray-200">
-                        <CheckSquare className="w-4 h-4"/> 他のメンバーが対応しました
-                      </span>
-                    </div>
+                    <span className="text-[10px] sm:text-xs font-black text-gray-500 flex items-center gap-1 bg-gray-50 px-2.5 py-1 sm:px-3 sm:py-1.5 rounded-lg border border-gray-200 shadow-2xs">
+                      <CheckSquare className="w-3.5 h-3.5"/> メンバーが対応済
+                    </span>
                   ) : (
-                    <button onClick={() => toggleActionStatus(true)} className="w-full max-w-[200px] px-4 py-3 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-sm font-black shadow-md transition-transform hover:-translate-y-0.5 flex items-center justify-center gap-2">
-                      <CheckSquare className="w-5 h-5" /> 対応済みにする
+                    <button onClick={() => toggleActionStatus(true)} className="w-full sm:w-auto px-4 py-1.5 sm:py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-[10px] sm:text-xs font-black shadow-md transition-transform hover:-translate-y-0.5 flex items-center justify-center gap-1.5">
+                      <CheckSquare className="w-3.5 h-3.5" /> 対応済にする
                     </button>
                   ))}
                 </div>
@@ -380,29 +378,28 @@ export default function BoardList({ announcements, categories, userData, tenantU
   return (
     <div className="flex flex-col lg:flex-row h-full w-full bg-white relative overflow-hidden">
       
-      <div className={`w-full lg:w-[420px] xl:w-[480px] border-r border-gray-200 flex flex-col flex-shrink-0 bg-white h-full ${showMobileDetail ? 'hidden lg:flex' : 'flex'}`}>
+      <div className={`w-full lg:w-[320px] xl:w-[400px] border-r border-gray-200 flex flex-col flex-shrink-0 bg-white h-full ${showMobileDetail ? 'hidden lg:flex' : 'flex'}`}>
         
         {isExternalTab && (
-          <div className="bg-blue-50 p-3 border-b border-blue-100 shrink-0 flex items-center gap-2.5">
-            <Globe className="w-5 h-5 text-blue-600 shrink-0" />
-            <p className="text-[10px] font-bold text-blue-800 leading-relaxed">
+          <div className="bg-blue-50 p-2 sm:p-3 border-b border-blue-100 shrink-0 flex items-center gap-2">
+            <Globe className="w-4 h-4 text-blue-600 shrink-0" />
+            <p className="text-[9px] sm:text-[10px] font-bold text-blue-800 leading-snug">
               ここは外部ユーザー（ゲスト）のダッシュボードに配信されている連絡事項の一覧です。（プレビュー専用）
             </p>
           </div>
         )}
 
-        <div className="p-2 border-b border-gray-200 bg-gray-50/50 flex flex-col gap-2 shrink-0">
+        <div className="p-2 border-b border-gray-200 bg-gray-50/50 flex flex-col gap-1.5 sm:gap-2 shrink-0">
           <div className="relative w-full">
             <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-400" />
             <input 
               type="text" placeholder="検索..." value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)}
-              className={`w-full pl-8 pr-2 py-1.5 bg-white border border-gray-200 rounded-lg text-xs font-bold focus:outline-none focus:ring-2 ${isExternalTab ? 'focus:ring-blue-500' : c.ring} shadow-2xs`}
+              className={`w-full pl-8 pr-2 py-1.5 bg-white border border-gray-200 rounded-lg text-[11px] sm:text-xs font-bold focus:outline-none focus:ring-2 ${isExternalTab ? 'focus:ring-blue-500' : c.ring} shadow-2xs`}
             />
           </div>
           
-          {/* ★ CustomSelect を利用したフィルター群 */}
-          <div className="flex flex-wrap items-center gap-1.5 text-[10px]">
-            <div className="flex-1 min-w-[95px]">
+          <div className="flex flex-wrap items-center gap-1 text-[10px]">
+            <div className="flex-1 min-w-[90px]">
               <CustomSelect 
                 value={filterReadStatus} onChange={val => setFilterReadStatus(val as any)}
                 options={[
@@ -410,10 +407,10 @@ export default function BoardList({ announcements, categories, userData, tenantU
                   { value: "unread", label: "未読のみ" },
                   { value: "read", label: "既読のみ" }
                 ]}
-                buttonClassName="w-full flex items-center justify-between bg-white border border-gray-200 rounded-lg px-2 py-1.5 text-gray-700 font-bold shadow-2xs focus:ring-2 focus:ring-indigo-500 text-[10px]"
+                buttonClassName="w-full flex items-center justify-between bg-white border border-gray-200 rounded-md px-2 py-1 text-gray-700 font-bold shadow-2xs focus:ring-2 focus:ring-indigo-500 text-[9px] sm:text-[10px]"
               />
             </div>
-            <div className="flex-1 min-w-[95px]">
+            <div className="flex-1 min-w-[90px]">
               <CustomSelect 
                 value={filterActionStatus} onChange={val => setFilterActionStatus(val as any)}
                 options={[
@@ -421,17 +418,17 @@ export default function BoardList({ announcements, categories, userData, tenantU
                   { value: "incomplete", label: "未対応のみ" },
                   { value: "completed", label: "対応済のみ" }
                 ]}
-                buttonClassName="w-full flex items-center justify-between bg-white border border-gray-200 rounded-lg px-2 py-1.5 text-gray-700 font-bold shadow-2xs focus:ring-2 focus:ring-indigo-500 text-[10px]"
+                buttonClassName="w-full flex items-center justify-between bg-white border border-gray-200 rounded-md px-2 py-1 text-gray-700 font-bold shadow-2xs focus:ring-2 focus:ring-indigo-500 text-[9px] sm:text-[10px]"
               />
             </div>
-            <div className="flex-1 min-w-[95px]">
+            <div className="flex-1 min-w-[90px]">
               <CustomSelect 
                 value={filterCategory} onChange={setFilterCategory}
                 options={[
                   { value: "all", label: "全カテゴリ" },
                   ...categories.map(cat => ({ value: cat.id, label: cat.name }))
                 ]}
-                buttonClassName="w-full flex items-center justify-between bg-white border border-gray-200 rounded-lg px-2 py-1.5 text-gray-700 font-bold shadow-2xs focus:ring-2 focus:ring-indigo-500 text-[10px]"
+                buttonClassName="w-full flex items-center justify-between bg-white border border-gray-200 rounded-md px-2 py-1 text-gray-700 font-bold shadow-2xs focus:ring-2 focus:ring-indigo-500 text-[9px] sm:text-[10px]"
               />
             </div>
             <div className="flex-1 min-w-[95px]">
@@ -441,17 +438,17 @@ export default function BoardList({ announcements, categories, userData, tenantU
                   { value: "urgent_first", label: "緊急を優先" },
                   { value: "date", label: "掲載日時順" }
                 ]}
-                buttonClassName="w-full flex items-center justify-between bg-white border border-gray-200 rounded-lg px-2 py-1.5 text-gray-700 font-bold shadow-2xs focus:ring-2 focus:ring-indigo-500 text-[10px]"
+                buttonClassName="w-full flex items-center justify-between bg-white border border-gray-200 rounded-md px-2 py-1 text-gray-700 font-bold shadow-2xs focus:ring-2 focus:ring-indigo-500 text-[9px] sm:text-[10px]"
               />
             </div>
             
-            <button onClick={() => setFilterRequireAction(!filterRequireAction)} className={`p-1.5 border rounded-lg transition-colors flex items-center justify-center shadow-2xs ${filterRequireAction ? 'bg-indigo-50 border-indigo-200 text-indigo-600' : 'bg-white border-gray-200 text-gray-400 hover:bg-gray-50'}`} title="要対応のみ表示">
+            <button onClick={() => setFilterRequireAction(!filterRequireAction)} className={`p-1 rounded-md transition-colors flex items-center justify-center shadow-2xs ${filterRequireAction ? 'bg-indigo-50 border-indigo-200 text-indigo-600' : 'bg-white border-gray-200 text-gray-400 hover:bg-gray-50'}`} title="要対応のみ表示">
               <CheckSquare className="w-3.5 h-3.5" />
             </button>
-            <button onClick={() => setFilterUrgent(!filterUrgent)} className={`p-1.5 border rounded-lg transition-colors flex items-center justify-center shadow-2xs ${filterUrgent ? 'bg-red-50 border-red-200 text-red-600' : 'bg-white border-gray-200 text-gray-400 hover:bg-gray-50'}`} title="緊急のみ表示">
+            <button onClick={() => setFilterUrgent(!filterUrgent)} className={`p-1 rounded-md transition-colors flex items-center justify-center shadow-2xs ${filterUrgent ? 'bg-red-50 border-red-200 text-red-600' : 'bg-white border-gray-200 text-gray-400 hover:bg-gray-50'}`} title="緊急のみ表示">
               <AlertOctagon className="w-3.5 h-3.5" />
             </button>
-            <button onClick={() => setSortOrder(sortOrder === "desc" ? "asc" : "desc")} className="p-1.5 bg-white border border-gray-200 text-gray-400 rounded-lg hover:bg-gray-50 transition-colors flex items-center justify-center shadow-2xs" title="並び替え">
+            <button onClick={() => setSortOrder(sortOrder === "desc" ? "asc" : "desc")} className="p-1 bg-white border border-gray-200 text-gray-400 rounded-md hover:bg-gray-50 transition-colors flex items-center justify-center shadow-2xs" title="並び替え">
               <ArrowDownUp className="w-3.5 h-3.5" />
             </button>
           </div>
@@ -459,9 +456,9 @@ export default function BoardList({ announcements, categories, userData, tenantU
 
         <div className="flex-1 overflow-y-auto custom-scrollbar divide-y divide-gray-100">
           {filteredAndSorted.length === 0 ? (
-            <div className="flex flex-col items-center justify-center text-gray-400 py-12 opacity-70">
-              <MessageSquareText className="w-6 h-6 mb-2" />
-              <p className="text-[10px] font-bold">該当する連絡はありません</p>
+            <div className="flex flex-col items-center justify-center text-gray-400 py-10 opacity-70">
+              <MessageSquareText className="w-5 h-5 mb-2" />
+              <p className="text-[9px] font-bold">該当する連絡はありません</p>
             </div>
           ) : (
             filteredAndSorted.map((a) => {
@@ -477,28 +474,28 @@ export default function BoardList({ announcements, categories, userData, tenantU
               return (
                 <div 
                   key={a.id} onClick={() => handleSelectAnnouncement(a.id)}
-                  className={`px-3 py-2 cursor-pointer flex items-center gap-2.5 min-w-0 transition-colors group ${isSelected && window.innerWidth >= 1024 ? (isUr ? 'bg-red-600 text-white' : (isExternalTab ? 'bg-blue-600 text-white shadow-inner' : `${c.bg} text-white shadow-inner`)) : 'hover:bg-gray-50 text-gray-900'}`}
+                  className={`px-2.5 sm:px-3 py-2 sm:py-2.5 cursor-pointer flex items-center gap-2 min-w-0 transition-colors group ${isSelected && window.innerWidth >= 1024 ? (isUr ? 'bg-red-600 text-white' : (isExternalTab ? 'bg-blue-600 text-white shadow-inner' : `${c.bg} text-white shadow-inner`)) : 'hover:bg-gray-50 text-gray-900'}`}
                 >
                   <div className="relative flex-shrink-0">
-                    <UserAvatar name={a.authorName} url={avatarUrl} className={`w-7 h-7 text-[10px]`} />
-                    {isUr && <div className={`absolute -top-1 -right-1 w-2.5 h-2.5 rounded-full border border-white ${isSelected && window.innerWidth >= 1024 ? 'bg-white' : 'bg-red-500'}`}></div>}
+                    <UserAvatar name={a.authorName} url={avatarUrl} className={`w-6 h-6 sm:w-7 sm:h-7 text-[9px]`} />
+                    {isUr && <div className={`absolute -top-0.5 -right-0.5 w-2 h-2 rounded-full border border-white ${isSelected && window.innerWidth >= 1024 ? 'bg-white' : 'bg-red-500'}`}></div>}
                   </div>
 
                   <div className="flex-1 min-w-0 flex flex-col justify-center">
                     <div className="flex items-center gap-1.5">
-                      <h4 className={`text-xs font-bold truncate flex-1 ${isSelected && window.innerWidth >= 1024 ? 'text-white' : (!isReadMark && !isExternalTab ? 'text-gray-900 font-black' : 'text-gray-600 font-medium')}`}>{a.title}</h4>
+                      <h4 className={`text-[11px] sm:text-xs font-bold truncate flex-1 ${isSelected && window.innerWidth >= 1024 ? 'text-white' : (!isReadMark && !isExternalTab ? 'text-gray-900 font-black' : 'text-gray-600 font-medium')}`}>{a.title}</h4>
                       {statusBadge}
-                      {a.attachments && a.attachments.length > 0 && <Paperclip className={`w-3 h-3 flex-shrink-0 ${isSelected && window.innerWidth >= 1024 ? 'text-white/70' : 'text-gray-400'}`} />}
+                      {a.attachments && a.attachments.length > 0 && <Paperclip className={`w-2.5 h-2.5 sm:w-3 sm:h-3 flex-shrink-0 ${isSelected && window.innerWidth >= 1024 ? 'text-white/70' : 'text-gray-400'}`} />}
                     </div>
-                    <div className="flex items-center gap-2 mt-0.5">
-                      <span className={`text-[10px] truncate max-w-[80px] ${isSelected && window.innerWidth >= 1024 ? 'text-white/80' : 'text-gray-500'}`}>{a.authorName}</span>
-                      {cat && <span className={`px-1.5 rounded-sm text-[9px] font-bold border truncate max-w-[60px] ${isSelected && window.innerWidth >= 1024 ? 'border-white/30 text-white/90' : cat.color}`}>{cat.name}</span>}
+                    <div className="flex items-center gap-1.5 sm:gap-2 mt-0.5">
+                      <span className={`text-[9px] sm:text-[10px] truncate max-w-[80px] ${isSelected && window.innerWidth >= 1024 ? 'text-white/80' : 'text-gray-500'}`}>{a.authorName}</span>
+                      {cat && <span className={`px-1 rounded-sm text-[8px] sm:text-[9px] font-bold border truncate max-w-[50px] sm:max-w-[60px] ${isSelected && window.innerWidth >= 1024 ? 'border-white/30 text-white/90' : cat.color}`}>{cat.name}</span>}
                     </div>
                   </div>
 
-                  <div className={`w-12 text-right flex-shrink-0 text-[10px] font-medium flex flex-col items-end gap-1 ${isSelected && window.innerWidth >= 1024 ? 'text-white/90' : 'text-gray-400'}`}>
+                  <div className={`w-10 sm:w-12 text-right flex-shrink-0 text-[9px] sm:text-[10px] font-medium flex flex-col items-end gap-1 ${isSelected && window.innerWidth >= 1024 ? 'text-white/90' : 'text-gray-400'}`}>
                     {formatTimeCompact(a.publishStartDate || a.createdAt)}
-                    {!isReadMark && !isExternalTab && <span className="w-2 h-2 rounded-full bg-blue-500 shadow-sm animate-pulse"></span>}
+                    {!isReadMark && !isExternalTab && <span className="w-1.5 h-1.5 rounded-full bg-blue-500 shadow-sm animate-pulse"></span>}
                   </div>
                 </div>
               );

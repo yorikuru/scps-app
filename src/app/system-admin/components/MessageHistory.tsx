@@ -4,6 +4,7 @@ import React, { useState, useMemo } from "react";
 import { Pin, Calendar, Edit2, Trash2, Search, ArrowUpDown, CheckSquare } from "lucide-react";
 import { SystemMessage, CATEGORIES, MessageCategory } from "./MessageDelivery";
 import { GlobalUserData, TenantData } from "../page";
+import CustomSelect from "@/components/CustomSelect"; // ★ CustomSelectをインポート
 
 type Props = {
   messages: SystemMessage[];
@@ -147,74 +148,86 @@ export default function MessageHistory({ messages, tenants, users, setQueryParam
 
   return (
     <div className="bg-white rounded-b-2xl shadow-sm border border-gray-200">
-      <div className="p-4 border-b border-gray-200 bg-gray-50/50 space-y-3">
-        <div className="flex flex-col md:flex-row gap-3">
+      <div className="p-3 sm:p-4 border-b border-gray-200 bg-gray-50/50 space-y-2.5 sm:space-y-3">
+        <div className="flex flex-col md:flex-row gap-2.5 sm:gap-3">
           <div className="relative flex-1">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
             <input 
               type="text" placeholder="タイトル、本文、宛先で検索..." 
               value={searchQuery} onChange={e => setSearchQuery(e.target.value)}
-              className="w-full pl-9 pr-3 py-2 text-xs font-bold border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500 outline-none"
+              className="w-full pl-9 pr-3 py-1.5 sm:py-2 text-[11px] sm:text-xs font-bold border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500 outline-none"
             />
           </div>
 
-          <div className="flex gap-2 overflow-x-auto custom-scrollbar pb-1 md:pb-0">
-            <select value={tenantFilter} onChange={e => setTenantFilter(e.target.value)} className="border border-gray-300 rounded-lg py-2 px-3 text-[11px] font-bold bg-white outline-none focus:ring-blue-500 max-w-[150px]">
-              <option value="all">全テナント</option>
-              {tenants.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
-            </select>
+          {/* ★ CustomSelect に置き換え、スクロールで隠れないよう flex-wrap に変更 */}
+          <div className="flex flex-wrap gap-1.5 pb-1 md:pb-0">
+            <div className="flex-1 min-w-[110px]">
+              <CustomSelect 
+                value={tenantFilter} onChange={setTenantFilter}
+                options={[{ value: "all", label: "全テナント" }, ...tenants.map(t => ({ value: t.id, label: t.name }))]}
+                buttonClassName="w-full border border-gray-300 rounded-lg py-1.5 sm:py-2 px-2.5 text-[10px] sm:text-[11px] font-bold bg-white outline-none focus:ring-blue-500 shadow-sm"
+              />
+            </div>
 
-            <select value={categoryFilter} onChange={e => setCategoryFilter(e.target.value)} className="border border-gray-300 rounded-lg py-2 px-3 text-[11px] font-bold bg-white outline-none focus:ring-blue-500">
-              <option value="all">全カテゴリ</option>
-              {Object.keys(CATEGORIES).map(cat => (
-                <option key={cat} value={cat}>{CATEGORIES[cat as MessageCategory].label}</option>
-              ))}
-            </select>
+            <div className="flex-1 min-w-[95px]">
+              <CustomSelect 
+                value={categoryFilter} onChange={setCategoryFilter}
+                options={[{ value: "all", label: "全カテゴリ" }, ...Object.keys(CATEGORIES).map(cat => ({ value: cat, label: CATEGORIES[cat as MessageCategory].label }))]}
+                buttonClassName="w-full border border-gray-300 rounded-lg py-1.5 sm:py-2 px-2.5 text-[10px] sm:text-[11px] font-bold bg-white outline-none focus:ring-blue-500 shadow-sm"
+              />
+            </div>
 
-            <select value={statusFilter} onChange={e => setStatusFilter(e.target.value)} className="border border-gray-300 rounded-lg py-2 px-3 text-[11px] font-bold bg-white outline-none focus:ring-blue-500">
-              <option value="all">全状態</option>
-              <option value="active">配信中</option>
-              <option value="inactive">期間外</option>
-            </select>
+            <div className="flex-1 min-w-[85px]">
+              <CustomSelect 
+                value={statusFilter} onChange={setStatusFilter}
+                options={[{ value: "all", label: "全状態" }, { value: "active", label: "配信中" }, { value: "inactive", label: "期間外" }]}
+                buttonClassName="w-full border border-gray-300 rounded-lg py-1.5 sm:py-2 px-2.5 text-[10px] sm:text-[11px] font-bold bg-white outline-none focus:ring-blue-500 shadow-sm"
+              />
+            </div>
 
-            <select value={responseFilter} onChange={e => setResponseFilter(e.target.value)} className="border border-gray-300 rounded-lg py-2 px-3 text-[11px] font-bold bg-white outline-none focus:ring-blue-500">
-              <option value="all">対応状況</option>
-              <option value="required">要求あり</option>
-              <option value="incomplete">未対応あり</option>
-              <option value="completed">完了</option>
-              <option value="not_required">不要</option>
-            </select>
+            <div className="flex-1 min-w-[95px]">
+              <CustomSelect 
+                value={responseFilter} onChange={setResponseFilter}
+                options={[
+                  { value: "all", label: "対応状況" }, { value: "required", label: "要求あり" }, 
+                  { value: "incomplete", label: "未対応あり" }, { value: "completed", label: "完了" }, { value: "not_required", label: "不要" }
+                ]}
+                buttonClassName="w-full border border-gray-300 rounded-lg py-1.5 sm:py-2 px-2.5 text-[10px] sm:text-[11px] font-bold bg-white outline-none focus:ring-blue-500 shadow-sm"
+              />
+            </div>
 
-            <div className="flex items-center gap-1.5 px-1 bg-white border border-gray-300 rounded-lg pl-2">
+            <div className="flex-1 min-w-[120px] flex items-center gap-1 px-1 bg-white border border-gray-300 rounded-lg pl-2 shadow-sm">
               <ArrowUpDown className="w-3.5 h-3.5 text-gray-400 flex-shrink-0" />
-              <select value={sortBy} onChange={e => setSortBy(e.target.value)} className="py-2 pr-3 text-[11px] font-bold bg-transparent outline-none focus:ring-0 border-none cursor-pointer">
-                <option value="start_desc">掲載開始日（新）</option>
-                <option value="start_asc">掲載開始日（旧）</option>
-                <option value="create_desc">作成日（新）</option>
-                <option value="create_asc">作成日（旧）</option>
-              </select>
+              <CustomSelect 
+                value={sortBy} onChange={setSortBy}
+                options={[
+                  { value: "start_desc", label: "掲載開始日(新)" }, { value: "start_asc", label: "掲載開始日(旧)" },
+                  { value: "create_desc", label: "作成日(新)" }, { value: "create_asc", label: "作成日(旧)" }
+                ]}
+                buttonClassName="w-full py-1.5 sm:py-2 pr-1.5 text-[10px] sm:text-[11px] font-bold bg-transparent outline-none focus:ring-0 border-none cursor-pointer"
+              />
             </div>
           </div>
         </div>
       </div>
 
       {messages.length === 0 ? (
-        <p className="text-center text-gray-400 py-16 font-bold text-sm">配信履歴はありません</p>
+        <p className="text-center text-gray-400 py-16 font-bold text-xs sm:text-sm">配信履歴はありません</p>
       ) : processedMessages.length === 0 ? (
-        <p className="text-center text-gray-400 py-16 font-bold text-sm">条件に一致するメッセージがありません</p>
+        <p className="text-center text-gray-400 py-16 font-bold text-xs sm:text-sm">条件に一致するメッセージがありません</p>
       ) : (
-        <div className="overflow-x-auto">
+        <div className="overflow-x-auto custom-scrollbar">
           <table className="min-w-full divide-y divide-gray-200 text-left whitespace-nowrap">
-            <thead className="bg-gray-50 text-[11px] font-bold text-gray-500">
+            <thead className="bg-gray-50 text-[10px] sm:text-[11px] font-bold text-gray-500">
               <tr>
-                <th className="px-4 py-3 border-r border-gray-100 w-28">状態 / カテゴリ</th>
-                <th className="px-4 py-3 border-r border-gray-100 min-w-[250px]">タイトル / 宛先</th>
-                <th className="px-4 py-3 border-r border-gray-100 w-48">掲載期間</th>
-                <th className="px-4 py-3 border-r border-gray-100 w-32 text-center">対応要求</th>
-                <th className="px-4 py-3 w-24 text-right">操作</th>
+                <th className="px-3 sm:px-4 py-2.5 sm:py-3 border-r border-gray-100 w-20 sm:w-28">状態 / カテゴリ</th>
+                <th className="px-3 sm:px-4 py-2.5 sm:py-3 border-r border-gray-100 min-w-[200px] sm:min-w-[250px]">タイトル / 宛先</th>
+                <th className="px-3 sm:px-4 py-2.5 sm:py-3 border-r border-gray-100 w-40 sm:w-48">掲載期間</th>
+                <th className="px-3 sm:px-4 py-2.5 sm:py-3 border-r border-gray-100 w-24 sm:w-32 text-center">対応要求</th>
+                <th className="px-3 sm:px-4 py-2.5 sm:py-3 w-16 sm:w-24 text-right">操作</th>
               </tr>
             </thead>
-            <tbody className="bg-white divide-y divide-gray-100 text-xs">
+            <tbody className="bg-white divide-y divide-gray-100 text-[11px] sm:text-xs">
               {processedMessages.map(msg => {
                 const isActive = (!msg.startAt || new Date(msg.startAt) <= new Date()) && (!msg.endAt || new Date(msg.endAt) >= new Date());
                 const catInfo = CATEGORIES[msg.category || "info"];
@@ -232,67 +245,67 @@ export default function MessageHistory({ messages, tenants, users, setQueryParam
 
                 return (
                   <tr key={msg.id} onClick={() => setQueryParams({ viewId: msg.id })} className="hover:bg-blue-50/50 cursor-pointer transition-colors group">
-                    <td className="px-4 py-3 border-r border-gray-100 align-top">
-                      <div className="flex flex-col gap-1.5 items-start">
-                        <span className={`inline-flex px-1.5 py-0.5 rounded text-[9px] font-bold ${isActive ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-500'}`}>
+                    <td className="px-3 sm:px-4 py-2 sm:py-3 border-r border-gray-100 align-top">
+                      <div className="flex flex-col gap-1 sm:gap-1.5 items-start">
+                        <span className={`inline-flex px-1.5 py-0.5 rounded text-[8px] sm:text-[9px] font-bold ${isActive ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-500'}`}>
                           {isActive ? '配信中' : '期間外'}
                         </span>
-                        <span className={`inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-bold border ${catInfo.bgColor} ${catInfo.color}`}>
+                        <span className={`inline-flex items-center px-1.5 py-0.5 rounded text-[8px] sm:text-[9px] font-bold border ${catInfo.bgColor} ${catInfo.color}`}>
                           {catInfo.label}
                         </span>
                       </div>
                     </td>
                     
-                    <td className="px-4 py-3 border-r border-gray-100 whitespace-normal">
-                      <div className="flex flex-col gap-1.5">
-                        <div className="flex items-center gap-1.5">
-                          {msg.isImportant && <span className="px-1.5 py-0.5 bg-red-100 text-red-700 text-[9px] font-bold rounded flex items-center flex-shrink-0"><Pin className="w-2.5 h-2.5 mr-0.5"/>緊急</span>}
-                          <span className="font-extrabold text-gray-900 group-hover:text-blue-700 transition-colors leading-snug">{msg.title}</span>
+                    <td className="px-3 sm:px-4 py-2 sm:py-3 border-r border-gray-100 whitespace-normal">
+                      <div className="flex flex-col gap-1 sm:gap-1.5">
+                        <div className="flex items-center gap-1 sm:gap-1.5">
+                          {msg.isImportant && <span className="px-1.5 py-0.5 bg-red-100 text-red-700 text-[8px] sm:text-[9px] font-bold rounded flex items-center flex-shrink-0"><Pin className="w-2.5 h-2.5 mr-0.5"/>緊急</span>}
+                          <span className="font-extrabold text-gray-900 group-hover:text-blue-700 transition-colors leading-snug text-xs sm:text-sm">{msg.title}</span>
                         </div>
-                        <div className="flex items-center gap-2 flex-wrap">
-                          {msg.subBadge === "update1" && <span className="px-1.5 py-0.5 rounded text-[9px] font-bold bg-yellow-100 text-yellow-800 border border-yellow-200 flex-shrink-0">更新①</span>}
-                          {msg.subBadge === "update2" && <span className="px-1.5 py-0.5 rounded text-[9px] font-bold bg-orange-100 text-orange-800 border border-orange-200 flex-shrink-0">更新②</span>}
-                          <span className="px-1.5 py-0.5 bg-gray-100 text-gray-600 text-[9px] font-bold rounded border border-gray-200 leading-tight">
+                        <div className="flex items-center gap-1 sm:gap-2 flex-wrap">
+                          {msg.subBadge === "update1" && <span className="px-1.5 py-0.5 rounded text-[8px] sm:text-[9px] font-bold bg-yellow-100 text-yellow-800 border border-yellow-200 flex-shrink-0">更新①</span>}
+                          {msg.subBadge === "update2" && <span className="px-1.5 py-0.5 rounded text-[8px] sm:text-[9px] font-bold bg-orange-100 text-orange-800 border border-orange-200 flex-shrink-0">更新②</span>}
+                          <span className="px-1.5 py-0.5 bg-gray-100 text-gray-600 text-[8px] sm:text-[9px] font-bold rounded border border-gray-200 leading-tight">
                             宛先: <span className="font-medium">{getTargetName(msg)}</span>
                           </span>
                         </div>
                       </div>
                     </td>
 
-                    <td className="px-4 py-3 border-r border-gray-100 text-[10px] font-medium text-gray-500 align-top">
-                      <div className="flex flex-col gap-1">
+                    <td className="px-3 sm:px-4 py-2 sm:py-3 border-r border-gray-100 text-[9px] sm:text-[10px] font-medium text-gray-500 align-top">
+                      <div className="flex flex-col gap-0.5 sm:gap-1">
                         <span className="flex items-center"><Calendar className="w-3 h-3 mr-1"/>開始: {msg.startAt ? msg.startAt.replace('T', ' ') : '指定なし'}</span>
                         <span className="flex items-center"><Calendar className="w-3 h-3 mr-1 opacity-50"/>終了: {msg.endAt ? msg.endAt.replace('T', ' ') : '指定なし'}</span>
                       </div>
                     </td>
 
-                    <td className="px-4 py-3 border-r border-gray-100 text-center align-top">
+                    <td className="px-3 sm:px-4 py-2 sm:py-3 border-r border-gray-100 text-center align-top">
                       {msg.requireResponse ? (
                         isCompleted ? (
                           <div className="flex flex-col items-center gap-0.5">
-                            <span className="px-2 py-1 bg-blue-100 text-blue-800 text-[10px] font-black rounded border border-blue-200 flex items-center whitespace-nowrap">
+                            <span className="px-2 py-0.5 sm:py-1 bg-blue-100 text-blue-800 text-[9px] sm:text-[10px] font-black rounded border border-blue-200 flex items-center whitespace-nowrap">
                               <CheckSquare className="w-3 h-3 mr-1"/> 全テナント完了
                             </span>
                           </div>
                         ) : (
                           <div className="flex flex-col items-center gap-0.5">
-                            <span className="text-[10px] font-bold text-red-700 bg-red-50 border border-red-100 px-1.5 py-0.5 rounded whitespace-nowrap">
+                            <span className="text-[9px] sm:text-[10px] font-bold text-red-700 bg-red-50 border border-red-100 px-1.5 py-0.5 rounded whitespace-nowrap">
                               未完了あり
                             </span>
-                            <span className="text-[9px] text-gray-500 whitespace-nowrap mt-1">
+                            <span className="text-[8px] sm:text-[9px] text-gray-500 whitespace-nowrap mt-1">
                               {msg.responseType === "single" ? `${cCount} / ${vCount} 組織 完了` : `${oResp} / ${oTotal} 名 完了`}
                             </span>
                           </div>
                         )
                       ) : (
-                        <span className="text-[10px] text-gray-400 font-bold">対応不要</span>
+                        <span className="text-[9px] sm:text-[10px] text-gray-400 font-bold">対応不要</span>
                       )}
                     </td>
 
-                    <td className="px-4 py-3 text-right align-top">
-                      <div className="flex justify-end gap-1.5">
-                        <button onClick={(e) => { e.stopPropagation(); setQueryParams({ tab: "form", editId: msg.id }); }} className="p-1.5 text-blue-600 hover:bg-blue-100 rounded-md transition-colors"><Edit2 className="w-4 h-4"/></button>
-                        <button onClick={(e) => { e.stopPropagation(); requestDelete(msg.id); }} className="p-1.5 text-red-600 hover:bg-red-100 rounded-md transition-colors"><Trash2 className="w-4 h-4"/></button>
+                    <td className="px-3 sm:px-4 py-2 sm:py-3 text-right align-top">
+                      <div className="flex justify-end gap-1 sm:gap-1.5">
+                        <button onClick={(e) => { e.stopPropagation(); setQueryParams({ tab: "form", editId: msg.id }); }} className="p-1.5 text-blue-600 hover:bg-blue-100 rounded-md transition-colors"><Edit2 className="w-3.5 h-3.5 sm:w-4 sm:h-4"/></button>
+                        <button onClick={(e) => { e.stopPropagation(); requestDelete(msg.id); }} className="p-1.5 text-red-600 hover:bg-red-100 rounded-md transition-colors"><Trash2 className="w-3.5 h-3.5 sm:w-4 sm:h-4"/></button>
                       </div>
                     </td>
                   </tr>

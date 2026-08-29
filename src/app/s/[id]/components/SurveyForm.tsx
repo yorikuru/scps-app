@@ -7,6 +7,7 @@ import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
 import { db, storage, auth } from "@/lib/firebase"; 
 import { Survey, UserData, Question, ExistingResponse } from "../types";
 import { useRouter, useSearchParams, usePathname } from "next/navigation";
+import CustomSelect from "@/components/CustomSelect"; // ★ CustomSelectを追加
 
 type Props = {
   survey: Survey;
@@ -33,7 +34,6 @@ export default function SurveyForm({ survey, currentUser, existingResponse, hasR
   const formRef = useRef<HTMLFormElement>(null);
   const [displayQuestions, setDisplayQuestions] = useState<Question[]>([]);
 
-  // ★ URLから初期ページを取得
   const initialPage = Number(searchParams.get("page")) || 0;
   const [currentPageIndex, setCurrentPageIndex] = useState(initialPage);
   const [pages, setPages] = useState<Question[][]>([]);
@@ -182,7 +182,6 @@ export default function SurveyForm({ survey, currentUser, existingResponse, hasR
     return true;
   };
 
-  // ★ ページネーション時にURLも変更する
   const handleNextPage = () => {
     if (validateCurrentPage()) {
       const nextIdx = Math.min(pages.length - 1, currentPageIndex + 1);
@@ -317,14 +316,14 @@ export default function SurveyForm({ survey, currentUser, existingResponse, hasR
 
   if (survey.settings.timeLimit && !isStarted) {
     return (
-      <div className="bg-white rounded-2xl shadow-sm border border-purple-200 p-8 text-center space-y-6 animate-fade-in font-sans">
-        <div className="w-16 h-16 bg-purple-100 rounded-full flex items-center justify-center mx-auto text-purple-600"><Clock className="w-8 h-8" /></div>
+      <div className="bg-white rounded-2xl shadow-sm border border-purple-200 p-6 sm:p-8 text-center space-y-4 sm:space-y-6 animate-fade-in font-sans">
+        <div className="w-14 h-14 sm:w-16 sm:h-16 bg-purple-100 rounded-full flex items-center justify-center mx-auto text-purple-600"><Clock className="w-6 h-6 sm:w-8 sm:h-8" /></div>
         <div>
-          <h2 className="text-xl font-extrabold text-gray-900 mb-2">回答制限時間があります</h2>
-          <p className="text-sm font-bold text-gray-600">このアンケートには制限時間が設定されています。<br />準備ができたら「回答を開始する」ボタンを押してください。</p>
-          <div className="mt-4 inline-block px-4 py-2 bg-purple-50 text-purple-700 font-extrabold text-lg rounded-xl border border-purple-200">制限時間: {survey.settings.timeLimit} 分</div>
+          <h2 className="text-lg sm:text-xl font-extrabold text-gray-900 mb-2">回答制限時間があります</h2>
+          <p className="text-xs sm:text-sm font-bold text-gray-600">このアンケートには制限時間が設定されています。<br />準備ができたら「回答を開始する」ボタンを押してください。</p>
+          <div className="mt-4 inline-block px-4 py-2 bg-purple-50 text-purple-700 font-extrabold text-sm sm:text-lg rounded-xl border border-purple-200">制限時間: {survey.settings.timeLimit} 分</div>
         </div>
-        <button type="button" onClick={() => { localStorage.setItem(timerKey, Date.now().toString()); localStorage.setItem(startAtKey, Date.now().toString()); setIsStarted(true); }} className="w-full sm:w-auto px-10 py-4 bg-purple-600 hover:bg-purple-700 text-white font-extrabold text-base rounded-full shadow-lg mx-auto flex justify-center items-center"><Play className="w-5 h-5 mr-2" /> 回答を開始する</button>
+        <button type="button" onClick={() => { localStorage.setItem(timerKey, Date.now().toString()); localStorage.setItem(startAtKey, Date.now().toString()); setIsStarted(true); }} className="w-full sm:w-auto px-8 sm:px-10 py-3 sm:py-4 bg-purple-600 hover:bg-purple-700 text-white font-extrabold text-sm sm:text-base rounded-full shadow-lg mx-auto flex justify-center items-center"><Play className="w-4 h-4 sm:w-5 sm:h-5 mr-2" /> 回答を開始する</button>
       </div>
     );
   }
@@ -334,14 +333,14 @@ export default function SurveyForm({ survey, currentUser, existingResponse, hasR
 
     switch (q.type) {
       case "text":
-        return <input type="text" required={q.required} value={val || ""} onChange={e => updateAns(q.id, e.target.value)} className="w-full bg-gray-50 border border-gray-300 rounded-lg focus:border-purple-500 px-4 py-3 outline-none text-sm font-medium" placeholder="回答を入力" />;
+        return <input type="text" required={q.required} value={val || ""} onChange={e => updateAns(q.id, e.target.value)} className="w-full bg-gray-50 border border-gray-300 rounded-lg focus:border-purple-500 px-3 py-2.5 sm:py-3 outline-none text-xs sm:text-sm font-medium" placeholder="回答を入力" />;
       case "textarea":
-        return <textarea required={q.required} value={val || ""} onChange={e => updateAns(q.id, e.target.value)} className="w-full bg-gray-50 border border-gray-300 rounded-lg focus:border-purple-500 px-4 py-3 outline-none text-sm font-medium resize-y" rows={4} placeholder="回答を入力" />;
+        return <textarea required={q.required} value={val || ""} onChange={e => updateAns(q.id, e.target.value)} className="w-full bg-gray-50 border border-gray-300 rounded-lg focus:border-purple-500 px-3 py-2.5 sm:py-3 outline-none text-xs sm:text-sm font-medium resize-y" rows={4} placeholder="回答を入力" />;
       case "radio":
-        return <div className="space-y-2">{q.options.map(o => (
-          <label key={o} className="flex items-center p-3 border border-transparent rounded-lg hover:bg-purple-50 cursor-pointer transition-colors group">
-            <input type="radio" name={q.id} required={q.required && !val} checked={val === o} onChange={() => updateAns(q.id, o)} className="h-5 w-5 text-purple-600 border-gray-300 mr-3" />
-            <span className="text-sm font-bold text-gray-700 group-hover:text-purple-900">{o}</span>
+        return <div className="space-y-1.5 sm:space-y-2">{q.options.map(o => (
+          <label key={o} className="flex items-center p-2.5 sm:p-3 border border-transparent rounded-lg hover:bg-purple-50 cursor-pointer transition-colors group">
+            <input type="radio" name={q.id} required={q.required && !val} checked={val === o} onChange={() => updateAns(q.id, o)} className="h-4 w-4 sm:h-5 sm:w-5 text-purple-600 border-gray-300 mr-2.5 sm:mr-3" />
+            <span className="text-xs sm:text-sm font-bold text-gray-700 group-hover:text-purple-900">{o}</span>
           </label>
         ))}</div>;
       case "checkbox":
@@ -355,28 +354,40 @@ export default function SurveyForm({ survey, currentUser, existingResponse, hasR
         else if (cType === "max") constraintText = `※ ${limit} 個以内で選択してください`;
 
         return (
-          <div className="space-y-2">
-            {constraintText && <p className="text-xs font-bold text-amber-600 mb-2">{constraintText}</p>}
+          <div className="space-y-1.5 sm:space-y-2">
+            {constraintText && <p className="text-[10px] sm:text-xs font-bold text-amber-600 mb-1.5 sm:mb-2">{constraintText}</p>}
             {q.options.map(o => {
               const isChecked = arr.includes(o);
               const disabled = !isChecked && isMaxReached;
               return (
-                <label key={o} className={`flex items-center p-3 border border-transparent rounded-lg transition-colors group ${disabled ? 'opacity-50 cursor-not-allowed' : 'hover:bg-purple-50 cursor-pointer'}`}>
+                <label key={o} className={`flex items-center p-2.5 sm:p-3 border border-transparent rounded-lg transition-colors group ${disabled ? 'opacity-50 cursor-not-allowed' : 'hover:bg-purple-50 cursor-pointer'}`}>
                   <input type="checkbox" disabled={disabled} checked={isChecked} onChange={e => {
                     if (disabled && e.target.checked) return;
                     updateAns(q.id, e.target.checked ? [...arr, o] : arr.filter((x:string) => x !== o));
-                  }} className="h-5 w-5 rounded text-purple-600 border-gray-300 mr-3" />
-                  <span className="text-sm font-bold text-gray-700 group-hover:text-purple-900">{o}</span>
+                  }} className="h-4 w-4 sm:h-5 sm:w-5 rounded text-purple-600 border-gray-300 mr-2.5 sm:mr-3" />
+                  <span className="text-xs sm:text-sm font-bold text-gray-700 group-hover:text-purple-900">{o}</span>
                 </label>
               )
             })}
           </div>
         );
       case "select":
-        return <select required={q.required} value={val || ""} onChange={e => updateAns(q.id, e.target.value)} className="w-full sm:w-1/2 bg-gray-50 border border-gray-300 rounded-lg px-4 py-3 text-sm font-bold text-gray-700 outline-none focus:border-purple-500"><option value="">選択してください</option>{q.options.map(o => <option key={o} value={o}>{o}</option>)}</select>;
+        return (
+          <div className="w-full sm:w-1/2">
+            <CustomSelect
+              value={val || ""}
+              onChange={(selectedVal) => updateAns(q.id, selectedVal)}
+              options={[
+                { value: "", label: "選択してください" },
+                ...q.options.map(o => ({ value: o, label: o }))
+              ]}
+              buttonClassName="w-full flex items-center justify-between bg-gray-50 border border-gray-300 rounded-lg px-3 py-2.5 sm:py-3 text-xs sm:text-sm font-bold text-gray-700 outline-none focus:border-purple-500 shadow-sm"
+            />
+          </div>
+        );
       case "file":
         return (
-          <div className="flex flex-col gap-2">
+          <div className="flex flex-col gap-1.5 sm:gap-2">
             <input 
               type="file" 
               required={q.required && !val} 
@@ -393,52 +404,66 @@ export default function SurveyForm({ survey, currentUser, existingResponse, hasR
                 }
               }} 
               multiple 
-              className="text-sm file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-bold file:bg-purple-50 file:text-purple-700 hover:file:bg-purple-100 cursor-pointer" 
+              className="text-xs sm:text-sm file:mr-3 file:py-1.5 file:px-3 sm:file:mr-4 sm:file:py-2 sm:file:px-4 file:rounded-full file:border-0 file:font-bold file:bg-purple-50 file:text-purple-700 hover:file:bg-purple-100 cursor-pointer" 
             />
-            {val && val[0] instanceof File && <span className="text-xs font-bold text-gray-500">{val.length} 個のファイルを選択中</span>}
-            {val && typeof val[0] === "string" && <span className="text-xs font-bold text-emerald-600">アップロード済みファイルがあります</span>}
+            {val && val[0] instanceof File && <span className="text-[10px] sm:text-xs font-bold text-gray-500">{val.length} 個のファイルを選択中</span>}
+            {val && typeof val[0] === "string" && <span className="text-[10px] sm:text-xs font-bold text-emerald-600">アップロード済みファイルがあります</span>}
           </div>
         );
       case "scale":
         const min = q.scaleMin || 1; const max = q.scaleMax || 5;
         const range = Array.from({length: max - min + 1}, (_, i) => min + i);
         return (
-          <div className="flex items-end gap-4 overflow-x-auto pb-4">
-            {q.scaleMinLabel && <span className="text-xs font-bold text-gray-500 shrink-0 pb-1">{q.scaleMinLabel}</span>}
-            <div className="flex gap-4 sm:gap-6">
+          <div className="flex items-end gap-3 sm:gap-4 overflow-x-auto pb-3 sm:pb-4 custom-scrollbar">
+            {q.scaleMinLabel && <span className="text-[10px] sm:text-xs font-bold text-gray-500 shrink-0 pb-1">{q.scaleMinLabel}</span>}
+            <div className="flex gap-3 sm:gap-6">
               {range.map(num => (
-                <label key={num} className="flex flex-col items-center gap-2 cursor-pointer">
-                  <span className="text-sm font-bold text-gray-700">{num}</span>
-                  <input type="radio" name={q.id} value={num} checked={Number(val) === num} onChange={() => updateAns(q.id, num)} className="h-5 w-5 text-purple-600" />
+                <label key={num} className="flex flex-col items-center gap-1.5 sm:gap-2 cursor-pointer">
+                  <span className="text-xs sm:text-sm font-bold text-gray-700">{num}</span>
+                  <input type="radio" name={q.id} value={num} checked={Number(val) === num} onChange={() => updateAns(q.id, num)} className="h-4 w-4 sm:h-5 sm:w-5 text-purple-600" />
                 </label>
               ))}
             </div>
-            {q.scaleMaxLabel && <span className="text-xs font-bold text-gray-500 shrink-0 pb-1">{q.scaleMaxLabel}</span>}
+            {q.scaleMaxLabel && <span className="text-[10px] sm:text-xs font-bold text-gray-500 shrink-0 pb-1">{q.scaleMaxLabel}</span>}
           </div>
         );
       case "rating":
         const rMax = q.ratingMax || 5;
         const IconLabel = q.ratingIcon === "heart" ? "♥" : q.ratingIcon === "thumb" ? "👍" : "★";
         return (
-          <div className="flex gap-2">
+          <div className="flex gap-1.5 sm:gap-2">
             {Array.from({length: rMax}, (_, i) => i + 1).map(num => (
-              <button type="button" key={num} onClick={() => updateAns(q.id, num)} className={`text-3xl transition-transform hover:scale-110 ${Number(val) >= num ? 'text-amber-400' : 'text-gray-200'}`}>{IconLabel}</button>
+              <button type="button" key={num} onClick={() => updateAns(q.id, num)} className={`text-2xl sm:text-3xl transition-transform hover:scale-110 ${Number(val) >= num ? 'text-amber-400' : 'text-gray-200'}`}>{IconLabel}</button>
             ))}
           </div>
         );
       case "ranking":
         const currentRankArr = (val as string[]) || [];
         return (
-          <div className="space-y-3">
+          <div className="space-y-2 sm:space-y-3">
             {q.options.map((_, i) => (
-              <div key={i} className="flex items-center gap-3">
-                <span className="w-8 text-center font-black text-gray-400">{i + 1}位</span>
-                <select value={currentRankArr[i] || ""} onChange={e => {
-                  const arr = [...currentRankArr]; arr[i] = e.target.value; updateAns(q.id, arr);
-                }} className="flex-1 bg-gray-50 border border-gray-300 rounded-lg px-3 py-2 text-sm font-bold outline-none">
-                  <option value="">選択</option>
-                  {q.options.map(o => <option key={o} value={o} disabled={currentRankArr.includes(o) && currentRankArr[i] !== o}>{o}</option>)}
-                </select>
+              <div key={i} className="flex items-center gap-2 sm:gap-3">
+                <span className="w-8 text-center font-black text-gray-400 text-xs sm:text-sm">{i + 1}位</span>
+                <div className="flex-1">
+                  <CustomSelect
+                    value={currentRankArr[i] || ""}
+                    onChange={(selectedVal) => {
+                      if (currentRankArr.includes(selectedVal) && currentRankArr[i] !== selectedVal) {
+                        showAlert("error", "すでに他の順位で選択されています。");
+                        return; 
+                      }
+                      const arr = [...currentRankArr]; arr[i] = selectedVal; updateAns(q.id, arr);
+                    }}
+                    options={[
+                      { value: "", label: "選択してください" },
+                      ...q.options.map(o => {
+                        const isUsed = currentRankArr.includes(o) && currentRankArr[i] !== o;
+                        return { value: o, label: isUsed ? `${o} (選択済)` : o };
+                      })
+                    ]}
+                    buttonClassName="w-full flex items-center justify-between bg-gray-50 border border-gray-300 rounded-lg px-3 py-2 text-xs sm:text-sm font-bold outline-none"
+                  />
+                </div>
               </div>
             ))}
           </div>
@@ -446,16 +471,16 @@ export default function SurveyForm({ survey, currentUser, existingResponse, hasR
       case "grid_radio":
         const grVal = val || {};
         return (
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm text-left whitespace-nowrap">
-              <thead><tr><th className="p-2"></th>{(q.gridCols||[]).map(c=><th key={c} className="p-2 font-bold text-gray-600 text-center min-w-[80px]">{c}</th>)}</tr></thead>
+          <div className="overflow-x-auto custom-scrollbar">
+            <table className="w-full text-xs sm:text-sm text-left whitespace-nowrap">
+              <thead><tr><th className="p-1.5 sm:p-2"></th>{(q.gridCols||[]).map(c=><th key={c} className="p-1.5 sm:p-2 font-bold text-gray-600 text-center min-w-[60px] sm:min-w-[80px]">{c}</th>)}</tr></thead>
               <tbody>
                 {(q.gridRows||[]).map((r, i) => (
                   <tr key={r} className={i % 2 === 0 ? "bg-gray-50" : "bg-white"}>
-                    <td className="p-3 font-bold text-gray-800">{r}</td>
+                    <td className="p-2 sm:p-3 font-bold text-gray-800">{r}</td>
                     {(q.gridCols||[]).map(c => (
-                      <td key={c} className="p-3 text-center">
-                        <input type="radio" name={`${q.id}_${r}`} checked={grVal[r] === c} onChange={() => updateAns(q.id, {...grVal, [r]: c})} className="w-4 h-4 text-purple-600 cursor-pointer" />
+                      <td key={c} className="p-2 sm:p-3 text-center">
+                        <input type="radio" name={`${q.id}_${r}`} checked={grVal[r] === c} onChange={() => updateAns(q.id, {...grVal, [r]: c})} className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-purple-600 cursor-pointer" />
                       </td>
                     ))}
                   </tr>
@@ -467,21 +492,21 @@ export default function SurveyForm({ survey, currentUser, existingResponse, hasR
       case "grid_checkbox":
         const gcVal = val || {};
         return (
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm text-left whitespace-nowrap">
-              <thead><tr><th className="p-2"></th>{(q.gridCols||[]).map(c=><th key={c} className="p-2 font-bold text-gray-600 text-center min-w-[80px]">{c}</th>)}</tr></thead>
+          <div className="overflow-x-auto custom-scrollbar">
+            <table className="w-full text-xs sm:text-sm text-left whitespace-nowrap">
+              <thead><tr><th className="p-1.5 sm:p-2"></th>{(q.gridCols||[]).map(c=><th key={c} className="p-1.5 sm:p-2 font-bold text-gray-600 text-center min-w-[60px] sm:min-w-[80px]">{c}</th>)}</tr></thead>
               <tbody>
                 {(q.gridRows||[]).map((r, i) => {
                   const arr = gcVal[r] || [];
                   return (
                     <tr key={r} className={i % 2 === 0 ? "bg-gray-50" : "bg-white"}>
-                      <td className="p-3 font-bold text-gray-800">{r}</td>
+                      <td className="p-2 sm:p-3 font-bold text-gray-800">{r}</td>
                       {(q.gridCols||[]).map(c => (
-                        <td key={c} className="p-3 text-center">
+                        <td key={c} className="p-2 sm:p-3 text-center">
                           <input type="checkbox" checked={arr.includes(c)} onChange={(e) => {
                             const newArr = e.target.checked ? [...arr, c] : arr.filter((x:string) => x !== c);
                             updateAns(q.id, {...gcVal, [r]: newArr});
-                          }} className="w-4 h-4 rounded text-purple-600 cursor-pointer" />
+                          }} className="w-3.5 h-3.5 sm:w-4 sm:h-4 rounded text-purple-600 cursor-pointer" />
                         </td>
                       ))}
                     </tr>
@@ -491,8 +516,8 @@ export default function SurveyForm({ survey, currentUser, existingResponse, hasR
             </table>
           </div>
         );
-      case "date": return <input type="date" required={q.required} value={val || ""} onChange={e => updateAns(q.id, e.target.value)} className="bg-gray-50 border border-gray-300 rounded-lg px-4 py-2 outline-none font-bold" />;
-      case "time": return <input type="time" required={q.required} value={val || ""} onChange={e => updateAns(q.id, e.target.value)} className="bg-gray-50 border border-gray-300 rounded-lg px-4 py-2 outline-none font-bold" />;
+      case "date": return <input type="date" required={q.required} value={val || ""} onChange={e => updateAns(q.id, e.target.value)} className="bg-gray-50 border border-gray-300 rounded-lg px-3 py-2 sm:px-4 outline-none font-bold text-xs sm:text-sm" />;
+      case "time": return <input type="time" required={q.required} value={val || ""} onChange={e => updateAns(q.id, e.target.value)} className="bg-gray-50 border border-gray-300 rounded-lg px-3 py-2 sm:px-4 outline-none font-bold text-xs sm:text-sm" />;
       default: return null;
     }
   };
@@ -500,51 +525,49 @@ export default function SurveyForm({ survey, currentUser, existingResponse, hasR
   return (
     <div className="relative font-sans animate-fade-in">
       
-      {/* 概要レポートを見るボタンは削除しました（回答前の情報漏洩防止） */}
-
-      <form ref={formRef} onSubmit={handleFormSubmit} className="space-y-6">
+      <form ref={formRef} onSubmit={handleFormSubmit} className="space-y-4 sm:space-y-6">
         
         {timeLeftSeconds !== null && (
-          <div className="sticky top-16 z-30 bg-purple-900 text-white px-4 py-2.5 rounded-xl shadow-lg flex items-center justify-between font-mono animate-pulse mb-6">
-            <span className="text-xs font-bold flex items-center gap-1.5"><Clock className="w-4 h-4 text-purple-300" /> 残り回答時間</span>
-            <span className={`text-lg font-black ${timeLeftSeconds < 60 ? 'text-red-300 animate-ping' : 'text-amber-300'}`}>
+          <div className="sticky top-16 z-30 bg-purple-900 text-white px-3 py-2 sm:px-4 sm:py-2.5 rounded-xl shadow-lg flex items-center justify-between font-mono animate-pulse mb-4 sm:mb-6">
+            <span className="text-[10px] sm:text-xs font-bold flex items-center gap-1.5"><Clock className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-purple-300" /> 残り回答時間</span>
+            <span className={`text-base sm:text-lg font-black ${timeLeftSeconds < 60 ? 'text-red-300 animate-ping' : 'text-amber-300'}`}>
               {formatTimerString(timeLeftSeconds)}
             </span>
           </div>
         )}
 
         {isFirstPage && survey.settings.collectEmail && (
-          <div className="bg-white rounded-xl shadow-sm border border-red-200 p-6 sm:p-8 relative overflow-hidden">
+          <div className="bg-white rounded-xl shadow-sm border border-red-200 p-4 sm:p-8 relative overflow-hidden">
             <div className="absolute top-0 left-0 w-1 h-full bg-red-500"></div>
-            <h3 className="text-base font-bold text-gray-900 mb-2 flex items-center"><Mail className="w-5 h-5 mr-2 text-red-500" />メールアドレス <span className="text-red-500 ml-1">*</span></h3>
-            <p className="text-[10px] font-bold text-gray-500 mb-4">このフォームはメールアドレスを収集します。初期値としてアカウントのメールアドレスが設定されます（変更可能）。</p>
-            <input type="email" required value={emailAnswer} onChange={(e) => setEmailAnswer(e.target.value)} placeholder="example@example.com" className="w-full sm:w-1/2 bg-gray-50 border border-gray-300 rounded-lg focus:border-red-500 px-4 py-3 outline-none text-sm font-medium" />
+            <h3 className="text-sm sm:text-base font-bold text-gray-900 mb-1.5 sm:mb-2 flex items-center"><Mail className="w-4 h-4 sm:w-5 sm:h-5 mr-1.5 sm:mr-2 text-red-500" />メールアドレス <span className="text-red-500 ml-1">*</span></h3>
+            <p className="text-[9px] sm:text-[10px] font-bold text-gray-500 mb-3 sm:mb-4">このフォームはメールアドレスを収集します。初期値としてアカウントのメールアドレスが設定されます（変更可能）。</p>
+            <input type="email" required value={emailAnswer} onChange={(e) => setEmailAnswer(e.target.value)} placeholder="example@example.com" className="w-full sm:w-1/2 bg-gray-50 border border-gray-300 rounded-lg focus:border-red-500 px-3 py-2.5 sm:px-4 sm:py-3 outline-none text-xs sm:text-sm font-medium" />
           </div>
         )}
 
         {isFirstPage && survey.settings.collectRespondentInfo && !currentUser && (
-          <div className="bg-white rounded-xl shadow-sm border border-blue-200 p-6 sm:p-8 relative overflow-hidden">
+          <div className="bg-white rounded-xl shadow-sm border border-blue-200 p-4 sm:p-8 relative overflow-hidden">
             <div className="absolute top-0 left-0 w-1 h-full bg-blue-500"></div>
-            <h3 className="text-base font-bold text-gray-900 mb-2 flex items-center"><User className="w-5 h-5 mr-2 text-blue-500" />お名前を入力してください <span className="text-red-500 ml-1">*</span></h3>
-            <p className="text-[10px] font-bold text-gray-500 mb-4">このフォームは記名式です。誰が回答したか管理者に通知されます。</p>
-            <input type="text" required value={guestName} onChange={(e) => setGuestName(e.target.value)} placeholder="氏名" className="w-full sm:w-1/2 bg-gray-50 border border-gray-300 rounded-lg focus:border-blue-500 px-4 py-3 outline-none text-sm font-medium" />
+            <h3 className="text-sm sm:text-base font-bold text-gray-900 mb-1.5 sm:mb-2 flex items-center"><User className="w-4 h-4 sm:w-5 sm:h-5 mr-1.5 sm:mr-2 text-blue-500" />お名前を入力してください <span className="text-red-500 ml-1">*</span></h3>
+            <p className="text-[9px] sm:text-[10px] font-bold text-gray-500 mb-3 sm:mb-4">このフォームは記名式です。誰が回答したか管理者に通知されます。</p>
+            <input type="text" required value={guestName} onChange={(e) => setGuestName(e.target.value)} placeholder="氏名" className="w-full sm:w-1/2 bg-gray-50 border border-gray-300 rounded-lg focus:border-blue-500 px-3 py-2.5 sm:px-4 sm:py-3 outline-none text-xs sm:text-sm font-medium" />
           </div>
         )}
 
         {currentQuestions.map((q, index) => {
           if (q.type === "section") {
             return (
-              <div key={q.id} className="bg-blue-600 text-white rounded-xl p-6 sm:p-8 shadow-md mt-10">
-                <h2 className="text-xl sm:text-2xl font-black">{q.title}</h2>
-                {q.description && <p className="text-sm text-blue-100 mt-2 whitespace-pre-wrap">{q.description}</p>}
+              <div key={q.id} className="bg-blue-600 text-white rounded-xl p-4 sm:p-8 shadow-md mt-6 sm:mt-10">
+                <h2 className="text-lg sm:text-2xl font-black">{q.title}</h2>
+                {q.description && <p className="text-xs sm:text-sm text-blue-100 mt-1.5 sm:mt-2 whitespace-pre-wrap">{q.description}</p>}
               </div>
             );
           }
           if (q.type === "description") {
             return (
-              <div key={q.id} className="bg-white rounded-xl border border-gray-200 p-6 sm:p-8 shadow-sm">
-                <h3 className="text-lg font-bold text-gray-900">{q.title}</h3>
-                {q.description && <p className="text-sm text-gray-600 mt-2 whitespace-pre-wrap">{q.description}</p>}
+              <div key={q.id} className="bg-white rounded-xl border border-gray-200 p-4 sm:p-8 shadow-sm">
+                <h3 className="text-base sm:text-lg font-bold text-gray-900">{q.title}</h3>
+                {q.description && <p className="text-xs sm:text-sm text-gray-600 mt-1.5 sm:mt-2 whitespace-pre-wrap">{q.description}</p>}
               </div>
             );
           }
@@ -557,18 +580,18 @@ export default function SurveyForm({ survey, currentUser, existingResponse, hasR
           globalIndex += (questionIndexInPage + 1);
 
           return (
-            <div key={q.id} className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 sm:p-8">
-              <div className="mb-4">
-                <h3 className="text-base sm:text-lg font-bold text-gray-900 flex items-start">
-                  <span className="mr-2 leading-snug">
+            <div key={q.id} className="bg-white rounded-xl shadow-sm border border-gray-200 p-4 sm:p-8">
+              <div className="mb-3 sm:mb-4">
+                <h3 className="text-sm sm:text-lg font-bold text-gray-900 flex items-start">
+                  <span className="mr-1.5 sm:mr-2 leading-snug">
                     {survey.settings.showQuestionNumbers && `${globalIndex}. `}
                     {q.title}
                   </span>
-                  {q.required && <span className="text-red-500 text-lg leading-none">*</span>}
+                  {q.required && <span className="text-red-500 text-base sm:text-lg leading-none">*</span>}
                 </h3>
-                {q.description && <p className="text-xs font-bold text-gray-500 mt-1 whitespace-pre-wrap">{q.description}</p>}
+                {q.description && <p className="text-[10px] sm:text-xs font-bold text-gray-500 mt-1 whitespace-pre-wrap">{q.description}</p>}
                 {survey.settings.isQuiz && survey.settings.showPointValues && (
-                  <span className="text-[10px] font-black text-gray-400 bg-gray-100 px-2 py-0.5 rounded mt-2 inline-block">
+                  <span className="text-[9px] sm:text-[10px] font-black text-gray-400 bg-gray-100 px-1.5 sm:px-2 py-0.5 rounded mt-1.5 sm:mt-2 inline-block">
                     {q.points || 0} 点
                   </span>
                 )}
@@ -579,13 +602,13 @@ export default function SurveyForm({ survey, currentUser, existingResponse, hasR
         })}
 
         {isLastPage && (
-          <div className={`rounded-xl shadow-sm border p-6 mt-6 flex items-start ${isAnonymousView ? "bg-gray-50 border-gray-200" : "bg-blue-50 border-blue-200"}`}>
-            <Info className={`h-6 w-6 mr-3 flex-shrink-0 ${isAnonymousView ? "text-gray-400" : "text-blue-500"}`} />
+          <div className={`rounded-xl shadow-sm border p-4 sm:p-6 mt-4 sm:mt-6 flex items-start ${isAnonymousView ? "bg-gray-50 border-gray-200" : "bg-blue-50 border-blue-200"}`}>
+            <Info className={`h-5 w-5 sm:h-6 sm:w-6 mr-2 sm:mr-3 flex-shrink-0 ${isAnonymousView ? "text-gray-400" : "text-blue-500"}`} />
             <div>
-              <h4 className={`text-sm font-bold mb-1 ${isAnonymousView ? "text-gray-700" : "text-blue-900"}`}>
+              <h4 className={`text-xs sm:text-sm font-bold mb-1 ${isAnonymousView ? "text-gray-700" : "text-blue-900"}`}>
                 {isAnonymousView ? "このアンケートは匿名で記録されます" : "このアンケートは記名式です"}
               </h4>
-              <p className={`text-xs leading-relaxed font-bold ${isAnonymousView ? "text-gray-500" : "text-blue-700"}`}>
+              <p className={`text-[10px] sm:text-xs leading-relaxed font-bold ${isAnonymousView ? "text-gray-500" : "text-blue-700"}`}>
                 {isAnonymousView ? "誰が送信したかは記録されません。" : `あなたのアカウント情報が管理者に記録・表示されます。`}
               </p>
             </div>
@@ -593,41 +616,41 @@ export default function SurveyForm({ survey, currentUser, existingResponse, hasR
         )}
 
         {survey.settings.showProgressBar && (
-          <div className="bg-white rounded-xl border border-gray-200 p-4 shadow-sm">
-            <div className="flex justify-between text-xs font-bold text-gray-500 mb-2">
+          <div className="bg-white rounded-xl border border-gray-200 p-3 sm:p-4 shadow-sm">
+            <div className="flex justify-between text-[10px] sm:text-xs font-bold text-gray-500 mb-1.5 sm:mb-2">
               <span>全体の進行状況</span>
               <span>{progressPercent}%</span>
             </div>
-            <div className="w-full bg-gray-200 rounded-full h-2">
-              <div className="bg-purple-600 h-2 rounded-full transition-all duration-500" style={{ width: `${progressPercent}%` }}></div>
+            <div className="w-full bg-gray-200 rounded-full h-1.5 sm:h-2">
+              <div className="bg-purple-600 h-1.5 sm:h-2 rounded-full transition-all duration-500" style={{ width: `${progressPercent}%` }}></div>
             </div>
           </div>
         )}
 
-        <div className="flex flex-col sm:flex-row items-center justify-between bg-white rounded-xl shadow-sm border border-gray-200 p-6 mt-6 gap-4">
+        <div className="flex flex-col sm:flex-row items-center justify-between bg-white rounded-xl shadow-sm border border-gray-200 p-4 sm:p-6 mt-4 sm:mt-6 gap-3 sm:gap-4">
           
-          <div className="flex items-center gap-3 w-full sm:w-auto">
+          <div className="flex items-center gap-2 sm:gap-3 w-full sm:w-auto">
             {currentPageIndex > 0 && (
-              <button type="button" onClick={handlePrevPage} className="w-full sm:w-auto px-6 py-3.5 bg-gray-100 hover:bg-gray-200 text-gray-700 font-bold text-sm rounded-full transition-colors flex justify-center items-center">
-                <ChevronLeft className="w-4 h-4 mr-1" /> 戻る
+              <button type="button" onClick={handlePrevPage} className="w-full sm:w-auto px-4 sm:px-6 py-2.5 sm:py-3.5 bg-gray-100 hover:bg-gray-200 text-gray-700 font-bold text-xs sm:text-sm rounded-full transition-colors flex justify-center items-center">
+                <ChevronLeft className="w-3.5 h-3.5 sm:w-4 sm:h-4 mr-1" /> 戻る
               </button>
             )}
             
             {!isLastPage ? (
-              <button type="submit" className="w-full sm:w-auto px-10 py-3.5 bg-indigo-600 hover:bg-indigo-700 text-white font-extrabold text-sm rounded-full transition-colors flex justify-center items-center shadow-md">
-                次へ <ChevronRight className="w-4 h-4 ml-1" />
+              <button type="submit" className="w-full sm:w-auto px-6 sm:px-10 py-2.5 sm:py-3.5 bg-indigo-600 hover:bg-indigo-700 text-white font-extrabold text-xs sm:text-sm rounded-full transition-colors flex justify-center items-center shadow-md">
+                次へ <ChevronRight className="w-3.5 h-3.5 sm:w-4 sm:h-4 ml-1" />
               </button>
             ) : (
-              <button type="submit" disabled={isSubmitting} className="w-full sm:w-auto px-10 py-3.5 bg-purple-600 hover:bg-purple-700 text-white font-extrabold text-sm rounded-full transition-colors flex justify-center items-center shadow-md disabled:opacity-70">
-                {isSubmitting ? <Loader2 className="animate-spin h-5 w-5 mr-2" /> : <Send className="h-4 h-4 mr-2" />} 
+              <button type="submit" disabled={isSubmitting} className="w-full sm:w-auto px-6 sm:px-10 py-2.5 sm:py-3.5 bg-purple-600 hover:bg-purple-700 text-white font-extrabold text-xs sm:text-sm rounded-full transition-colors flex justify-center items-center shadow-md disabled:opacity-70">
+                {isSubmitting ? <Loader2 className="animate-spin h-4 w-4 sm:h-5 sm:w-5 mr-1.5 sm:mr-2" /> : <Send className="w-3.5 h-3.5 sm:w-4 sm:h-4 mr-1.5 sm:mr-2" />} 
                 {existingResponse ? "更新する" : "送信する"}
               </button>
             )}
           </div>
           
           {isLastPage && (
-            <div className="text-[10px] font-bold text-gray-400 text-center sm:text-right leading-relaxed mt-2 sm:mt-0">
-              回答内容は管理者にのみ送信されます。<br />
+            <div className="text-[9px] sm:text-[10px] font-bold text-gray-400 text-center sm:text-right leading-relaxed mt-1 sm:mt-0">
+              回答内容は管理者にのみ送信されます。<br className="hidden sm:block" />
               {existingResponse ? "この回答は既に送信されており、現在は編集モードです。" : survey.settings.allowEditResponse ? "送信後も回答の編集が可能です。" : "送信後は内容の変更ができません。"}
             </div>
           )}

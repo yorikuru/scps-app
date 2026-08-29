@@ -52,7 +52,6 @@ export default function PresencePage() {
   const [myPresence, setMyPresence] = useState<UserPresence | null>(null);
   const [locations, setLocations] = useState<PresenceLocation[]>([]);
 
-  // ★ 追加：全員のスケジュールとルーティンを読み込むステート
   const [schedules, setSchedules] = useState<ScheduledPresence[]>([]);
   const [routines, setRoutines] = useState<WeeklyDayRoutine[]>([]);
 
@@ -201,7 +200,7 @@ export default function PresencePage() {
 
         if (snap.exists()) {
           const data = snap.data();
-          if (data.isManualOverride === true) return; // 手動設定は維持
+          if (data.isManualOverride === true) return; 
 
           await setDoc(ref, {
             ...data,
@@ -277,11 +276,12 @@ export default function PresencePage() {
 
   const proxyTargetUser = tenantUsers.find(u => u.id === proxyParam) || null;
 
-  if (isLoading) return <div className="h-full bg-[#F9FAFB] flex justify-center items-center"><Loader2 className="w-8 h-8 animate-spin text-indigo-600" /></div>;
-  if (!hasPermission) return <div className="h-full flex flex-col items-center justify-center p-4"><AlertTriangle className="w-12 h-12 text-red-500 mb-4" /><h1 className="text-xl font-black">アクセス権限がありません</h1></div>;
+  if (isLoading) return <div className="h-[100dvh] bg-[#F9FAFB] flex justify-center items-center"><Loader2 className="w-8 h-8 animate-spin text-indigo-600" /></div>;
+  if (!hasPermission) return <div className="h-[100dvh] flex flex-col items-center justify-center p-4 bg-gray-50"><AlertTriangle className="w-12 h-12 text-red-500 mb-4" /><h1 className="text-xl font-black">アクセス権限がありません</h1></div>;
 
   return (
-    <div className="h-full flex-1 w-full bg-[#F9FAFB] font-sans flex flex-col text-gray-900 overflow-hidden relative min-h-0 print:bg-white print:overflow-visible print:h-auto print:block">
+    // ★ h-[100dvh] を設定し、全体のスクロールを固定。内部の各ペインでスクロールさせる
+    <div className="h-[100dvh] w-full flex flex-col min-h-0 font-sans text-gray-900 bg-[#F9FAFB] relative overflow-hidden print:bg-white print:overflow-visible print:h-auto print:block">
       
       {toast.show && (
         <div className="absolute top-4 right-4 z-50 animate-fade-in w-fit max-w-sm print:hidden">
@@ -291,7 +291,7 @@ export default function PresencePage() {
         </div>
       )}
 
-      {/* アプリヘッダー */}
+      {/* アプリヘッダー (固定) */}
       <div className="px-3 sm:px-6 py-2.5 sm:py-3 border-b border-gray-200 bg-white flex flex-col sm:flex-row sm:items-center justify-between gap-3 shrink-0 print:hidden">
         <div className="flex items-center gap-2.5 min-w-0">
           <div className="p-2 bg-indigo-50 text-indigo-600 rounded-xl shadow-2xs shrink-0">
@@ -319,6 +319,7 @@ export default function PresencePage() {
         </div>
       </div>
 
+      {/* スクロール領域 */}
       <main className="flex-1 overflow-y-auto custom-scrollbar p-2.5 sm:p-4 lg:p-6 space-y-4 pb-20 sm:pb-6 min-h-0 print:p-0 print:overflow-visible">
         <div className="max-w-7xl mx-auto space-y-4 print:max-w-none">
           
@@ -355,7 +356,7 @@ export default function PresencePage() {
       </main>
 
       {proxyParam && proxyTargetUser && userData && (
-        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/40 backdrop-blur-sm sm:p-4 animate-fade-in print:hidden">
+        <div className="fixed inset-0 z-[100] flex items-end sm:items-center justify-center bg-black/40 backdrop-blur-sm sm:p-4 animate-fade-in print:hidden">
           <div className="bg-white rounded-t-2xl sm:rounded-2xl shadow-2xl w-full max-w-xl flex flex-col overflow-visible animate-slide-up sm:animate-fade-in border border-gray-200">
             <MyStatusEditor
               targetUser={proxyTargetUser}

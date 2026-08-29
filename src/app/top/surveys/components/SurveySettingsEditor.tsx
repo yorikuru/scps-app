@@ -5,6 +5,7 @@ import { SurveySettings, UserData } from "../types";
 import { Calendar, Clock, Lock, Shield, Users, Search, Globe, UserCheck, AlertCircle } from "lucide-react";
 import { collection, getDocs, query, where } from "firebase/firestore";
 import { db } from "@/lib/firebase";
+import CustomSelect from "@/components/CustomSelect"; // ★ CustomSelectを追加
 
 type Props = {
   settings: SurveySettings;
@@ -16,13 +17,11 @@ export default function SurveySettingsEditor({ settings, setSettings, tenantUser
   const [externalUsers, setExternalUsers] = useState<UserData[]>([]);
   const [isLoadedExtUsers, setIsLoadedExtUsers] = useState(false);
   
-  // 回答対象者用タブ
   const [respondentTab, setRespondentTab] = useState<"tenant" | "external">("tenant");
   const [tenantSearch, setTenantSearch] = useState("");
   const [extSearch, setExtSearch] = useState("");
   const [extCategoryFilter, setExtCategoryFilter] = useState("all");
 
-  // 必須回答ユーザー用タブと検索・フィルター
   const [requiredTab, setRequiredTab] = useState<"tenant" | "external">("tenant");
   const [reqTenantSearch, setReqTenantSearch] = useState("");
   const [reqExtSearch, setReqExtSearch] = useState("");
@@ -69,23 +68,22 @@ export default function SurveySettingsEditor({ settings, setSettings, tenantUser
     }).sort((a, b) => a.name.localeCompare(b.name, "ja"));
   }, [externalUsers, extSearch, extCategoryFilter]);
 
-  // ★ 必須回答に表示できるユーザーを、アクセス対象（公開範囲）や選択ユーザーに基づいて自動フィルタリング
   const availableRequiredTenantUsers = useMemo(() => {
     return sortedTenantUsers.filter(u => {
       if (settings.accessTarget === "selected_users") {
         return settings.respondentIds.includes(u.id);
       }
-      return true; // tenant_members, external_users, public なら全員対象
+      return true; 
     });
   }, [sortedTenantUsers, settings.accessTarget, settings.respondentIds]);
 
   const availableRequiredExternalUsers = useMemo(() => {
     return filteredExternalUsers.filter(u => {
-      if (settings.accessTarget === "tenant_members") return false; // テナント内限定の場合は外部は除外
+      if (settings.accessTarget === "tenant_members") return false; 
       if (settings.accessTarget === "selected_users") {
         return settings.respondentIds.includes(u.id);
       }
-      return true; // external_users, public なら対象
+      return true; 
     });
   }, [filteredExternalUsers, settings.accessTarget, settings.respondentIds]);
 
@@ -167,40 +165,40 @@ export default function SurveySettingsEditor({ settings, setSettings, tenantUser
   };
 
   return (
-    <div className="max-w-3xl mx-auto space-y-6 pb-20 animate-fade-in font-sans">
+    <div className="max-w-3xl mx-auto space-y-4 sm:space-y-6 pb-20 animate-fade-in font-sans">
       
-      <section className="bg-white rounded-xl shadow-sm border border-purple-200 overflow-hidden">
-        <div className="bg-purple-50/80 px-5 py-3 border-b border-purple-100 flex items-center gap-2">
-          <Calendar className="w-4 h-4 text-purple-600" />
-          <h3 className="text-sm font-black text-purple-900">回答期間と回答制限時間</h3>
+      <section className="bg-white rounded-xl sm:rounded-2xl shadow-sm border border-purple-200 overflow-hidden">
+        <div className="bg-purple-50/80 px-4 sm:px-5 py-2.5 sm:py-3 border-b border-purple-100 flex items-center gap-1.5 sm:gap-2">
+          <Calendar className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-purple-600" />
+          <h3 className="text-[11px] sm:text-sm font-black text-purple-900">回答期間と回答制限時間</h3>
         </div>
-        <div className="p-5 space-y-5">
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        <div className="p-4 sm:p-5 space-y-4 sm:space-y-5">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
             <div>
-              <label className="block text-xs font-black text-gray-700 mb-1">回答開始日時</label>
+              <label className="block text-[10px] sm:text-xs font-black text-gray-700 mb-1">回答開始日時</label>
               <input
                 type="datetime-local"
                 value={settings.startDate ? settings.startDate.substring(0, 16) : ""}
                 onChange={e => update("startDate", e.target.value || null)}
-                className="w-full bg-white border border-gray-300 text-xs font-bold rounded-lg px-3 py-2 outline-none focus:ring-2 focus:ring-purple-500"
+                className="w-full bg-white border border-gray-300 text-[11px] sm:text-xs font-bold rounded-lg px-2.5 sm:px-3 py-1.5 sm:py-2 outline-none focus:ring-2 focus:ring-purple-500 shadow-2xs"
               />
-              <span className="text-[10px] text-gray-400 font-bold mt-1 block">未設定の場合はすぐに回答可能</span>
+              <span className="text-[9px] sm:text-[10px] text-gray-400 font-bold mt-1 block">未設定の場合はすぐに回答可能</span>
             </div>
             <div>
-              <label className="block text-xs font-black text-gray-700 mb-1">回答締切日時</label>
+              <label className="block text-[10px] sm:text-xs font-black text-gray-700 mb-1">回答締切日時</label>
               <input
                 type="datetime-local"
                 value={settings.endDate ? settings.endDate.substring(0, 16) : ""}
                 onChange={e => update("endDate", e.target.value || null)}
-                className="w-full bg-white border border-gray-300 text-xs font-bold rounded-lg px-3 py-2 outline-none focus:ring-2 focus:ring-purple-500"
+                className="w-full bg-white border border-gray-300 text-[11px] sm:text-xs font-bold rounded-lg px-2.5 sm:px-3 py-1.5 sm:py-2 outline-none focus:ring-2 focus:ring-purple-500 shadow-2xs"
               />
-              <span className="text-[10px] text-gray-400 font-bold mt-1 block">未設定の場合は無期限</span>
+              <span className="text-[9px] sm:text-[10px] text-gray-400 font-bold mt-1 block">未設定の場合は無期限</span>
             </div>
           </div>
 
           <div className="pt-3 border-t border-gray-100">
-            <label className="block text-xs font-black text-gray-700 mb-1 flex items-center gap-1.5">
-              <Clock className="w-3.5 h-3.5 text-purple-600" />
+            <label className="block text-[10px] sm:text-xs font-black text-gray-700 mb-1.5 flex items-center gap-1.5">
+              <Clock className="w-3 h-3 sm:w-3.5 sm:h-3.5 text-purple-600" />
               回答制限時間（分単位）
             </label>
             <div className="flex items-center gap-2">
@@ -210,99 +208,113 @@ export default function SurveySettingsEditor({ settings, setSettings, tenantUser
                 placeholder="例: 30"
                 value={settings.timeLimit || ""}
                 onChange={e => handleTimeLimitChange(e.target.value ? Number(e.target.value) : null)}
-                className="w-32 bg-white border border-gray-300 text-xs font-bold rounded-lg px-3 py-2 outline-none focus:ring-2 focus:ring-purple-500"
+                className="w-24 sm:w-32 bg-white border border-gray-300 text-[11px] sm:text-xs font-bold rounded-lg px-2.5 sm:px-3 py-1.5 sm:py-2 outline-none focus:ring-2 focus:ring-purple-500 shadow-2xs text-center"
               />
-              <span className="text-xs font-bold text-gray-700">分</span>
+              <span className="text-[10px] sm:text-xs font-bold text-gray-700">分</span>
             </div>
-            <p className="text-[10px] font-bold text-gray-500 mt-1.5 leading-relaxed">
-              ※ 設定すると、回答開始ボタン押下後にタイマーが開始されます。制限時間を過ぎた場合、回答内容は自動送信されます。<br/>
+            <p className="text-[9px] sm:text-[10px] font-bold text-gray-500 mt-1.5 leading-relaxed">
               ※ 制限時間を設定した場合、「回答の編集」は許可できなくなります。
             </p>
           </div>
         </div>
       </section>
 
-      <section className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
-        <div className="bg-gray-50 px-5 py-3 border-b border-gray-100"><h3 className="text-sm font-black text-gray-800">公開と権限</h3></div>
-        <div className="p-5 space-y-6">
+      <section className="bg-white rounded-xl sm:rounded-2xl shadow-sm border border-gray-200 overflow-hidden">
+        <div className="bg-gray-50 px-4 sm:px-5 py-2.5 sm:py-3 border-b border-gray-100"><h3 className="text-[11px] sm:text-sm font-black text-gray-800">公開と権限</h3></div>
+        <div className="p-4 sm:p-5 space-y-4 sm:space-y-6">
           <div>
-            <label className="block text-xs font-black text-gray-700 mb-2">アンケートの回答対象者（公開範囲）</label>
-            <select value={settings.accessTarget} onChange={e => update("accessTarget", e.target.value)} className="w-full bg-white border border-gray-300 text-sm font-bold rounded-lg px-3 py-2 outline-none focus:ring-2 focus:ring-purple-500">
-              <option value="tenant_members">限定公開 (テナント内のメンバー)</option>
-              <option value="external_users">限定公開 (テナント＋外部連携)</option>
-              <option value="selected_users">限定公開 (指定したユーザーのみ ※内部・外部選択可)</option>
-              <option value="public">一般公開 (ログイン不要・誰でも)</option>
-            </select>
-            <p className="text-[10px] text-gray-500 mt-1 font-bold">
+            <label className="block text-[10px] sm:text-xs font-black text-gray-700 mb-1.5 sm:mb-2">アンケートの回答対象者（公開範囲）</label>
+            <CustomSelect 
+              value={settings.accessTarget} 
+              onChange={(val) => update("accessTarget", val)}
+              options={[
+                { value: "tenant_members", label: "限定公開 (テナント内のメンバー)" },
+                { value: "external_users", label: "限定公開 (テナント＋外部連携)" },
+                { value: "selected_users", label: "限定公開 (指定したユーザーのみ)" },
+                { value: "public", label: "一般公開 (ログイン不要・誰でも)" }
+              ]}
+              buttonClassName="w-full bg-white border border-gray-300 text-[11px] sm:text-sm font-bold rounded-lg sm:rounded-xl px-2.5 sm:px-3 py-1.5 sm:py-2 outline-none focus:ring-2 focus:ring-purple-500 shadow-2xs flex items-center justify-between"
+            />
+            <p className="text-[8px] sm:text-[10px] text-gray-500 mt-1 sm:mt-1.5 font-bold">
               ※ 一般公開以外は、回答時にアカウントでのログインが必須となります。
             </p>
             
             {settings.accessTarget === "selected_users" && (
-              <div className="mt-3 p-3 border border-indigo-100 rounded-xl bg-indigo-50/20 space-y-3">
-                <div className="flex items-center justify-between border-b border-indigo-100 pb-2">
-                  <div className="flex bg-white p-1 rounded-lg border border-indigo-200 text-xs font-bold">
-                    <button type="button" onClick={() => setRespondentTab("tenant")} className={`px-3 py-1 rounded-md transition-colors ${respondentTab === "tenant" ? "bg-indigo-600 text-white shadow-sm" : "text-gray-600 hover:text-gray-900"}`}>
+              <div className="mt-2.5 sm:mt-3 p-2.5 sm:p-3 border border-indigo-100 rounded-xl bg-indigo-50/20 space-y-2.5 sm:space-y-3">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between border-b border-indigo-100 pb-2 gap-2">
+                  <div className="flex bg-white p-1 rounded-lg border border-indigo-200 text-[10px] sm:text-xs font-bold w-full sm:w-auto">
+                    <button type="button" onClick={() => setRespondentTab("tenant")} className={`flex-1 sm:flex-none px-2.5 sm:px-3 py-1 sm:py-1.5 rounded-md transition-colors ${respondentTab === "tenant" ? "bg-indigo-600 text-white shadow-sm" : "text-gray-600 hover:text-gray-900 hover:bg-gray-50"}`}>
                       内部メンバー ({tenantUsers.length})
                     </button>
-                    <button type="button" onClick={() => setRespondentTab("external")} className={`px-3 py-1 rounded-md transition-colors ${respondentTab === "external" ? "bg-indigo-600 text-white shadow-sm" : "text-gray-600 hover:text-gray-900"}`}>
+                    <button type="button" onClick={() => setRespondentTab("external")} className={`flex-1 sm:flex-none px-2.5 sm:px-3 py-1 sm:py-1.5 rounded-md transition-colors ${respondentTab === "external" ? "bg-indigo-600 text-white shadow-sm" : "text-gray-600 hover:text-gray-900 hover:bg-gray-50"}`}>
                       外部ユーザー ({externalUsers.length})
                     </button>
                   </div>
                   
-                  <div className="flex items-center gap-2">
-                    <span className="text-[10px] font-bold text-indigo-700">選択中: {settings.respondentIds.length}名</span>
-                    <button type="button" onClick={() => setAllArray("respondentIds", true, respondentTab === "tenant" ? sortedTenantUsers : filteredExternalUsers)} className="text-[10px] font-bold text-indigo-600 hover:underline bg-white px-2 py-1 rounded border border-indigo-200">表示中を全選択</button>
-                    <button type="button" onClick={() => setAllArray("respondentIds", false, respondentTab === "tenant" ? sortedTenantUsers : filteredExternalUsers)} className="text-[10px] font-bold text-gray-500 hover:underline bg-white px-2 py-1 rounded border border-gray-200">表示中を解除</button>
+                  <div className="flex items-center gap-1.5 sm:gap-2 justify-end">
+                    <span className="text-[9px] sm:text-[10px] font-bold text-indigo-700">選択中: {settings.respondentIds.length}名</span>
+                    <button type="button" onClick={() => setAllArray("respondentIds", true, respondentTab === "tenant" ? sortedTenantUsers : filteredExternalUsers)} className="text-[8px] sm:text-[10px] font-bold text-indigo-600 hover:bg-indigo-50 bg-white px-1.5 sm:px-2 py-0.5 sm:py-1 rounded border border-indigo-200 transition-colors shadow-2xs">全選択</button>
+                    <button type="button" onClick={() => setAllArray("respondentIds", false, respondentTab === "tenant" ? sortedTenantUsers : filteredExternalUsers)} className="text-[8px] sm:text-[10px] font-bold text-gray-500 hover:bg-gray-50 bg-white px-1.5 sm:px-2 py-0.5 sm:py-1 rounded border border-gray-200 transition-colors shadow-2xs">全解除</button>
                   </div>
                 </div>
 
                 {respondentTab === "tenant" ? (
                   <div className="space-y-2">
                     <div className="relative">
-                      <Search className="w-3.5 h-3.5 absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-400" />
+                      <Search className="w-3 h-3 sm:w-3.5 sm:h-3.5 absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-400" />
                       <input 
                         type="text" placeholder="内部メンバーを検索..." value={tenantSearch} onChange={e => setTenantSearch(e.target.value)}
-                        className="w-full pl-8 pr-3 py-1.5 bg-white border border-gray-200 rounded-lg text-xs font-bold outline-none focus:border-indigo-500"
+                        className="w-full pl-7 sm:pl-8 pr-2.5 sm:pr-3 py-1.5 bg-white border border-gray-200 rounded-lg text-[10px] sm:text-xs font-bold outline-none focus:border-indigo-500 shadow-2xs"
                       />
                     </div>
-                    <div className="max-h-40 overflow-y-auto custom-scrollbar bg-white rounded-lg border border-indigo-100 p-1.5 space-y-0.5">
-                      {sortedTenantUsers.map(u => (
-                        <label key={u.id} className="flex items-center gap-2 py-1 px-2 cursor-pointer hover:bg-indigo-50/60 rounded text-xs font-bold text-gray-700">
-                          <input type="checkbox" checked={settings.respondentIds.includes(u.id)} onChange={() => toggleArray("respondentIds", u.id)} className="w-3.5 h-3.5 text-indigo-600 rounded" />
-                          {u.systemId ? <span className="font-mono text-purple-600">[{u.systemId}]</span> : null}
-                          <span className="truncate flex-1">{u.name}</span>
-                        </label>
-                      ))}
+                    <div className="max-h-32 sm:max-h-40 overflow-y-auto custom-scrollbar bg-white rounded-lg border border-indigo-100 p-1 sm:p-1.5 space-y-0.5">
+                      {sortedTenantUsers.length === 0 ? (
+                        <p className="text-[9px] sm:text-[10px] text-gray-400 text-center py-3 font-bold">メンバーがいません</p>
+                      ) : (
+                        sortedTenantUsers.map(u => (
+                          <label key={u.id} className="flex items-center gap-1.5 sm:gap-2 py-1 px-1.5 sm:px-2 cursor-pointer hover:bg-indigo-50/60 rounded text-[10px] sm:text-xs font-bold text-gray-700 transition-colors">
+                            <input type="checkbox" checked={settings.respondentIds.includes(u.id)} onChange={() => toggleArray("respondentIds", u.id)} className="w-3 h-3 sm:w-3.5 sm:h-3.5 text-indigo-600 rounded" />
+                            {u.systemId ? <span className="font-mono text-purple-600">[{u.systemId}]</span> : null}
+                            <span className="truncate flex-1">{u.name}</span>
+                          </label>
+                        ))
+                      )}
                     </div>
                   </div>
                 ) : (
                   <div className="space-y-2">
-                    <div className="flex gap-2">
+                    <div className="flex flex-col sm:flex-row gap-1.5 sm:gap-2">
                       <div className="relative flex-1">
-                        <Search className="w-3.5 h-3.5 absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-400" />
+                        <Search className="w-3 h-3 sm:w-3.5 sm:h-3.5 absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-400" />
                         <input 
-                          type="text" placeholder="外部ユーザー名・所属で検索..." value={extSearch} onChange={e => setExtSearch(e.target.value)}
-                          className="w-full pl-8 pr-3 py-1.5 bg-white border border-gray-200 rounded-lg text-xs font-bold outline-none focus:border-indigo-500"
+                          type="text" placeholder="外部ユーザー名・所属..." value={extSearch} onChange={e => setExtSearch(e.target.value)}
+                          className="w-full pl-7 sm:pl-8 pr-2.5 sm:pr-3 py-1.5 bg-white border border-gray-200 rounded-lg text-[10px] sm:text-xs font-bold outline-none focus:border-indigo-500 shadow-2xs"
                         />
                       </div>
-                      <select value={extCategoryFilter} onChange={e => setExtCategoryFilter(e.target.value)} className="bg-white border border-gray-200 rounded-lg px-2.5 py-1.5 text-xs font-bold outline-none">
-                        <option value="all">すべての区分</option>
-                        <option value="student">生徒</option>
-                        <option value="teacher">教職員</option>
-                        <option value="other">その他</option>
-                      </select>
+                      <div className="w-full sm:w-[130px] shrink-0">
+                        <CustomSelect 
+                          value={extCategoryFilter} onChange={setExtCategoryFilter}
+                          options={[
+                            { value: "all", label: "すべての区分" },
+                            { value: "student", label: "生徒" },
+                            { value: "teacher", label: "教職員" },
+                            { value: "other", label: "その他" }
+                          ]}
+                          buttonClassName="w-full bg-white border border-gray-200 rounded-lg px-2 sm:px-2.5 py-1.5 text-[10px] sm:text-xs font-bold outline-none flex items-center justify-between shadow-2xs"
+                        />
+                      </div>
                     </div>
-                    <div className="max-h-40 overflow-y-auto custom-scrollbar bg-white rounded-lg border border-indigo-100 p-1.5 space-y-0.5">
+                    <div className="max-h-32 sm:max-h-40 overflow-y-auto custom-scrollbar bg-white rounded-lg border border-indigo-100 p-1 sm:p-1.5 space-y-0.5">
                       {filteredExternalUsers.length === 0 ? (
-                        <p className="text-[10px] text-gray-400 text-center py-4 font-bold">外部ユーザーが見つかりません</p>
+                        <p className="text-[9px] sm:text-[10px] text-gray-400 text-center py-3 font-bold">外部ユーザーが見つかりません</p>
                       ) : (
                         filteredExternalUsers.map(u => (
-                          <label key={u.id} className="flex items-center justify-between py-1 px-2 cursor-pointer hover:bg-indigo-50/60 rounded text-xs font-bold text-gray-700">
-                            <div className="flex items-center gap-2 min-w-0">
-                              <input type="checkbox" checked={settings.respondentIds.includes(u.id)} onChange={() => toggleArray("respondentIds", u.id)} className="w-3.5 h-3.5 text-indigo-600 rounded shrink-0" />
+                          <label key={u.id} className="flex items-center justify-between py-1 px-1.5 sm:px-2 cursor-pointer hover:bg-indigo-50/60 rounded text-[10px] sm:text-xs font-bold text-gray-700 transition-colors">
+                            <div className="flex items-center gap-1.5 sm:gap-2 min-w-0">
+                              <input type="checkbox" checked={settings.respondentIds.includes(u.id)} onChange={() => toggleArray("respondentIds", u.id)} className="w-3 h-3 sm:w-3.5 sm:h-3.5 text-indigo-600 rounded shrink-0" />
                               <span className="truncate">{u.name}</span>
                             </div>
-                            <span className="text-[10px] text-gray-400 font-normal shrink-0 ml-2">{(u as any).affiliation || "所属なし"}</span>
+                            <span className="text-[8px] sm:text-[10px] text-gray-400 font-normal shrink-0 ml-1.5 sm:ml-2">{(u as any).affiliation || "所属なし"}</span>
                           </label>
                         ))
                       )}
@@ -314,46 +326,46 @@ export default function SurveySettingsEditor({ settings, setSettings, tenantUser
           </div>
 
           {settings.accessTarget !== "public" && (
-            <div className="pt-4 border-t border-gray-100">
-              <label className="block text-xs font-black text-gray-700 mb-1">必須回答ユーザーの指定</label>
-              <p className="text-[10px] text-gray-400 font-bold mb-2">※ 上記の公開範囲・対象者として選択されているメンバーのみ選択できます。</p>
+            <div className="pt-3 sm:pt-4 border-t border-gray-100">
+              <label className="block text-[11px] sm:text-xs font-black text-gray-700 mb-1">必須回答ユーザーの指定</label>
+              <p className="text-[9px] sm:text-[10px] text-gray-400 font-bold mb-2">※ 上記の公開範囲として選択されているメンバーのみ選択できます。</p>
 
-              <div className="p-3 border border-rose-100 rounded-xl bg-rose-50/20 space-y-3">
-                <div className="flex items-center justify-between border-b border-rose-100 pb-2">
-                  <div className="flex bg-white p-1 rounded-lg border border-rose-200 text-xs font-bold">
-                    <button type="button" onClick={() => setRequiredTab("tenant")} className={`px-3 py-1 rounded-md transition-colors ${requiredTab === "tenant" ? "bg-rose-600 text-white shadow-sm" : "text-gray-600 hover:text-gray-900"}`}>
+              <div className="p-2.5 sm:p-3 border border-rose-100 rounded-xl bg-rose-50/20 space-y-2.5 sm:space-y-3">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between border-b border-rose-100 pb-2 gap-2">
+                  <div className="flex bg-white p-1 rounded-lg border border-rose-200 text-[10px] sm:text-xs font-bold w-full sm:w-auto">
+                    <button type="button" onClick={() => setRequiredTab("tenant")} className={`flex-1 sm:flex-none px-2.5 sm:px-3 py-1 sm:py-1.5 rounded-md transition-colors ${requiredTab === "tenant" ? "bg-rose-600 text-white shadow-sm" : "text-gray-600 hover:text-gray-900 hover:bg-gray-50"}`}>
                       内部メンバー ({availableRequiredTenantUsers.length})
                     </button>
                     {settings.accessTarget !== "tenant_members" && (
-                      <button type="button" onClick={() => setRequiredTab("external")} className={`px-3 py-1 rounded-md transition-colors ${requiredTab === "external" ? "bg-rose-600 text-white shadow-sm" : "text-gray-600 hover:text-gray-900"}`}>
-                        外部ユーザー ({availableRequiredExternalUsers.length})
+                      <button type="button" onClick={() => setRequiredTab("external")} className={`flex-1 sm:flex-none px-2.5 sm:px-3 py-1 sm:py-1.5 rounded-md transition-colors ${requiredTab === "external" ? "bg-rose-600 text-white shadow-sm" : "text-gray-600 hover:text-gray-900 hover:bg-gray-50"}`}>
+                        外部 ({availableRequiredExternalUsers.length})
                       </button>
                     )}
                   </div>
                   
-                  <div className="flex items-center gap-2">
-                    <span className="text-[10px] font-bold text-rose-700">選択中: {settings.requiredRespondentIds.length}名</span>
-                    <button type="button" onClick={() => setAllArray("requiredRespondentIds", true, requiredTab === "tenant" ? sortedReqTenantUsers : filteredReqExternalUsers)} className="text-[10px] font-bold text-rose-600 hover:underline bg-white px-2 py-1 rounded border border-rose-200">表示中を全選択</button>
-                    <button type="button" onClick={() => setAllArray("requiredRespondentIds", false, requiredTab === "tenant" ? sortedReqTenantUsers : filteredReqExternalUsers)} className="text-[10px] font-bold text-gray-500 hover:underline bg-white px-2 py-1 rounded border border-gray-200">表示中を解除</button>
+                  <div className="flex items-center gap-1.5 sm:gap-2 justify-end">
+                    <span className="text-[9px] sm:text-[10px] font-bold text-rose-700">選択中: {settings.requiredRespondentIds.length}名</span>
+                    <button type="button" onClick={() => setAllArray("requiredRespondentIds", true, requiredTab === "tenant" ? sortedReqTenantUsers : filteredReqExternalUsers)} className="text-[8px] sm:text-[10px] font-bold text-rose-600 hover:bg-rose-50 bg-white px-1.5 sm:px-2 py-0.5 sm:py-1 rounded border border-rose-200 transition-colors shadow-2xs">全選択</button>
+                    <button type="button" onClick={() => setAllArray("requiredRespondentIds", false, requiredTab === "tenant" ? sortedReqTenantUsers : filteredReqExternalUsers)} className="text-[8px] sm:text-[10px] font-bold text-gray-500 hover:bg-gray-50 bg-white px-1.5 sm:px-2 py-0.5 sm:py-1 rounded border border-gray-200 transition-colors shadow-2xs">全解除</button>
                   </div>
                 </div>
 
                 {requiredTab === "tenant" ? (
                   <div className="space-y-2">
                     <div className="relative">
-                      <Search className="w-3.5 h-3.5 absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-400" />
+                      <Search className="w-3 h-3 sm:w-3.5 sm:h-3.5 absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-400" />
                       <input 
                         type="text" placeholder="内部メンバーを検索..." value={reqTenantSearch} onChange={e => setReqTenantSearch(e.target.value)}
-                        className="w-full pl-8 pr-3 py-1.5 bg-white border border-gray-200 rounded-lg text-xs font-bold outline-none focus:border-rose-500"
+                        className="w-full pl-7 sm:pl-8 pr-2.5 sm:pr-3 py-1.5 bg-white border border-gray-200 rounded-lg text-[10px] sm:text-xs font-bold outline-none focus:border-rose-500 shadow-2xs"
                       />
                     </div>
-                    <div className="max-h-40 overflow-y-auto custom-scrollbar bg-white rounded-lg border border-rose-100 p-1.5 space-y-0.5">
+                    <div className="max-h-32 sm:max-h-40 overflow-y-auto custom-scrollbar bg-white rounded-lg border border-rose-100 p-1 sm:p-1.5 space-y-0.5">
                       {sortedReqTenantUsers.length === 0 ? (
-                        <p className="text-[10px] text-gray-400 text-center py-4 font-bold">対象となる内部メンバーがいません</p>
+                        <p className="text-[9px] sm:text-[10px] text-gray-400 text-center py-3 font-bold">対象のメンバーがいません</p>
                       ) : (
                         sortedReqTenantUsers.map(u => (
-                          <label key={u.id} className="flex items-center gap-2 py-1 px-2 cursor-pointer hover:bg-rose-50/60 rounded text-xs font-bold text-gray-700">
-                            <input type="checkbox" checked={settings.requiredRespondentIds.includes(u.id)} onChange={() => toggleArray("requiredRespondentIds", u.id)} className="w-3.5 h-3.5 text-rose-600 rounded" />
+                          <label key={u.id} className="flex items-center gap-1.5 sm:gap-2 py-1 px-1.5 sm:px-2 cursor-pointer hover:bg-rose-50/60 rounded text-[10px] sm:text-xs font-bold text-gray-700 transition-colors">
+                            <input type="checkbox" checked={settings.requiredRespondentIds.includes(u.id)} onChange={() => toggleArray("requiredRespondentIds", u.id)} className="w-3 h-3 sm:w-3.5 sm:h-3.5 text-rose-600 rounded" />
                             {u.systemId ? <span className="font-mono text-purple-600">[{u.systemId}]</span> : null}
                             <span className="truncate flex-1">{u.name}</span>
                           </label>
@@ -363,32 +375,38 @@ export default function SurveySettingsEditor({ settings, setSettings, tenantUser
                   </div>
                 ) : (
                   <div className="space-y-2">
-                    <div className="flex gap-2">
+                    <div className="flex flex-col sm:flex-row gap-1.5 sm:gap-2">
                       <div className="relative flex-1">
-                        <Search className="w-3.5 h-3.5 absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-400" />
+                        <Search className="w-3 h-3 sm:w-3.5 sm:h-3.5 absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-400" />
                         <input 
                           type="text" placeholder="外部ユーザー名・所属で検索..." value={reqExtSearch} onChange={e => setReqExtSearch(e.target.value)}
-                          className="w-full pl-8 pr-3 py-1.5 bg-white border border-gray-200 rounded-lg text-xs font-bold outline-none focus:border-rose-500"
+                          className="w-full pl-7 sm:pl-8 pr-2.5 sm:pr-3 py-1.5 bg-white border border-gray-200 rounded-lg text-[10px] sm:text-xs font-bold outline-none focus:border-rose-500 shadow-2xs"
                         />
                       </div>
-                      <select value={reqExtCategoryFilter} onChange={e => setReqExtCategoryFilter(e.target.value)} className="bg-white border border-gray-200 rounded-lg px-2.5 py-1.5 text-xs font-bold outline-none">
-                        <option value="all">すべての区分</option>
-                        <option value="student">生徒</option>
-                        <option value="teacher">教職員</option>
-                        <option value="other">その他</option>
-                      </select>
+                      <div className="w-full sm:w-[130px] shrink-0">
+                        <CustomSelect 
+                          value={reqExtCategoryFilter} onChange={setReqExtCategoryFilter}
+                          options={[
+                            { value: "all", label: "すべての区分" },
+                            { value: "student", label: "生徒" },
+                            { value: "teacher", label: "教職員" },
+                            { value: "other", label: "その他" }
+                          ]}
+                          buttonClassName="w-full bg-white border border-gray-200 rounded-lg px-2.5 py-1.5 text-[10px] sm:text-xs font-bold outline-none flex items-center justify-between shadow-2xs"
+                        />
+                      </div>
                     </div>
-                    <div className="max-h-40 overflow-y-auto custom-scrollbar bg-white rounded-lg border border-rose-100 p-1.5 space-y-0.5">
+                    <div className="max-h-32 sm:max-h-40 overflow-y-auto custom-scrollbar bg-white rounded-lg border border-rose-100 p-1 sm:p-1.5 space-y-0.5">
                       {filteredReqExternalUsers.length === 0 ? (
-                        <p className="text-[10px] text-gray-400 text-center py-4 font-bold">対象となる外部ユーザーがいません</p>
+                        <p className="text-[9px] sm:text-[10px] text-gray-400 text-center py-3 font-bold">対象の外部ユーザーがいません</p>
                       ) : (
                         filteredReqExternalUsers.map(u => (
-                          <label key={u.id} className="flex items-center justify-between py-1 px-2 cursor-pointer hover:bg-rose-50/60 rounded text-xs font-bold text-gray-700">
-                            <div className="flex items-center gap-2 min-w-0">
-                              <input type="checkbox" checked={settings.requiredRespondentIds.includes(u.id)} onChange={() => toggleArray("requiredRespondentIds", u.id)} className="w-3.5 h-3.5 text-rose-600 rounded shrink-0" />
+                          <label key={u.id} className="flex items-center justify-between py-1 px-1.5 sm:px-2 cursor-pointer hover:bg-rose-50/60 rounded text-[10px] sm:text-xs font-bold text-gray-700 transition-colors">
+                            <div className="flex items-center gap-1.5 sm:gap-2 min-w-0">
+                              <input type="checkbox" checked={settings.requiredRespondentIds.includes(u.id)} onChange={() => toggleArray("requiredRespondentIds", u.id)} className="w-3 h-3 sm:w-3.5 sm:h-3.5 text-rose-600 rounded shrink-0" />
                               <span className="truncate">{u.name}</span>
                             </div>
-                            <span className="text-[10px] text-gray-400 font-normal shrink-0 ml-2">{(u as any).affiliation || "所属なし"}</span>
+                            <span className="text-[8px] sm:text-[10px] text-gray-400 font-normal shrink-0 ml-1.5 sm:ml-2">{(u as any).affiliation || "所属なし"}</span>
                           </label>
                         ))
                       )}
@@ -399,77 +417,84 @@ export default function SurveySettingsEditor({ settings, setSettings, tenantUser
             </div>
           )}
 
-          <div className="pt-4 border-t border-gray-100">
-            <label className="block text-xs font-black text-gray-700 mb-2">編集権限（このアンケートを編集できる人）</label>
-            <select value={settings.visibility} onChange={e => update("visibility", e.target.value)} className="w-full bg-white border border-gray-300 text-sm font-bold rounded-lg px-3 py-2 outline-none focus:ring-2 focus:ring-purple-500">
-              <option value="private">自分だけ</option>
-              <option value="tenant_all">テナントの全メンバー</option>
-              <option value="selected_users">指定したユーザー</option>
-            </select>
+          <div className="pt-3 sm:pt-4 border-t border-gray-100">
+            <label className="block text-[10px] sm:text-xs font-black text-gray-700 mb-1.5 sm:mb-2">編集権限（このアンケートを編集できる人）</label>
+            <CustomSelect 
+              value={settings.visibility} 
+              onChange={val => update("visibility", val)}
+              options={[
+                { value: "private", label: "自分だけ" },
+                { value: "tenant_all", label: "テナントの全メンバー" },
+                { value: "selected_users", label: "指定したユーザー" }
+              ]}
+              buttonClassName="w-full bg-white border border-gray-300 text-[11px] sm:text-sm font-bold rounded-lg px-2.5 sm:px-3 py-1.5 sm:py-2 outline-none focus:ring-2 focus:ring-purple-500 shadow-2xs flex items-center justify-between"
+            />
             {settings.visibility === "selected_users" && (
-              <div className="mt-3 p-3 border border-gray-200 rounded-lg bg-gray-50 max-h-48 overflow-y-auto custom-scrollbar">
-                <div className="flex justify-between mb-2 border-b border-gray-200 pb-2">
-                  <span className="text-[10px] font-bold text-gray-600">編集を許可するユーザー（システム利用番号順）</span>
-                  <button type="button" onClick={() => setAllArray("editorIds", true, sortedTenantUsers)} className="text-[10px] text-purple-600 hover:underline">全選択</button>
+              <div className="mt-2.5 sm:mt-3 p-2.5 sm:p-3 border border-gray-200 rounded-lg sm:rounded-xl bg-gray-50 max-h-40 sm:max-h-48 overflow-y-auto custom-scrollbar shadow-inner">
+                <div className="flex justify-between items-center mb-2 border-b border-gray-200 pb-1.5 sm:pb-2">
+                  <span className="text-[9px] sm:text-[10px] font-bold text-gray-600">編集を許可するユーザー（番号順）</span>
+                  <button type="button" onClick={() => setAllArray("editorIds", true, sortedTenantUsers)} className="text-[9px] sm:text-[10px] font-bold text-purple-600 hover:underline bg-white px-1.5 py-0.5 rounded border border-purple-200 shadow-2xs">全選択</button>
                 </div>
-                {sortedTenantUsers.map(u => (
-                  <label key={u.id} className="flex items-center gap-2 py-1 cursor-pointer hover:bg-gray-100 rounded px-1">
-                    <input type="checkbox" checked={settings.editorIds.includes(u.id)} onChange={() => toggleArray("editorIds", u.id)} className="w-3.5 h-3.5 text-purple-600 rounded" />
-                    <span className="text-xs font-bold text-gray-700">
-                      {u.systemId ? <span className="font-mono text-purple-600 mr-1.5">[{u.systemId}]</span> : null}
-                      {u.name}
-                    </span>
-                  </label>
-                ))}
+                <div className="space-y-0.5">
+                  {sortedTenantUsers.map(u => (
+                    <label key={u.id} className="flex items-center gap-1.5 sm:gap-2 py-1 cursor-pointer hover:bg-gray-100 rounded px-1 sm:px-1.5 transition-colors">
+                      <input type="checkbox" checked={settings.editorIds.includes(u.id)} onChange={() => toggleArray("editorIds", u.id)} className="w-3 h-3 sm:w-3.5 sm:h-3.5 text-purple-600 rounded" />
+                      <span className="text-[10px] sm:text-xs font-bold text-gray-700 truncate">
+                        {u.systemId ? <span className="font-mono text-purple-600 mr-1 sm:mr-1.5">[{u.systemId}]</span> : null}
+                        {u.name}
+                      </span>
+                    </label>
+                  ))}
+                </div>
               </div>
             )}
           </div>
         </div>
       </section>
 
-      <section className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
-        <div className="bg-gray-50 px-5 py-3 border-b border-gray-100"><h3 className="text-sm font-black text-gray-800">回答の制御</h3></div>
-        <div className="p-5 space-y-4">
-          <label className="flex items-center justify-between cursor-pointer">
-            <span className="text-sm font-bold text-gray-900">回答を受付中</span>
-            <input type="checkbox" checked={settings.acceptingResponses} onChange={e => update("acceptingResponses", e.target.checked)} className="h-5 w-5 rounded text-purple-600 border-gray-300" />
+      <section className="bg-white rounded-xl sm:rounded-2xl shadow-sm border border-gray-200 overflow-hidden">
+        <div className="bg-gray-50 px-4 sm:px-5 py-2.5 sm:py-3 border-b border-gray-100"><h3 className="text-[11px] sm:text-sm font-black text-gray-800">回答の制御</h3></div>
+        <div className="p-4 sm:p-5 space-y-3 sm:space-y-4">
+          <label className="flex items-center justify-between cursor-pointer group">
+            <span className="text-[11px] sm:text-sm font-bold text-gray-900 group-hover:text-purple-700 transition-colors">回答を受付中</span>
+            <input type="checkbox" checked={settings.acceptingResponses} onChange={e => update("acceptingResponses", e.target.checked)} className="h-4 w-4 sm:h-5 sm:w-5 rounded text-purple-600 border-gray-300 shadow-2xs cursor-pointer" />
           </label>
-          <p className="text-[10px] text-gray-500 font-bold -mt-2">オフにすると回答フォームが直ちに閉じられます。</p>
+          <p className="text-[9px] sm:text-[10px] text-gray-500 font-bold -mt-1 sm:-mt-2">オフにすると回答フォームが直ちに閉じられます。</p>
 
-          <div className="border-t border-gray-100 pt-4 mt-2">
-            <label className="flex items-center justify-between cursor-pointer">
-              <span className="text-sm font-bold text-gray-900">回答者情報を収集する</span>
-              <input type="checkbox" checked={settings.collectRespondentInfo} onChange={e => handleCollectInfoChange(e.target.checked)} className="h-5 w-5 rounded text-purple-600 border-gray-300" />
+          <div className="border-t border-gray-100 pt-3 sm:pt-4 mt-1 sm:mt-2">
+            <label className="flex items-center justify-between cursor-pointer group">
+              <span className="text-[11px] sm:text-sm font-bold text-gray-900 group-hover:text-purple-700 transition-colors">回答者情報を収集する</span>
+              <input type="checkbox" checked={settings.collectRespondentInfo} onChange={e => handleCollectInfoChange(e.target.checked)} className="h-4 w-4 sm:h-5 sm:w-5 rounded text-purple-600 border-gray-300 shadow-2xs cursor-pointer" />
             </label>
-            <p className="text-[10px] text-gray-500 font-bold mt-1">
+            <p className="text-[9px] sm:text-[10px] text-gray-500 font-bold mt-1 leading-relaxed">
               オフにすると完全な「匿名回答」になります。個人を特定する機能（1回制限やメール収集など）は利用できなくなります。
             </p>
           </div>
 
-          <div className={`space-y-4 pt-4 border-t border-gray-100 ${!settings.collectRespondentInfo ? 'opacity-50 pointer-events-none' : ''}`}>
-            <label className="flex items-center justify-between cursor-pointer">
-              <span className="text-sm font-bold text-gray-900">メールアドレスを収集する</span>
-              <input type="checkbox" disabled={!settings.collectRespondentInfo} checked={settings.collectEmail} onChange={e => update("collectEmail", e.target.checked)} className="h-5 w-5 rounded text-purple-600 border-gray-300" />
+          <div className={`space-y-3 sm:space-y-4 pt-3 sm:pt-4 border-t border-gray-100 ${!settings.collectRespondentInfo ? 'opacity-50 pointer-events-none' : ''}`}>
+            <label className="flex items-center justify-between cursor-pointer group">
+              <span className="text-[11px] sm:text-sm font-bold text-gray-900 group-hover:text-purple-700 transition-colors">メールアドレスを収集する</span>
+              <input type="checkbox" disabled={!settings.collectRespondentInfo} checked={settings.collectEmail} onChange={e => update("collectEmail", e.target.checked)} className="h-4 w-4 sm:h-5 sm:w-5 rounded text-purple-600 border-gray-300 shadow-2xs cursor-pointer" />
             </label>
             
-            <label className="flex items-center justify-between cursor-pointer">
-              <div>
-                <span className="text-sm font-bold text-gray-900 block">回答を1回に制限する（一発勝負）</span>
-                <span className="text-[10px] text-gray-500 font-bold">ONにすると、回答後の再回答や内容の編集ができなくなります。</span>
+            <label className="flex items-center justify-between cursor-pointer group">
+              <div className="pr-3">
+                <span className="text-[11px] sm:text-sm font-bold text-gray-900 block group-hover:text-purple-700 transition-colors">回答を1回に制限する（一発勝負）</span>
+                <span className="text-[8px] sm:text-[10px] text-gray-500 font-bold mt-0.5 block">ONにすると、回答後の再回答や内容の編集ができなくなります。</span>
               </div>
               <input 
                 type="checkbox" 
                 disabled={!settings.collectRespondentInfo} 
                 checked={settings.limitToOneResponse} 
                 onChange={e => handleLimitToOneChange(e.target.checked)} 
-                className="h-5 w-5 rounded text-purple-600 border-gray-300" 
+                className="h-4 w-4 sm:h-5 sm:w-5 rounded text-purple-600 border-gray-300 shadow-2xs cursor-pointer shrink-0" 
               />
             </label>
 
-            <label className={`flex items-center justify-between cursor-pointer ${(!settings.collectRespondentInfo || !!settings.timeLimit) ? 'opacity-50 pointer-events-none' : ''}`}>
-              <div>
-                <span className="text-sm font-bold text-gray-900 block">回答の編集を許可する</span>
-                <span className={`text-[10px] font-bold ${settings.timeLimit ? 'text-red-500' : 'text-gray-500'}`}>
+            <label className={`flex items-center justify-between cursor-pointer group ${(!settings.collectRespondentInfo || !!settings.timeLimit) ? 'opacity-50 pointer-events-none' : ''}`}>
+              <div className="pr-3">
+                <span className="text-[11px] sm:text-sm font-bold text-gray-900 block group-hover:text-purple-700 transition-colors">回答の編集を許可する</span>
+                <span className={`text-[8px] sm:text-[10px] font-bold mt-0.5 block leading-tight ${settings.timeLimit ? 'text-red-500' : 'text-gray-500'}`}>
                   {settings.timeLimit ? "制限時間が設定されているため、編集は許可できません。" : "ONにすると、送信後も自分の回答を自由に上書き編集できます。"}
                 </span>
               </div>
@@ -478,87 +503,92 @@ export default function SurveySettingsEditor({ settings, setSettings, tenantUser
                 disabled={!settings.collectRespondentInfo || !!settings.timeLimit} 
                 checked={settings.allowEditResponse} 
                 onChange={e => handleAllowEditChange(e.target.checked)} 
-                className="h-5 w-5 rounded text-purple-600 border-gray-300" 
+                className="h-4 w-4 sm:h-5 sm:w-5 rounded text-purple-600 border-gray-300 shadow-2xs cursor-pointer shrink-0" 
               />
             </label>
           </div>
         </div>
       </section>
 
-      <section className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
-        <div className="bg-gray-50 px-5 py-3 border-b border-gray-100"><h3 className="text-sm font-black text-gray-800">テスト (クイズ)</h3></div>
-        <div className="p-5 space-y-4">
-          <label className="flex items-center justify-between cursor-pointer">
-            <span className="text-sm font-bold text-gray-900">テストにする</span>
-            <input type="checkbox" checked={settings.isQuiz} onChange={e => update("isQuiz", e.target.checked)} className="h-5 w-5 rounded text-purple-600 border-gray-300" />
+      <section className="bg-white rounded-xl sm:rounded-2xl shadow-sm border border-gray-200 overflow-hidden">
+        <div className="bg-gray-50 px-4 sm:px-5 py-2.5 sm:py-3 border-b border-gray-100"><h3 className="text-[11px] sm:text-sm font-black text-gray-800">テスト (クイズ)</h3></div>
+        <div className="p-4 sm:p-5 space-y-3 sm:space-y-4">
+          <label className="flex items-center justify-between cursor-pointer group">
+            <span className="text-[11px] sm:text-sm font-bold text-gray-900 group-hover:text-purple-700 transition-colors">テストにする</span>
+            <input type="checkbox" checked={settings.isQuiz} onChange={e => update("isQuiz", e.target.checked)} className="h-4 w-4 sm:h-5 sm:w-5 rounded text-purple-600 border-gray-300 shadow-2xs cursor-pointer" />
           </label>
-          <p className="text-[10px] text-gray-500 font-bold -mt-2">点数の割り当て、自動採点、フィードバックの提供が可能になります。</p>
+          <p className="text-[9px] sm:text-[10px] text-gray-500 font-bold -mt-1 sm:-mt-2">点数の割り当て、自動採点、フィードバックの提供が可能になります。</p>
           
           {settings.isQuiz && (
-            <div className="pt-4 border-t border-gray-100 space-y-4 animate-fade-in">
+            <div className="pt-3 sm:pt-4 border-t border-gray-100 space-y-3 sm:space-y-4 animate-fade-in">
               <div>
-                <label className="block text-xs font-bold text-gray-700 mb-2">成績の発表</label>
-                <div className="space-y-2">
-                  <label className="flex items-center gap-2"><input type="radio" checked={settings.releaseGrades === "immediately"} onChange={() => update("releaseGrades", "immediately")} className="text-purple-600" /><span className="text-sm text-gray-800">送信直後に表示</span></label>
-                  <label className="flex items-center gap-2"><input type="radio" checked={settings.releaseGrades === "manual"} onChange={() => update("releaseGrades", "manual")} className="text-purple-600" /><span className="text-sm text-gray-800">確認後に手動で表示する（表示ボタンを押すまで隠す）</span></label>
-                  <label className="flex items-center gap-2"><input type="radio" checked={settings.releaseGrades === "never"} onChange={() => update("releaseGrades", "never")} className="text-purple-600" /><span className="text-sm text-gray-800">成績を発表しない</span></label>
+                <label className="block text-[10px] sm:text-xs font-bold text-gray-700 mb-1.5 sm:mb-2">成績の発表</label>
+                <div className="space-y-1.5 sm:space-y-2">
+                  <label className="flex items-center gap-2 cursor-pointer group/rd"><input type="radio" checked={settings.releaseGrades === "immediately"} onChange={() => update("releaseGrades", "immediately")} className="text-purple-600 w-3.5 h-3.5 sm:w-4 sm:h-4" /><span className="text-[11px] sm:text-sm font-bold text-gray-800 group-hover/rd:text-purple-700 transition-colors">送信直後に表示</span></label>
+                  <label className="flex items-center gap-2 cursor-pointer group/rd"><input type="radio" checked={settings.releaseGrades === "manual"} onChange={() => update("releaseGrades", "manual")} className="text-purple-600 w-3.5 h-3.5 sm:w-4 sm:h-4" /><span className="text-[11px] sm:text-sm font-bold text-gray-800 group-hover/rd:text-purple-700 transition-colors">確認後に手動で表示する（表示ボタンを押すまで隠す）</span></label>
+                  <label className="flex items-center gap-2 cursor-pointer group/rd"><input type="radio" checked={settings.releaseGrades === "never"} onChange={() => update("releaseGrades", "never")} className="text-purple-600 w-3.5 h-3.5 sm:w-4 sm:h-4" /><span className="text-[11px] sm:text-sm font-bold text-gray-800 group-hover/rd:text-purple-700 transition-colors">成績を発表しない</span></label>
                 </div>
               </div>
-              <div className={`transition-opacity ${settings.releaseGrades === "never" ? 'opacity-50 pointer-events-none' : ''}`}>
-                <label className="block text-xs font-bold text-gray-700 mb-2">回答者の設定（成績発表時に表示する内容）</label>
-                <div className="space-y-2">
-                  <label className="flex items-center gap-2"><input type="checkbox" checked={settings.showMissedQuestions} onChange={e => update("showMissedQuestions", e.target.checked)} className="rounded text-purple-600" /><span className="text-sm text-gray-800">不正解だった質問を表示</span></label>
-                  <label className="flex items-center gap-2"><input type="checkbox" checked={settings.showCorrectAnswers} onChange={e => update("showCorrectAnswers", e.target.checked)} className="rounded text-purple-600" /><span className="text-sm text-gray-800">正解を表示</span></label>
-                  <label className="flex items-center gap-2"><input type="checkbox" checked={settings.showPointValues} onChange={e => update("showPointValues", e.target.checked)} className="rounded text-purple-600" /><span className="text-sm text-gray-800">点数を表示</span></label>
+              <div className={`transition-opacity pt-2 ${settings.releaseGrades === "never" ? 'opacity-50 pointer-events-none' : ''}`}>
+                <label className="block text-[10px] sm:text-xs font-bold text-gray-700 mb-1.5 sm:mb-2">回答者の設定（成績発表時に表示する内容）</label>
+                <div className="space-y-1.5 sm:space-y-2">
+                  <label className="flex items-center gap-2 cursor-pointer group/cb"><input type="checkbox" checked={settings.showMissedQuestions} onChange={e => update("showMissedQuestions", e.target.checked)} className="rounded text-purple-600 w-3.5 h-3.5 sm:w-4 sm:h-4" /><span className="text-[11px] sm:text-sm font-bold text-gray-800 group-hover/cb:text-purple-700 transition-colors">不正解だった質問を表示</span></label>
+                  <label className="flex items-center gap-2 cursor-pointer group/cb"><input type="checkbox" checked={settings.showCorrectAnswers} onChange={e => update("showCorrectAnswers", e.target.checked)} className="rounded text-purple-600 w-3.5 h-3.5 sm:w-4 sm:h-4" /><span className="text-[11px] sm:text-sm font-bold text-gray-800 group-hover/cb:text-purple-700 transition-colors">正解を表示</span></label>
+                  <label className="flex items-center gap-2 cursor-pointer group/cb"><input type="checkbox" checked={settings.showPointValues} onChange={e => update("showPointValues", e.target.checked)} className="rounded text-purple-600 w-3.5 h-3.5 sm:w-4 sm:h-4" /><span className="text-[11px] sm:text-sm font-bold text-gray-800 group-hover/cb:text-purple-700 transition-colors">点数を表示</span></label>
                 </div>
               </div>
-              <div>
-                <label className="block text-xs font-bold text-gray-700 mb-1">新しい質問のデフォルトの点数</label>
-                <input type="number" min="0" value={settings.defaultPoints} onChange={e => update("defaultPoints", Number(e.target.value))} className="w-24 px-3 py-1.5 border border-gray-300 rounded-md text-sm outline-none" />
+              <div className="pt-2">
+                <label className="block text-[10px] sm:text-xs font-bold text-gray-700 mb-1">新しい質問のデフォルトの点数</label>
+                <input type="number" min="0" value={settings.defaultPoints} onChange={e => update("defaultPoints", Number(e.target.value))} className="w-20 sm:w-24 px-2.5 sm:px-3 py-1.5 border border-gray-300 rounded-lg text-[11px] sm:text-sm font-bold outline-none focus:ring-2 focus:ring-purple-500 shadow-2xs text-center" />
               </div>
             </div>
           )}
         </div>
       </section>
 
-      <section className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
-        <div className="bg-gray-50 px-5 py-3 border-b border-gray-100"><h3 className="text-sm font-black text-gray-800">表示設定</h3></div>
-        <div className="p-5 space-y-4">
-          <label className="flex items-center justify-between cursor-pointer">
-            <span className="text-sm font-bold text-gray-900">進行状況バーを表示</span>
-            <input type="checkbox" checked={settings.showProgressBar} onChange={e => update("showProgressBar", e.target.checked)} className="h-5 w-5 rounded text-purple-600 border-gray-300" />
+      <section className="bg-white rounded-xl sm:rounded-2xl shadow-sm border border-gray-200 overflow-hidden">
+        <div className="bg-gray-50 px-4 sm:px-5 py-2.5 sm:py-3 border-b border-gray-100"><h3 className="text-[11px] sm:text-sm font-black text-gray-800">表示設定</h3></div>
+        <div className="p-4 sm:p-5 space-y-3 sm:space-y-4">
+          <label className="flex items-center justify-between cursor-pointer group">
+            <span className="text-[11px] sm:text-sm font-bold text-gray-900 group-hover:text-purple-700 transition-colors">進行状況バーを表示</span>
+            <input type="checkbox" checked={settings.showProgressBar} onChange={e => update("showProgressBar", e.target.checked)} className="h-4 w-4 sm:h-5 sm:w-5 rounded text-purple-600 border-gray-300 shadow-2xs cursor-pointer" />
           </label>
           
-          <div>
-            <label className="block text-sm font-bold text-gray-900 mb-1">質問の順序をシャッフルする</label>
-            <select value={settings.shuffleQuestions} onChange={e => update("shuffleQuestions", e.target.value)} className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm outline-none">
-              <option value="off">オフ</option>
-              <option value="all">すべての問題</option>
-              <option value="except_locked">一部の問題をロックしてシャッフル</option>
-            </select>
+          <div className="pt-2 border-t border-gray-100">
+            <label className="block text-[11px] sm:text-sm font-bold text-gray-900 mb-1.5 sm:mb-2">質問の順序をシャッフルする</label>
+            <CustomSelect 
+              value={settings.shuffleQuestions || "off"} 
+              onChange={val => update("shuffleQuestions", val)}
+              options={[
+                { value: "off", label: "オフ" },
+                { value: "all", label: "すべての問題" },
+                { value: "except_locked", label: "一部の問題をロックしてシャッフル" }
+              ]}
+              buttonClassName="w-full border border-gray-300 bg-white rounded-lg px-2.5 sm:px-3 py-1.5 sm:py-2 text-[11px] sm:text-sm font-bold outline-none focus:ring-2 focus:ring-purple-500 shadow-2xs flex items-center justify-between"
+            />
             {settings.shuffleQuestions === "except_locked" && (
-              <input type="text" placeholder="例: 1-3" value={settings.lockedQuestionRange} onChange={e => update("lockedQuestionRange", e.target.value)} className="mt-2 w-full border border-gray-300 rounded-lg px-3 py-1.5 text-sm" />
+              <input type="text" placeholder="例: 1-3" value={settings.lockedQuestionRange} onChange={e => update("lockedQuestionRange", e.target.value)} className="mt-2 w-full border border-gray-300 rounded-lg px-2.5 sm:px-3 py-1.5 sm:py-2 text-[11px] sm:text-sm font-bold outline-none focus:ring-2 focus:ring-purple-500 shadow-2xs" />
             )}
           </div>
 
-          <label className="flex items-center justify-between cursor-pointer">
-            <span className="text-sm font-bold text-gray-900">別の回答を送信するためのリンクを表示</span>
-            <input type="checkbox" checked={settings.showLinkToSubmitAnother} onChange={e => update("showLinkToSubmitAnother", e.target.checked)} className="h-5 w-5 rounded text-purple-600 border-gray-300" />
+          <label className="flex items-center justify-between cursor-pointer group pt-2 border-t border-gray-100">
+            <span className="text-[11px] sm:text-sm font-bold text-gray-900 group-hover:text-purple-700 transition-colors">別の回答を送信するためのリンクを表示</span>
+            <input type="checkbox" checked={settings.showLinkToSubmitAnother} onChange={e => update("showLinkToSubmitAnother", e.target.checked)} className="h-4 w-4 sm:h-5 sm:w-5 rounded text-purple-600 border-gray-300 shadow-2xs cursor-pointer" />
           </label>
 
-          <label className="flex items-center justify-between cursor-pointer">
-            <span className="text-sm font-bold text-gray-900">結果の概要を表示する</span>
-            <input type="checkbox" checked={settings.showResultsSummary} onChange={e => update("showResultsSummary", e.target.checked)} className="h-5 w-5 rounded text-purple-600 border-gray-300" />
+          <label className="flex items-center justify-between cursor-pointer group pt-1">
+            <span className="text-[11px] sm:text-sm font-bold text-gray-900 group-hover:text-purple-700 transition-colors">結果の概要を表示する</span>
+            <input type="checkbox" checked={settings.showResultsSummary} onChange={e => update("showResultsSummary", e.target.checked)} className="h-4 w-4 sm:h-5 sm:w-5 rounded text-purple-600 border-gray-300 shadow-2xs cursor-pointer" />
           </label>
 
-          <label className="flex items-center justify-between cursor-pointer">
-            <span className="text-sm font-bold text-gray-900">すべての回答者に対して自動保存を無効にする</span>
-            <input type="checkbox" checked={settings.disableAutosave} onChange={e => update("disableAutosave", e.target.checked)} className="h-5 w-5 rounded text-purple-600 border-gray-300" />
+          <label className="flex items-center justify-between cursor-pointer group pt-1">
+            <span className="text-[11px] sm:text-sm font-bold text-gray-900 group-hover:text-purple-700 transition-colors">すべての回答者に対して自動保存を無効にする</span>
+            <input type="checkbox" checked={settings.disableAutosave} onChange={e => update("disableAutosave", e.target.checked)} className="h-4 w-4 sm:h-5 sm:w-5 rounded text-purple-600 border-gray-300 shadow-2xs cursor-pointer" />
           </label>
 
-          <div className="pt-2">
-            <label className="block text-sm font-bold text-gray-900 mb-1">確認メッセージ（お礼）</label>
-            <textarea rows={2} value={settings.confirmationMessage} onChange={e => update("confirmationMessage", e.target.value)} className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm outline-none resize-none custom-scrollbar" />
+          <div className="pt-3 sm:pt-4 border-t border-gray-100">
+            <label className="block text-[11px] sm:text-sm font-bold text-gray-900 mb-1.5 sm:mb-2">確認メッセージ（お礼）</label>
+            <textarea rows={2} value={settings.confirmationMessage} onChange={e => update("confirmationMessage", e.target.value)} className="w-full border border-gray-300 rounded-lg sm:rounded-xl px-2.5 sm:px-3 py-1.5 sm:py-2 text-[11px] sm:text-sm font-bold outline-none resize-none custom-scrollbar focus:ring-2 focus:ring-purple-500 shadow-2xs" />
           </div>
         </div>
       </section>

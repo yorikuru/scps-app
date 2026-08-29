@@ -2,17 +2,18 @@
 
 import React, { useEffect, useState, useMemo, Suspense } from "react";
 import Link from "next/link";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useRouter, useSearchParams, usePathname } from "next/navigation";
 import { onAuthStateChanged, signOut } from "firebase/auth";
 import { doc, getDoc, getDocs, collection, query, where, onSnapshot, orderBy, updateDoc, arrayUnion } from "firebase/firestore";
 import { auth, db } from "@/lib/firebase";
-import { Loader2, AlertTriangle, LogOut, Search, ArrowDownUp, MessageSquareText, Calendar, ChevronLeft, Paperclip, FileIcon, Download, AlertOctagon, Check } from "lucide-react";
+import { ArrowUpDown,Loader2, AlertTriangle, LogOut, Search, ArrowDownUp, MessageSquareText, Calendar, ChevronLeft, Paperclip, FileIcon, Download, AlertOctagon, Check } from "lucide-react";
 import * as LucideIcons from "lucide-react";
 
 import { useDialog } from "@/components/DialogContext";
 import { ExternalUser } from "@/app/types/external";
 import ExtHeader from "@/app/ext-top/components/ExtHeader";
 import { Announcement, Category, AppConfig, COLOR_MAPPINGS } from "@/app/top/board/types";
+import CustomSelect from "@/components/CustomSelect"; // ★ CustomSelectをインポート
 
 const DynamicIcon = ({ name, className }: { name: string, className?: string }) => {
   const IconComponent = (LucideIcons as any)[name] || LucideIcons.Box;
@@ -32,6 +33,7 @@ const UserAvatar = ({ name, url, className = "w-5 h-5 text-[9px]" }: { name: str
 function ExternalBoardContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
+  const pathname = usePathname();
   const noticeQuery = searchParams.get("notice");
 
   const { showConfirm } = useDialog();
@@ -51,7 +53,6 @@ function ExternalBoardContent() {
 
   const [searchQuery, setSearchQuery] = useState("");
   const [filterCategory, setFilterCategory] = useState<string>("all");
-  // ★ 既読・未読フィルター
   const [filterReadStatus, setFilterReadStatus] = useState<"all" | "unread" | "read">("all");
   const [sortOrder, setSortOrder] = useState<"desc" | "asc">("desc");
 
@@ -158,7 +159,7 @@ function ExternalBoardContent() {
                 publishStartDate: docData.publishStartDate || null,
                 publishEndDate: docData.publishEndDate || null,
                 isExternal: docData.isExternal || false,
-                readByExternal: docData.readByExternal || [], // ★ 既読者リストを取得
+                readByExternal: docData.readByExternal || [], 
               });
             });
             setAnnouncements(fetched);
@@ -191,10 +192,10 @@ function ExternalBoardContent() {
       } else {
         const params = new URLSearchParams(searchParams.toString());
         params.delete("notice");
-        router.replace(params.toString() ? `${window.location.pathname}?${params.toString()}` : window.location.pathname);
+        router.replace(params.toString() ? `${pathname}?${params.toString()}` : pathname);
       }
     }
-  }, [noticeQuery, announcements, isLoading, router, searchParams]);
+  }, [noticeQuery, announcements, isLoading, router, searchParams, pathname]);
 
   const updateNoticeUrl = (noticeId: string | null) => {
     setActiveNoticeId(noticeId);
@@ -204,10 +205,9 @@ function ExternalBoardContent() {
     } else {
       params.delete("notice");
     }
-    router.replace(params.toString() ? `${window.location.pathname}?${params.toString()}` : window.location.pathname);
+    router.replace(params.toString() ? `${pathname}?${params.toString()}` : pathname);
   };
 
-  // ★ 既読処理
   const markAsRead = async (noticeId: string) => {
     if (!extUser) return;
     try {
@@ -229,7 +229,6 @@ function ExternalBoardContent() {
         return start <= now && (!end || end >= now);
       })
       .filter(a => filterCategory === "all" || a.categoryId === filterCategory)
-      // ★ 既読・未読フィルターの適用
       .filter(a => {
         if (!extUser) return true;
         const isRead = (a as any).readByExternal?.includes(extUser.id);
@@ -320,34 +319,46 @@ function ExternalBoardContent() {
                 <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-400" />
                 <input 
                   type="text" placeholder="検索..." value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)}
-                  className={`w-full pl-8 pr-2 py-1.5 bg-white border border-gray-200 rounded-lg text-xs font-bold focus:outline-none focus:ring-2 ${c.ring} shadow-2xs`}
+                  className={`w-full pl-8 pr-2 py-1.5 bg-white border border-gray-200 rounded-lg text-[11px] sm:text-xs font-bold focus:outline-none focus:ring-2 ${c.ring} shadow-2xs`}
                 />
               </div>
 
-              {/* ★ 既読・未読フィルターの追加 */}
-              <div className="flex bg-gray-200/50 p-1 rounded-xl">
-                <button onClick={() => setFilterReadStatus("all")} className={`flex-1 py-1.5 text-[11px] font-bold rounded-lg transition-colors ${filterReadStatus === "all" ? "bg-white shadow-sm text-gray-900" : "text-gray-500 hover:text-gray-700"}`}>
-                  すべて表示
-                </button>
-                <button onClick={() => setFilterReadStatus("unread")} className={`flex-1 py-1.5 text-[11px] font-bold rounded-lg transition-colors ${filterReadStatus === "unread" ? "bg-white shadow-sm text-gray-900" : "text-gray-500 hover:text-gray-700"}`}>
-                  未読のみ
-                </button>
-                <button onClick={() => setFilterReadStatus("read")} className={`flex-1 py-1.5 text-[11px] font-bold rounded-lg transition-colors ${filterReadStatus === "read" ? "bg-white shadow-sm text-gray-900" : "text-gray-500 hover:text-gray-700"}`}>
-                  既読のみ
-                </button>
-              </div>
+              {/* ★ CustomSelect によるフィルター群（折り返し対応） */}
+              <div className="flex flex-wrap gap-1.5">
+                <div className="flex-1 min-w-[95px]">
+                  <CustomSelect 
+                    value={filterReadStatus} onChange={val => setFilterReadStatus(val as any)}
+                    options={[
+                      { value: "all", label: "既読状況: 全て" },
+                      { value: "unread", label: "未読のみ" },
+                      { value: "read", label: "既読のみ" }
+                    ]}
+                    buttonClassName="w-full flex items-center justify-between bg-white border border-gray-300 rounded-lg px-2 py-1.5 text-gray-700 font-bold shadow-sm focus:ring-2 focus:ring-blue-500 text-[10px] sm:text-[11px]"
+                  />
+                </div>
 
-              <div className="flex items-center gap-1.5 text-[10px]">
-                <select 
-                  value={filterCategory} onChange={e => setFilterCategory(e.target.value)}
-                  className="flex-1 bg-white border border-gray-200 rounded-md px-2 py-1 text-gray-600 focus:outline-none font-bold"
-                >
-                  <option value="all">全カテゴリ</option>
-                  {categories.map(cat => <option key={cat.id} value={cat.id}>{cat.name}</option>)}
-                </select>
-                <button onClick={() => setSortOrder(sortOrder === "desc" ? "asc" : "desc")} className="p-1 bg-white border border-gray-200 text-gray-400 rounded-md hover:bg-gray-50 transition-colors" title="並び替え">
-                  <ArrowDownUp className="w-3.5 h-3.5" />
-                </button>
+                <div className="flex-1 min-w-[95px]">
+                  <CustomSelect 
+                    value={filterCategory} onChange={setFilterCategory}
+                    options={[
+                      { value: "all", label: "全カテゴリ" },
+                      ...categories.map(cat => ({ value: cat.id, label: cat.name }))
+                    ]}
+                    buttonClassName="w-full flex items-center justify-between bg-white border border-gray-300 rounded-lg px-2 py-1.5 text-gray-700 font-bold shadow-sm focus:ring-2 focus:ring-blue-500 text-[10px] sm:text-[11px]"
+                  />
+                </div>
+
+                <div className="flex-1 min-w-[120px] flex items-center gap-1 px-1.5 bg-white border border-gray-300 rounded-lg shadow-sm">
+                  <ArrowUpDown className="w-3 h-3 text-gray-400 flex-shrink-0" />
+                  <CustomSelect 
+                    value={sortOrder} onChange={val => setSortOrder(val as any)}
+                    options={[
+                      { value: "desc", label: "新着順" },
+                      { value: "asc", label: "古い順" }
+                    ]}
+                    buttonClassName="w-full py-1.5 pr-1 text-[10px] sm:text-[11px] font-bold bg-transparent outline-none focus:ring-0 border-none flex justify-between items-center text-gray-700"
+                  />
+                </div>
               </div>
             </div>
 
@@ -382,22 +393,21 @@ function ExternalBoardContent() {
 
                       <div className="flex-1 min-w-0 flex flex-col justify-center">
                         <div className="flex items-center gap-1.5">
-                          {/* ★ 未読の場合は青ポッチを表示 */}
                           {!isRead && (
                             <span className={`w-2 h-2 rounded-full flex-shrink-0 ${isSelected && window.innerWidth >= 1024 ? 'bg-white' : 'bg-blue-500'}`}></span>
                           )}
-                          <h4 className={`text-xs font-bold truncate flex-1 ${isSelected && window.innerWidth >= 1024 ? 'text-white' : (isRead ? 'text-gray-500' : 'text-gray-900')}`}>
+                          <h4 className={`text-[11px] sm:text-xs font-bold truncate flex-1 ${isSelected && window.innerWidth >= 1024 ? 'text-white' : (isRead ? 'text-gray-500' : 'text-gray-900')}`}>
                             {a.title}
                           </h4>
                           {a.attachments && a.attachments.length > 0 && <Paperclip className={`w-3 h-3 flex-shrink-0 ${isSelected && window.innerWidth >= 1024 ? 'text-white/70' : 'text-gray-400'}`} />}
                         </div>
                         <div className="flex items-center gap-2 mt-0.5 ml-3.5">
-                          <span className={`text-[10px] truncate max-w-[80px] ${isSelected && window.innerWidth >= 1024 ? 'text-white/80' : 'text-gray-500'}`}>{a.authorName}</span>
-                          {cat && <span className={`px-1.5 rounded-sm text-[9px] font-bold border truncate max-w-[60px] ${isSelected && window.innerWidth >= 1024 ? 'border-white/30 text-white/90' : cat.color}`}>{cat.name}</span>}
+                          <span className={`text-[9px] sm:text-[10px] truncate max-w-[80px] ${isSelected && window.innerWidth >= 1024 ? 'text-white/80' : 'text-gray-500'}`}>{a.authorName}</span>
+                          {cat && <span className={`px-1.5 rounded-sm text-[8px] sm:text-[9px] font-bold border truncate max-w-[60px] ${isSelected && window.innerWidth >= 1024 ? 'border-white/30 text-white/90' : cat.color}`}>{cat.name}</span>}
                         </div>
                       </div>
 
-                      <div className={`w-12 text-right flex-shrink-0 text-[10px] font-medium ${isSelected && window.innerWidth >= 1024 ? 'text-white/90' : 'text-gray-400'}`}>
+                      <div className={`w-12 text-right flex-shrink-0 text-[9px] sm:text-[10px] font-medium ${isSelected && window.innerWidth >= 1024 ? 'text-white/90' : 'text-gray-400'}`}>
                         {formatTimeCompact(a.publishStartDate || a.createdAt)}
                       </div>
                     </div>
@@ -480,7 +490,6 @@ function ExternalBoardContent() {
                   </div>
                 )}
                 
-                {/* ★ 既読ボタンの追加 */}
                 <div className="p-4 sm:p-6 border-t border-gray-100 flex justify-center shrink-0">
                   {isActiveNoticeRead ? (
                     <div className="flex flex-col items-center">
@@ -507,15 +516,14 @@ function ExternalBoardContent() {
     </div>
   );
 }
-
 export default function ExternalBoardMainPage() {
-  return (
-    <Suspense fallback={
-      <div className="h-[100dvh] flex justify-center items-center bg-gray-50">
-        <Loader2 className="w-8 h-8 animate-spin text-indigo-500" />
-      </div>
-    }>
-      <ExternalBoardContent />
-    </Suspense>
-  );
-}
+    return (
+      <Suspense fallback={
+        <div className="h-[100dvh] flex justify-center items-center bg-gray-50">
+          <Loader2 className="w-8 h-8 animate-spin text-indigo-500" />
+        </div>
+      }>
+        <ExternalBoardContent />
+      </Suspense>
+    );
+  }
