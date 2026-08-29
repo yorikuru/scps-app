@@ -54,7 +54,6 @@ export default function TopLayout({ children }: { children: React.ReactNode }) {
   const [surveyUnansweredCount, setSurveyUnansweredCount] = useState(0);
   const [surveyRequiredUnansweredCount, setSurveyRequiredUnansweredCount] = useState(0);
 
-  // ★ 修正：onAuthStateChanged の中のリスナーを適切に解除する仕組みに変更
   useEffect(() => {
     let unsubUser: (() => void) | undefined;
 
@@ -68,7 +67,6 @@ export default function TopLayout({ children }: { children: React.ReactNode }) {
             setUserData(uData);
           },
           (error) => {
-            // ログアウト時などに発生する権限エラーを握りつぶす
             console.warn("User listener disconnected");
           }
         );
@@ -120,9 +118,7 @@ export default function TopLayout({ children }: { children: React.ReactNode }) {
             }, { merge: true });
           }
         }
-      } catch (e) {
-        // console.error(e);
-      }
+      } catch (e) {}
     };
 
     updatePresenceState("available", true);
@@ -159,7 +155,6 @@ export default function TopLayout({ children }: { children: React.ReactNode }) {
     }
   }, [userData, pathname]);
 
-  // ★ 修正：すべてのリスナーにエラーハンドラーを追加し、ログアウト時のエラーを握りつぶす
   useEffect(() => {
     if (!userData?.schoolId) return;
     
@@ -169,7 +164,7 @@ export default function TopLayout({ children }: { children: React.ReactNode }) {
         const sData = schoolDocSnap.exists() ? { id: schoolDocSnap.id, ...schoolDocSnap.data() } as ExtendedSchoolData : null;
         setSchoolData(sData);
       },
-      () => {} // ログアウト時のエラーを無視
+      () => {} 
     );
 
     const qTenantUsers = query(collection(db, "users"), where("schoolId", "==", userData.schoolId));
@@ -266,7 +261,7 @@ export default function TopLayout({ children }: { children: React.ReactNode }) {
     let unsubSurveys: (() => void) | undefined;
     let unsubSurveyResponses: (() => void) | undefined;
 
-    if (userData.allowedModules?.includes("chat") || userData.role === "admin" || userData.role === "system_admin" || userData.isITManager) {
+    if (userData.allowedModules?.includes("chat") || userData.role === "admin" || userData.role === "system_admin" || (userData as any).isITManager) {
       const qChat = query(collection(db, "chat_rooms"), where("schoolId", "==", userData.schoolId), where("members", "array-contains", userData.id));
       unsubChatRooms = onSnapshot(
         qChat, 
@@ -288,7 +283,7 @@ export default function TopLayout({ children }: { children: React.ReactNode }) {
       );
     }
 
-    if (userData.allowedModules?.includes("equipment") || userData.role === "admin" || userData.role === "system_admin" || userData.isITManager) {
+    if (userData.allowedModules?.includes("equipment") || userData.role === "admin" || userData.role === "system_admin" || (userData as any).isITManager) {
       const qRentals = query(collection(db, "rentals"), where("schoolId", "==", userData.schoolId));
       unsubRentals = onSnapshot(
         qRentals, 
@@ -310,7 +305,7 @@ export default function TopLayout({ children }: { children: React.ReactNode }) {
       );
     }
 
-    if (userData.allowedModules?.includes("surveys") || userData.role === "admin" || userData.role === "system_admin" || userData.isITManager) {
+    if (userData.allowedModules?.includes("surveys") || userData.role === "admin" || userData.role === "system_admin" || (userData as any).isITManager) {
       let currentSurveys: any[] = [];
       let myRespondedIds = new Set<string>();
 
@@ -557,7 +552,8 @@ export default function TopLayout({ children }: { children: React.ReactNode }) {
           />
           
           <main className="flex-1 min-h-0 w-full relative flex flex-col overflow-y-auto overscroll-contain">
-            <div className={isBlurNeeded ? "pointer-events-none select-none blur-[4px] transition-all flex flex-col flex-1 min-h-full pb-20 md:pb-6" : "flex flex-col flex-1 min-h-full pb-20 md:pb-6"}>
+            {/* ★ 下部の余白（pb）を pb-20 から pb-14 へ削減し、モバイルナビ分の余白を最小化 */}
+            <div className={isBlurNeeded ? "pointer-events-none select-none blur-[4px] transition-all flex flex-col flex-1 min-h-full pb-14 md:pb-4" : "flex flex-col flex-1 min-h-full pb-14 md:pb-4"}>
               
               <div className="w-full max-w-7xl mx-auto px-3 sm:px-4 lg:px-6 pt-3 sm:pt-4 lg:pt-6 empty:hidden flex-shrink-0 z-40">
                 <DisasterAlertWidget schoolData={schoolData} />
