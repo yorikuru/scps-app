@@ -6,6 +6,7 @@ import { doc, getDoc, updateDoc } from "firebase/firestore";
 import { auth, db } from "@/lib/firebase";
 import { Html5Qrcode, Html5QrcodeSupportedFormats } from "html5-qrcode";
 import { ScanLine, X, Loader2, AlertCircle, CheckCircle2, Camera, ShieldCheck } from "lucide-react";
+import LoadingScreen from "@/components/LoadingScreen";
 
 const MAGIC_PREFIX = "SCPS:TICKET:";
 
