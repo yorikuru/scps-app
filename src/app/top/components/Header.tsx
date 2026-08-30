@@ -14,7 +14,6 @@ import HeaderSearch from "./HeaderSearch";
 import { useDialog } from "@/components/DialogContext";
 import ProfileMenu from "./ProfileMenu";
 
-// 通知のカラーマッピング
 const NOTICE_COLORS: Record<string, { color: string, bg: string }> = {
   indigo: { color: "text-indigo-600", bg: "bg-indigo-50" },
   blue: { color: "text-blue-600", bg: "bg-blue-50" },
@@ -119,7 +118,7 @@ export default function Header({
         fetched.push({ id: d.id, ...data, createdAt: dateIso });
       });
       setAllNotifications(fetched);
-    });
+    }, (err) => {}); // ★ エラーハンドリング追加
 
     return () => unsubscribe();
   }, [userData]);
@@ -243,12 +242,10 @@ export default function Header({
           <Home className="w-4 h-4" />
         </button>
 
-        {/* ★ リロードボタンを追加 */}
         <button onClick={() => window.location.reload()} className="p-1.5 text-gray-500 hover:bg-gray-100 hover:text-indigo-600 rounded-md transition-colors" title="ページを再読み込み">
           <RefreshCw className="w-4 h-4" />
         </button>
 
-        {/* スマホ用: テナントロゴとテナント名 */}
         <div className="flex sm:hidden items-center gap-1.5 ml-1">
           {currentSchoolData?.logoURL ? (
             <img src={currentSchoolData.logoURL} alt="Logo" className="w-5 h-5 rounded object-cover" />
@@ -368,7 +365,6 @@ export default function Header({
           <LogOut className="w-4 h-4" />
         </button>
 
-        {/* プロフィール・ステータスメニュー (分割したコンポーネント) */}
         <ProfileMenu 
           userData={userData}
           schoolData={currentSchoolData}

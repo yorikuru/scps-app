@@ -14,7 +14,7 @@ import AdminNotificationWidget, { ExtendedSystemMessage } from "./AdminNotificat
 import BoardWidget from "./BoardWidget";
 import WeatherWidget from "./WeatherWidget";
 import PresenceWidget from "./PresenceWidget";
-import TasksWidget from "./TasksWidget"; // ★ タスクウィジェットをインポート
+import TasksWidget from "./TasksWidget";
 import { UserPresence } from "../presence/types";
 
 type ExtendedSchoolData = SchoolData & {
@@ -38,7 +38,6 @@ type Props = {
   handleLogout: () => void;
 };
 
-// ★ 完全網羅のカラーマッピング
 const APP_COLOR_MAPPINGS: Record<string, { lightBg: string, text: string, hoverBg: string, iconText: string, badgeBg: string, badgeText: string }> = {
   slate: { lightBg: "bg-slate-50", text: "text-slate-600", hoverBg: "hover:bg-slate-100", iconText: "text-slate-600", badgeBg: "bg-slate-100", badgeText: "text-slate-800" },
   gray: { lightBg: "bg-gray-50", text: "text-gray-600", hoverBg: "hover:bg-gray-100", iconText: "text-gray-600", badgeBg: "bg-gray-100", badgeText: "text-gray-800" },
@@ -98,21 +97,21 @@ export default function NormalTop({ userData, schoolData, messages, systemApps, 
         });
       });
       setAllTasks(fetched);
-    });
+    }, (err) => {}); // ★ エラーハンドリング追加
 
     const qRentals = query(collection(db, "rentals"), where("schoolId", "==", schoolData.id));
     const unsubRentals = onSnapshot(qRentals, (snapshot) => {
       const fetched: any[] = [];
       snapshot.forEach(d => fetched.push({ id: d.id, ...d.data() }));
       setRentals(fetched);
-    });
+    }, (err) => {}); // ★ エラーハンドリング追加
 
     const qPresences = query(collection(db, "presence_statuses"), where("schoolId", "==", schoolData.id));
     const unsubPresences = onSnapshot(qPresences, (snapshot) => {
       const fetched: UserPresence[] = [];
       snapshot.forEach(d => fetched.push({ id: d.id, ...d.data() } as UserPresence));
       setPresences(fetched);
-    });
+    }, (err) => {}); // ★ エラーハンドリング追加
 
     return () => { unsubTasks(); unsubRentals(); unsubPresences(); };
   }, [schoolData]);
@@ -138,7 +137,7 @@ export default function NormalTop({ userData, schoolData, messages, systemApps, 
         }
       });
       setUnreadCounts(counts);
-    });
+    }, (err) => {}); // ★ エラーハンドリング追加
 
     const qChat = query(collection(db, "chat_rooms"), where("schoolId", "==", schoolData.id), where("members", "array-contains", userData.id));
     unsubChat = onSnapshot(qChat, (snapshot) => {
@@ -147,7 +146,7 @@ export default function NormalTop({ userData, schoolData, messages, systemApps, 
         totalChatUnread += (doc.data().unreadCount?.[userData.id] || 0);
       });
       setChatUnreadCount(totalChatUnread);
-    });
+    }, (err) => {}); // ★ エラーハンドリング追加
 
     let currentSurveys: any[] = [];
     let myRespondedIds = new Set<string>();
@@ -188,13 +187,13 @@ export default function NormalTop({ userData, schoolData, messages, systemApps, 
     unsubSurveys = onSnapshot(qSurveys, (snap) => {
       currentSurveys = snap.docs.map(d => ({ id: d.id, ...d.data() }));
       calculateSurveyBadges();
-    });
+    }, (err) => {}); // ★ エラーハンドリング追加
 
     const qMyResponses = query(collection(db, "survey_responses"), where("respondentId", "==", userData.id));
     unsubSurveyResponses = onSnapshot(qMyResponses, (snap) => {
       myRespondedIds = new Set(snap.docs.map(d => d.data().surveyId));
       calculateSurveyBadges();
-    });
+    }, (err) => {}); // ★ エラーハンドリング追加
 
     return () => { 
       if (unsubNotif) unsubNotif(); 
@@ -429,7 +428,6 @@ export default function NormalTop({ userData, schoolData, messages, systemApps, 
               />
             )}
 
-            {/* ★ タスクウィジェットを分離したコンポーネントで呼び出し */}
             {tasksApp && (
               <TasksWidget 
                 tasksApp={tasksApp} 
