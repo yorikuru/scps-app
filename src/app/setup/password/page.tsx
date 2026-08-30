@@ -6,6 +6,7 @@ import { onAuthStateChanged } from "firebase/auth";
 import { doc, getDoc, updateDoc } from "firebase/firestore";
 import { auth, db } from "@/lib/firebase";
 import { Lock, CheckCircle2, ArrowRight, Loader2, Eye, EyeOff, AlertCircle, Key, Building2, User } from "lucide-react";
+import LoadingScreen from "@/components/LoadingScreen";
 
 export default function SetupPasswordPage() {
   const router = useRouter();
