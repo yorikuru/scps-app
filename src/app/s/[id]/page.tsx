@@ -74,7 +74,6 @@ export default function SurveyAnsweringPage() {
           }
         }
 
-        // ★修正: 先に認証状態を確認し、一般公開であってもログイン済みならユーザー情報を取得する
         onAuthStateChanged(auth, async (user) => {
           try {
             let uData: UserData | null = null;
@@ -91,17 +90,14 @@ export default function SurveyAnsweringPage() {
               }
             }
 
-            // 一般公開の場合
             if (surveyData.settings.accessTarget === "public") {
-              if (uData) setCurrentUser(uData); // ログインしていれば情報をセット
+              if (uData) setCurrentUser(uData); 
 
               if (surveyData.settings.limitToOneResponse) {
-                // 1回制限がある場合、ローカルストレージを確認
                 if (localStorage.getItem(`survey_responded_${surveyId}`)) {
                   setHasRespondedLocally(true);
                   setHasResponded(true);
                 } else if (uData) {
-                  // ログインしていればDBも確認する
                   const qResp = query(collection(db, "survey_responses"), where("surveyId", "==", surveyId), where("respondentId", "==", uData.id));
                   const respSnap = await getDocs(qResp);
                   if (!respSnap.empty) {
@@ -111,12 +107,11 @@ export default function SurveyAnsweringPage() {
                 }
               }
               setIsLoading(false);
-              return; // 権限チェックは不要なので終了
+              return; 
             }
 
-            // ここから下は一般公開ではない（限定公開）場合の処理
             if (!uData) {
-              router.push("/login"); // ログインしていない場合は弾く
+              router.push("/login"); 
               return;
             }
 
@@ -160,7 +155,6 @@ export default function SurveyAnsweringPage() {
 
       } catch (error: any) {
         console.error("Survey fetch error:", error);
-        // ★修正: Firestoreのルールで弾かれた場合のエラーを具体的に表示
         if (error.code === 'permission-denied') {
           setErrorMsg("【アクセス権限エラー】\nこのアンケートを読み込む権限がありません。");
         } else {
@@ -199,13 +193,13 @@ export default function SurveyAnsweringPage() {
     return <SurveyError errorMsg="【回答済み】\nすでに回答済みです。このフォームは1回のみ回答可能です。" />;
   }
 
-  // ★ 既存の manualScores を SurveySuccess に渡す
   const currentManualScores = existingResponse?.manualScores || undefined;
 
   if (isSuccess) return <SurveySuccess survey={survey} currentUser={currentUser} submittedAnswers={submittedAnswers} manualScores={currentManualScores} onReset={() => setIsSuccess(false)} />;
 
   return (
-    <div className="min-h-screen bg-[#f3f2f7] pb-20 font-sans">
+    // ★ h-[100dvh] flex flex-col overflow-hidden に変更し、外枠のスクロールを止める
+    <div className="h-[100dvh] flex flex-col bg-[#f3f2f7] font-sans overflow-hidden">
       
       <SurveyHeader survey={survey} />
 
@@ -218,34 +212,37 @@ export default function SurveyAnsweringPage() {
         </div>
       )}
 
-      <main className="max-w-3xl mx-auto px-4 sm:px-6 py-6 sm:py-8">
-        
-        <div className="bg-white rounded-xl shadow-sm border border-gray-200 border-t-8 border-t-purple-600 p-6 sm:p-8 mb-6">
-          <h1 className="text-2xl sm:text-3xl font-extrabold text-gray-900 mb-4 leading-tight">{survey?.title}</h1>
-          {survey?.description && (
-            <p className="text-sm font-medium text-gray-600 whitespace-pre-wrap leading-relaxed">
-              {survey.description}
-            </p>
-          )}
+      {/* ★ flex-1 と overflow-y-auto でここだけがスクロールするようにする */}
+      <main className="flex-1 overflow-y-auto custom-scrollbar w-full relative overscroll-contain">
+        <div className="max-w-3xl mx-auto px-4 sm:px-6 py-6 sm:py-8 pb-32">
           
-          <div className="mt-6 pt-4 border-t border-gray-100 flex items-center justify-between text-xs text-gray-500 font-bold">
-            <div><span className="text-red-500 mr-1 text-base leading-none">*</span> は必須の質問です</div>
-            {!survey?.settings.disableAutosave && (
-              <span className="text-green-600 flex items-center gap-1"><CheckCircle className="w-3.5 h-3.5" /> 自動保存が有効</span>
+          <div className="bg-white rounded-xl shadow-sm border border-gray-200 border-t-8 border-t-purple-600 p-6 sm:p-8 mb-6">
+            <h1 className="text-2xl sm:text-3xl font-extrabold text-gray-900 mb-4 leading-tight">{survey?.title}</h1>
+            {survey?.description && (
+              <p className="text-sm font-medium text-gray-600 whitespace-pre-wrap leading-relaxed">
+                {survey.description}
+              </p>
             )}
+            
+            <div className="mt-6 pt-4 border-t border-gray-100 flex items-center justify-between text-xs text-gray-500 font-bold">
+              <div><span className="text-red-500 mr-1 text-base leading-none">*</span> は必須の質問です</div>
+              {!survey?.settings.disableAutosave && (
+                <span className="text-green-600 flex items-center gap-1"><CheckCircle className="w-3.5 h-3.5" /> 自動保存が有効</span>
+              )}
+            </div>
           </div>
-        </div>
 
-        {survey && (
-          <SurveyForm 
-            survey={survey} 
-            currentUser={currentUser} 
-            existingResponse={existingResponse}
-            hasResponded={hasResponded}
-            onSuccess={handleSuccess} 
-            showAlert={showAlert} 
-          />
-        )}
+          {survey && (
+            <SurveyForm 
+              survey={survey} 
+              currentUser={currentUser} 
+              existingResponse={existingResponse}
+              hasResponded={hasResponded}
+              onSuccess={handleSuccess} 
+              showAlert={showAlert} 
+            />
+          )}
+        </div>
       </main>
     </div>
   );

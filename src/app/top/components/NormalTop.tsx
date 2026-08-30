@@ -1,12 +1,11 @@
 "use client";
 
 import React, { useEffect, useState, useMemo } from "react";
-import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import { collection, query, where, onSnapshot } from "firebase/firestore";
+import { collection, query, where, onSnapshot, doc } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 import * as LucideIcons from "lucide-react";
-import { ChevronRight, AlertTriangle, ArrowRightLeft, Grid } from "lucide-react";
+import { ChevronRight, AlertTriangle, ArrowRightLeft } from "lucide-react";
 import { UserData, SchoolData, SystemApp } from "../page";
 
 import ScheduleWidget from "./ScheduleWidget";
@@ -15,6 +14,7 @@ import BoardWidget from "./BoardWidget";
 import WeatherWidget from "./WeatherWidget";
 import PresenceWidget from "./PresenceWidget";
 import TasksWidget from "./TasksWidget";
+import QuickLaunchWidget from "./QuickLaunchWidget"; 
 import { UserPresence } from "../presence/types";
 
 type ExtendedSchoolData = SchoolData & {
@@ -71,6 +71,10 @@ export default function NormalTop({ userData, schoolData, messages, systemApps, 
   const dateParam = searchParams.get("date");
   const selectedDate = dateParam ? new Date(dateParam) : new Date();
 
+  // ★ 権限のリアルタイム監視用ステートを追加
+  const [liveUserData, setLiveUserData] = useState<any>(userData);
+  const [liveSchoolData, setLiveSchoolData] = useState<any>(schoolData);
+
   const [allTasks, setAllTasks] = useState<any[]>([]);
   const [rentals, setRentals] = useState<any[]>([]); 
   const [presences, setPresences] = useState<UserPresence[]>([]); 
@@ -80,6 +84,28 @@ export default function NormalTop({ userData, schoolData, messages, systemApps, 
 
   const [surveyUnansweredCount, setSurveyUnansweredCount] = useState(0);
   const [surveyRequiredUnansweredCount, setSurveyRequiredUnansweredCount] = useState(0);
+
+  // ★ ユーザー情報のリアルタイム監視 (個人権限の即時反映用)
+  useEffect(() => {
+    if (!userData?.id) return;
+    const unsub = onSnapshot(doc(db, "users", userData.id), (docSnap) => {
+      if (docSnap.exists()) {
+        setLiveUserData({ id: docSnap.id, ...docSnap.data() });
+      }
+    }, (err) => {});
+    return () => unsub();
+  }, [userData?.id]);
+
+  // ★ テナント設定のリアルタイム監視 (全体権限の即時反映用)
+  useEffect(() => {
+    if (!schoolData?.id) return;
+    const unsub = onSnapshot(doc(db, "schools", schoolData.id), (docSnap) => {
+      if (docSnap.exists()) {
+        setLiveSchoolData({ id: docSnap.id, ...docSnap.data() });
+      }
+    }, (err) => {});
+    return () => unsub();
+  }, [schoolData?.id]);
 
   useEffect(() => {
     if (!schoolData) return;
@@ -97,21 +123,21 @@ export default function NormalTop({ userData, schoolData, messages, systemApps, 
         });
       });
       setAllTasks(fetched);
-    }, (err) => {}); // ★ エラーハンドリング追加
+    }, (err) => {});
 
     const qRentals = query(collection(db, "rentals"), where("schoolId", "==", schoolData.id));
     const unsubRentals = onSnapshot(qRentals, (snapshot) => {
       const fetched: any[] = [];
       snapshot.forEach(d => fetched.push({ id: d.id, ...d.data() }));
       setRentals(fetched);
-    }, (err) => {}); // ★ エラーハンドリング追加
+    }, (err) => {});
 
     const qPresences = query(collection(db, "presence_statuses"), where("schoolId", "==", schoolData.id));
     const unsubPresences = onSnapshot(qPresences, (snapshot) => {
       const fetched: UserPresence[] = [];
       snapshot.forEach(d => fetched.push({ id: d.id, ...d.data() } as UserPresence));
       setPresences(fetched);
-    }, (err) => {}); // ★ エラーハンドリング追加
+    }, (err) => {});
 
     return () => { unsubTasks(); unsubRentals(); unsubPresences(); };
   }, [schoolData]);
@@ -137,7 +163,7 @@ export default function NormalTop({ userData, schoolData, messages, systemApps, 
         }
       });
       setUnreadCounts(counts);
-    }, (err) => {}); // ★ エラーハンドリング追加
+    }, (err) => {});
 
     const qChat = query(collection(db, "chat_rooms"), where("schoolId", "==", schoolData.id), where("members", "array-contains", userData.id));
     unsubChat = onSnapshot(qChat, (snapshot) => {
@@ -146,7 +172,7 @@ export default function NormalTop({ userData, schoolData, messages, systemApps, 
         totalChatUnread += (doc.data().unreadCount?.[userData.id] || 0);
       });
       setChatUnreadCount(totalChatUnread);
-    }, (err) => {}); // ★ エラーハンドリング追加
+    }, (err) => {});
 
     let currentSurveys: any[] = [];
     let myRespondedIds = new Set<string>();
@@ -187,13 +213,13 @@ export default function NormalTop({ userData, schoolData, messages, systemApps, 
     unsubSurveys = onSnapshot(qSurveys, (snap) => {
       currentSurveys = snap.docs.map(d => ({ id: d.id, ...d.data() }));
       calculateSurveyBadges();
-    }, (err) => {}); // ★ エラーハンドリング追加
+    }, (err) => {});
 
     const qMyResponses = query(collection(db, "survey_responses"), where("respondentId", "==", userData.id));
     unsubSurveyResponses = onSnapshot(qMyResponses, (snap) => {
       myRespondedIds = new Set(snap.docs.map(d => d.data().surveyId));
       calculateSurveyBadges();
-    }, (err) => {}); // ★ エラーハンドリング追加
+    }, (err) => {});
 
     return () => { 
       if (unsubNotif) unsubNotif(); 
@@ -203,19 +229,29 @@ export default function NormalTop({ userData, schoolData, messages, systemApps, 
     };
   }, [userData, schoolData]);
 
+  // ★ リアルタイムに監視している liveUserData と liveSchoolData を基準に権限チェック
   const userAllowedApps = useMemo(() => {
-    if (!schoolData || !userData || !systemApps) return [];
-    const exSchoolData = schoolData as ExtendedSchoolData;
+    if (!liveSchoolData || !liveUserData || !systemApps) return [];
+    const exSchoolData = liveSchoolData as ExtendedSchoolData;
     
     return systemApps.filter(app => {
       if (!app.isActive) return false;
       const appId = (app as any).appId || app.id;
+      
+      // テナント全体での利用可否
       const isTenantAllowed = exSchoolData.availableModules?.includes(appId);
       if (!isTenantAllowed) return false;
-      const roleKey = (userData?.role || "guest") as string;
+      
+      // ★ ユーザー個人への利用可否 (リアルタイムで反映)
+      const isUserAllowed = (liveUserData as any).allowedModules?.includes(appId);
+      if (!isUserAllowed) return false;
+
+      // 役割 (Role) による利用可否
+      const roleKey = (liveUserData?.role || "guest") as string;
       const defaultRoles = (app as any).defaultRoles || { admin: true, it_manager: true, teacher: true, officer: true, guest: false };
       const perms = exSchoolData.appPermissions?.[appId] || defaultRoles;
       if (perms[roleKey] === false) return false;
+      
       return true;
     }).map(app => {
       const appId = (app as any).appId || app.id;
@@ -226,8 +262,9 @@ export default function NormalTop({ userData, schoolData, messages, systemApps, 
         displayName: customName || app.name || (app as any).displayName
       };
     }).sort((a, b) => ((a as any).order || 0) - ((b as any).order || 0));
-  }, [systemApps, schoolData, userData]);
+  }, [systemApps, liveSchoolData, liveUserData]);
 
+  // 各種ウィジェットの表示・非表示も、リアルタイムに権限チェックされた userAllowedApps をベースにする
   const boardApp = userAllowedApps.find(app => app.id === "board");
   const boardC = boardApp ? (APP_COLOR_MAPPINGS[(boardApp as any).color] || APP_COLOR_MAPPINGS.default) : APP_COLOR_MAPPINGS.default;
 
@@ -250,7 +287,7 @@ export default function NormalTop({ userData, schoolData, messages, systemApps, 
     return due < now;
   };
 
-  const myTasks = allTasks.filter(t => t.assignees.includes(userData?.id || "") && t.status !== "done").sort((a, b) => {
+  const myTasks = allTasks.filter(t => t.assignees.includes(liveUserData?.id || "") && t.status !== "done").sort((a, b) => {
     const aOverdue = isOverdue(a.dueDate, a.dueTime, a.status);
     const bOverdue = isOverdue(b.dueDate, b.dueTime, b.status);
     if (aOverdue && !bOverdue) return -1;
@@ -290,74 +327,24 @@ export default function NormalTop({ userData, schoolData, messages, systemApps, 
         <div className="grid grid-cols-2 lg:grid-cols-12 gap-2.5 sm:gap-4 lg:gap-5 w-full min-w-0 lg:h-[220px]">
           
           <div className="col-span-1 lg:col-span-8 xl:col-span-9 min-w-0 flex flex-col h-full">
-            <ScheduleWidget userData={userData} schoolData={schoolData} selectedDate={selectedDate} />
+            <ScheduleWidget userData={liveUserData} schoolData={liveSchoolData} selectedDate={selectedDate} />
           </div>
           
           <div className="col-span-1 lg:col-span-4 xl:col-span-3 min-w-0 flex flex-col gap-2.5 sm:gap-4 h-full">
             
-            <div className="lg:hidden flex-1 flex flex-col min-h-0 bg-white border border-gray-200 rounded-2xl shadow-2xs overflow-hidden">
-              <div className="px-2.5 py-1.5 border-b border-gray-100 flex justify-between items-center bg-gray-50/50 shrink-0">
-                <h2 className="text-[10px] sm:text-xs font-black text-gray-900 flex items-center gap-1.5 truncate">
-                  <Grid className="w-3 h-3 text-gray-500" /> クイック起動
-                </h2>
-              </div>
-              <div className="p-1.5 sm:p-2 bg-white flex-1 overflow-y-auto overflow-x-hidden custom-scrollbar">
-                <div className="grid grid-cols-3 gap-y-2.5 gap-x-1.5 place-items-start w-full">
-                  {userAllowedApps.map(app => {
-                    const c = APP_COLOR_MAPPINGS[app.color] || APP_COLOR_MAPPINGS.default;
-                    const isTasksApp = app.id === "tasks" || app.id === "task";
-                    const isChatApp = app.id === "chat";
-                    const isEquipmentApp = app.id === "equipment" || app.id === "rentals";
-                    const isSurveyApp = app.id === "surveys" || app.id === "survey"; 
-
-                    let unread = 0;
-                    if (isChatApp) unread = chatUnreadCount;
-                    else unread = unreadCounts[app.id] || 0;
-
-                    return (
-                      <Link 
-                        key={app.id} 
-                        href={app.path} 
-                        className="flex flex-col items-center gap-1 w-full shrink-0 group relative overflow-visible"
-                      >
-                        <div className={`relative w-8 h-8 sm:w-10 sm:h-10 rounded-[10px] sm:rounded-xl flex items-center justify-center transition-transform group-hover:scale-105 shadow-sm border border-gray-100/50 shrink-0 ${c.lightBg} ${c.text}`}>
-                          <DynamicIcon name={app.icon} className="w-4 h-4 sm:w-5 sm:h-5" />
-                          
-                          {isTasksApp ? (
-                            <div className="absolute -top-1 -right-1 flex gap-[1px] z-10 scale-[0.75] sm:scale-90 origin-top-right">
-                              {taskRedCount > 0 && <span className="w-4 h-4 bg-red-500 border-2 border-white rounded-full flex items-center justify-center text-[8px] font-black text-white shadow-sm">{taskRedCount > 99 ? '99+' : taskRedCount}</span>}
-                              {taskBlueCount > 0 && <span className="w-4 h-4 bg-blue-500 border-2 border-white rounded-full flex items-center justify-center text-[8px] font-black text-white shadow-sm">{taskBlueCount > 99 ? '99+' : taskBlueCount}</span>}
-                            </div>
-                          ) : isEquipmentApp ? (
-                            <div className="absolute -top-1 -right-1 flex gap-[1px] z-10 scale-[0.75] sm:scale-90 origin-top-right">
-                              {unread > 0 && <span className="w-4 h-4 bg-red-500 border-2 border-white rounded-full flex items-center justify-center text-[8px] font-black text-white shadow-sm">{unread > 99 ? '99+' : unread}</span>}
-                              {activeRentalsCount > 0 && <span className="w-4 h-4 bg-blue-500 border-2 border-white rounded-full flex items-center justify-center text-[8px] font-black text-white shadow-sm">{activeRentalsCount > 99 ? '99+' : activeRentalsCount}</span>}
-                            </div>
-                          ) : isSurveyApp ? (
-                            <div className="absolute -top-1 -right-1 flex gap-[1px] z-10 scale-[0.75] sm:scale-90 origin-top-right">
-                              {surveyRequiredUnansweredCount > 0 && <span className="w-4 h-4 bg-red-500 border-2 border-white rounded-full flex items-center justify-center text-[8px] font-black text-white shadow-sm">{surveyRequiredUnansweredCount > 99 ? '99+' : surveyRequiredUnansweredCount}</span>}
-                              {surveyUnansweredCount > 0 && <span className="w-4 h-4 bg-blue-500 border-2 border-white rounded-full flex items-center justify-center text-[8px] font-black text-white shadow-sm">{surveyUnansweredCount > 99 ? '99+' : surveyUnansweredCount}</span>}
-                            </div>
-                          ) : (
-                            unread > 0 && (
-                              <span className="absolute -top-1 -right-1 w-4 h-4 bg-red-500 border-2 border-white rounded-full flex items-center justify-center text-[8px] font-black text-white shadow-sm z-10 scale-[0.75] sm:scale-90 origin-top-right">
-                                {unread > 99 ? '99+' : unread}
-                              </span>
-                            )
-                          )}
-                        </div>
-                        <span className="text-[8px] sm:text-[9px] font-bold text-gray-700 truncate w-full text-center leading-tight px-0.5">
-                          {app.displayName}
-                        </span>
-                      </Link>
-                    )
-                  })}
-                </div>
-              </div>
-            </div>
+            <QuickLaunchWidget 
+              userAllowedApps={userAllowedApps}
+              appBadges={{
+                chat: { unread: chatUnreadCount },
+                equipment: { active: activeRentalsCount },
+                surveys: { required: surveyRequiredUnansweredCount, optional: surveyUnansweredCount },
+                tasks: { red: taskRedCount, blue: taskBlueCount },
+                generalUnread: unreadCounts
+              }}
+            />
 
             <div className="flex-1 flex flex-col min-h-0">
-              <WeatherWidget schoolData={schoolData} />
+              <WeatherWidget schoolData={liveSchoolData} />
             </div>
             
           </div>
@@ -368,12 +355,12 @@ export default function NormalTop({ userData, schoolData, messages, systemApps, 
           <div className="lg:col-span-6 space-y-2.5 sm:space-y-4 min-w-0">
             
             <AdminNotificationWidget 
-              userData={userData} 
+              userData={liveUserData} 
               messages={messages} 
               tenantUsers={tenantUsers} 
             />
 
-            <BoardWidget schoolData={schoolData} boardApp={boardApp} boardC={boardC} tenantUsers={tenantUsers} />
+            {boardApp && <BoardWidget schoolData={liveSchoolData} boardApp={boardApp} boardC={boardC} tenantUsers={tenantUsers} />}
 
             {equipmentApp && (
               <div className="bg-white border border-gray-200 rounded-2xl shadow-2xs overflow-hidden flex flex-col min-w-0">

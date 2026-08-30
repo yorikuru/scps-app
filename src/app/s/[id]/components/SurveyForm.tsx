@@ -7,7 +7,7 @@ import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
 import { db, storage, auth } from "@/lib/firebase"; 
 import { Survey, UserData, Question, ExistingResponse } from "../types";
 import { useRouter, useSearchParams, usePathname } from "next/navigation";
-import CustomSelect from "@/components/CustomSelect"; // ★ CustomSelectを追加
+import CustomSelect from "@/components/CustomSelect";
 
 type Props = {
   survey: Survey;
@@ -523,139 +523,141 @@ export default function SurveyForm({ survey, currentUser, existingResponse, hasR
   };
 
   return (
-    <div className="relative font-sans animate-fade-in">
-      
-      <form ref={formRef} onSubmit={handleFormSubmit} className="space-y-4 sm:space-y-6">
-        
-        {timeLeftSeconds !== null && (
-          <div className="sticky top-16 z-30 bg-purple-900 text-white px-3 py-2 sm:px-4 sm:py-2.5 rounded-xl shadow-lg flex items-center justify-between font-mono animate-pulse mb-4 sm:mb-6">
-            <span className="text-[10px] sm:text-xs font-bold flex items-center gap-1.5"><Clock className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-purple-300" /> 残り回答時間</span>
-            <span className={`text-base sm:text-lg font-black ${timeLeftSeconds < 60 ? 'text-red-300 animate-ping' : 'text-amber-300'}`}>
-              {formatTimerString(timeLeftSeconds)}
-            </span>
-          </div>
-        )}
-
-        {isFirstPage && survey.settings.collectEmail && (
-          <div className="bg-white rounded-xl shadow-sm border border-red-200 p-4 sm:p-8 relative overflow-hidden">
-            <div className="absolute top-0 left-0 w-1 h-full bg-red-500"></div>
-            <h3 className="text-sm sm:text-base font-bold text-gray-900 mb-1.5 sm:mb-2 flex items-center"><Mail className="w-4 h-4 sm:w-5 sm:h-5 mr-1.5 sm:mr-2 text-red-500" />メールアドレス <span className="text-red-500 ml-1">*</span></h3>
-            <p className="text-[9px] sm:text-[10px] font-bold text-gray-500 mb-3 sm:mb-4">このフォームはメールアドレスを収集します。初期値としてアカウントのメールアドレスが設定されます（変更可能）。</p>
-            <input type="email" required value={emailAnswer} onChange={(e) => setEmailAnswer(e.target.value)} placeholder="example@example.com" className="w-full sm:w-1/2 bg-gray-50 border border-gray-300 rounded-lg focus:border-red-500 px-3 py-2.5 sm:px-4 sm:py-3 outline-none text-xs sm:text-sm font-medium" />
-          </div>
-        )}
-
-        {isFirstPage && survey.settings.collectRespondentInfo && !currentUser && (
-          <div className="bg-white rounded-xl shadow-sm border border-blue-200 p-4 sm:p-8 relative overflow-hidden">
-            <div className="absolute top-0 left-0 w-1 h-full bg-blue-500"></div>
-            <h3 className="text-sm sm:text-base font-bold text-gray-900 mb-1.5 sm:mb-2 flex items-center"><User className="w-4 h-4 sm:w-5 sm:h-5 mr-1.5 sm:mr-2 text-blue-500" />お名前を入力してください <span className="text-red-500 ml-1">*</span></h3>
-            <p className="text-[9px] sm:text-[10px] font-bold text-gray-500 mb-3 sm:mb-4">このフォームは記名式です。誰が回答したか管理者に通知されます。</p>
-            <input type="text" required value={guestName} onChange={(e) => setGuestName(e.target.value)} placeholder="氏名" className="w-full sm:w-1/2 bg-gray-50 border border-gray-300 rounded-lg focus:border-blue-500 px-3 py-2.5 sm:px-4 sm:py-3 outline-none text-xs sm:text-sm font-medium" />
-          </div>
-        )}
-
-        {currentQuestions.map((q, index) => {
-          if (q.type === "section") {
-            return (
-              <div key={q.id} className="bg-blue-600 text-white rounded-xl p-4 sm:p-8 shadow-md mt-6 sm:mt-10">
-                <h2 className="text-lg sm:text-2xl font-black">{q.title}</h2>
-                {q.description && <p className="text-xs sm:text-sm text-blue-100 mt-1.5 sm:mt-2 whitespace-pre-wrap">{q.description}</p>}
-              </div>
-            );
-          }
-          if (q.type === "description") {
-            return (
-              <div key={q.id} className="bg-white rounded-xl border border-gray-200 p-4 sm:p-8 shadow-sm">
-                <h3 className="text-base sm:text-lg font-bold text-gray-900">{q.title}</h3>
-                {q.description && <p className="text-xs sm:text-sm text-gray-600 mt-1.5 sm:mt-2 whitespace-pre-wrap">{q.description}</p>}
-              </div>
-            );
-          }
-
-          let globalIndex = 0;
-          for (let p=0; p<currentPageIndex; p++) {
-            globalIndex += pages[p].filter(x => x.type !== "section" && x.type !== "description").length;
-          }
-          const questionIndexInPage = currentQuestions.filter(x => x.type !== "section" && x.type !== "description").findIndex(x => x.id === q.id);
-          globalIndex += (questionIndexInPage + 1);
-
-          return (
-            <div key={q.id} className="bg-white rounded-xl shadow-sm border border-gray-200 p-4 sm:p-8">
-              <div className="mb-3 sm:mb-4">
-                <h3 className="text-sm sm:text-lg font-bold text-gray-900 flex items-start">
-                  <span className="mr-1.5 sm:mr-2 leading-snug">
-                    {survey.settings.showQuestionNumbers && `${globalIndex}. `}
-                    {q.title}
-                  </span>
-                  {q.required && <span className="text-red-500 text-base sm:text-lg leading-none">*</span>}
-                </h3>
-                {q.description && <p className="text-[10px] sm:text-xs font-bold text-gray-500 mt-1 whitespace-pre-wrap">{q.description}</p>}
-                {survey.settings.isQuiz && survey.settings.showPointValues && (
-                  <span className="text-[9px] sm:text-[10px] font-black text-gray-400 bg-gray-100 px-1.5 sm:px-2 py-0.5 rounded mt-1.5 sm:mt-2 inline-block">
-                    {q.points || 0} 点
-                  </span>
-                )}
-              </div>
-              {renderQuestionUI(q)}
-            </div>
-          );
-        })}
-
-        {isLastPage && (
-          <div className={`rounded-xl shadow-sm border p-4 sm:p-6 mt-4 sm:mt-6 flex items-start ${isAnonymousView ? "bg-gray-50 border-gray-200" : "bg-blue-50 border-blue-200"}`}>
-            <Info className={`h-5 w-5 sm:h-6 sm:w-6 mr-2 sm:mr-3 flex-shrink-0 ${isAnonymousView ? "text-gray-400" : "text-blue-500"}`} />
-            <div>
-              <h4 className={`text-xs sm:text-sm font-bold mb-1 ${isAnonymousView ? "text-gray-700" : "text-blue-900"}`}>
-                {isAnonymousView ? "このアンケートは匿名で記録されます" : "このアンケートは記名式です"}
-              </h4>
-              <p className={`text-[10px] sm:text-xs leading-relaxed font-bold ${isAnonymousView ? "text-gray-500" : "text-blue-700"}`}>
-                {isAnonymousView ? "誰が送信したかは記録されません。" : `あなたのアカウント情報が管理者に記録・表示されます。`}
-              </p>
-            </div>
-          </div>
-        )}
-
-        {survey.settings.showProgressBar && (
-          <div className="bg-white rounded-xl border border-gray-200 p-3 sm:p-4 shadow-sm">
-            <div className="flex justify-between text-[10px] sm:text-xs font-bold text-gray-500 mb-1.5 sm:mb-2">
-              <span>全体の進行状況</span>
-              <span>{progressPercent}%</span>
-            </div>
-            <div className="w-full bg-gray-200 rounded-full h-1.5 sm:h-2">
-              <div className="bg-purple-600 h-1.5 sm:h-2 rounded-full transition-all duration-500" style={{ width: `${progressPercent}%` }}></div>
-            </div>
-          </div>
-        )}
-
-        <div className="flex flex-col sm:flex-row items-center justify-between bg-white rounded-xl shadow-sm border border-gray-200 p-4 sm:p-6 mt-4 sm:mt-6 gap-3 sm:gap-4">
+    // ★ h-full と overflow-y-auto を追加し、スマートフォンUIでの縦スクロールを有効化
+    <div className="relative font-sans animate-fade-in h-full flex flex-col w-full">
+      <div className="flex-1 overflow-y-auto custom-scrollbar pb-24 px-4 pt-4 sm:px-0 sm:pt-0">
+        <form ref={formRef} onSubmit={handleFormSubmit} className="space-y-4 sm:space-y-6">
           
-          <div className="flex items-center gap-2 sm:gap-3 w-full sm:w-auto">
-            {currentPageIndex > 0 && (
-              <button type="button" onClick={handlePrevPage} className="w-full sm:w-auto px-4 sm:px-6 py-2.5 sm:py-3.5 bg-gray-100 hover:bg-gray-200 text-gray-700 font-bold text-xs sm:text-sm rounded-full transition-colors flex justify-center items-center">
-                <ChevronLeft className="w-3.5 h-3.5 sm:w-4 sm:h-4 mr-1" /> 戻る
-              </button>
-            )}
-            
-            {!isLastPage ? (
-              <button type="submit" className="w-full sm:w-auto px-6 sm:px-10 py-2.5 sm:py-3.5 bg-indigo-600 hover:bg-indigo-700 text-white font-extrabold text-xs sm:text-sm rounded-full transition-colors flex justify-center items-center shadow-md">
-                次へ <ChevronRight className="w-3.5 h-3.5 sm:w-4 sm:h-4 ml-1" />
-              </button>
-            ) : (
-              <button type="submit" disabled={isSubmitting} className="w-full sm:w-auto px-6 sm:px-10 py-2.5 sm:py-3.5 bg-purple-600 hover:bg-purple-700 text-white font-extrabold text-xs sm:text-sm rounded-full transition-colors flex justify-center items-center shadow-md disabled:opacity-70">
-                {isSubmitting ? <Loader2 className="animate-spin h-4 w-4 sm:h-5 sm:w-5 mr-1.5 sm:mr-2" /> : <Send className="w-3.5 h-3.5 sm:w-4 sm:h-4 mr-1.5 sm:mr-2" />} 
-                {existingResponse ? "更新する" : "送信する"}
-              </button>
-            )}
-          </div>
-          
-          {isLastPage && (
-            <div className="text-[9px] sm:text-[10px] font-bold text-gray-400 text-center sm:text-right leading-relaxed mt-1 sm:mt-0">
-              回答内容は管理者にのみ送信されます。<br className="hidden sm:block" />
-              {existingResponse ? "この回答は既に送信されており、現在は編集モードです。" : survey.settings.allowEditResponse ? "送信後も回答の編集が可能です。" : "送信後は内容の変更ができません。"}
+          {timeLeftSeconds !== null && (
+            <div className="sticky top-0 z-30 bg-purple-900 text-white px-3 py-2 sm:px-4 sm:py-2.5 rounded-xl shadow-lg flex items-center justify-between font-mono animate-pulse mb-4 sm:mb-6">
+              <span className="text-[10px] sm:text-xs font-bold flex items-center gap-1.5"><Clock className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-purple-300" /> 残り回答時間</span>
+              <span className={`text-base sm:text-lg font-black ${timeLeftSeconds < 60 ? 'text-red-300 animate-ping' : 'text-amber-300'}`}>
+                {formatTimerString(timeLeftSeconds)}
+              </span>
             </div>
           )}
-        </div>
-      </form>
+
+          {isFirstPage && survey.settings.collectEmail && (
+            <div className="bg-white rounded-xl shadow-sm border border-red-200 p-4 sm:p-8 relative overflow-hidden">
+              <div className="absolute top-0 left-0 w-1 h-full bg-red-500"></div>
+              <h3 className="text-sm sm:text-base font-bold text-gray-900 mb-1.5 sm:mb-2 flex items-center"><Mail className="w-4 h-4 sm:w-5 sm:h-5 mr-1.5 sm:mr-2 text-red-500" />メールアドレス <span className="text-red-500 ml-1">*</span></h3>
+              <p className="text-[9px] sm:text-[10px] font-bold text-gray-500 mb-3 sm:mb-4">このフォームはメールアドレスを収集します。初期値としてアカウントのメールアドレスが設定されます（変更可能）。</p>
+              <input type="email" required value={emailAnswer} onChange={(e) => setEmailAnswer(e.target.value)} placeholder="example@example.com" className="w-full sm:w-1/2 bg-gray-50 border border-gray-300 rounded-lg focus:border-red-500 px-3 py-2.5 sm:px-4 sm:py-3 outline-none text-xs sm:text-sm font-medium" />
+            </div>
+          )}
+
+          {isFirstPage && survey.settings.collectRespondentInfo && !currentUser && (
+            <div className="bg-white rounded-xl shadow-sm border border-blue-200 p-4 sm:p-8 relative overflow-hidden">
+              <div className="absolute top-0 left-0 w-1 h-full bg-blue-500"></div>
+              <h3 className="text-sm sm:text-base font-bold text-gray-900 mb-1.5 sm:mb-2 flex items-center"><User className="w-4 h-4 sm:w-5 sm:h-5 mr-1.5 sm:mr-2 text-blue-500" />お名前を入力してください <span className="text-red-500 ml-1">*</span></h3>
+              <p className="text-[9px] sm:text-[10px] font-bold text-gray-500 mb-3 sm:mb-4">このフォームは記名式です。誰が回答したか管理者に通知されます。</p>
+              <input type="text" required value={guestName} onChange={(e) => setGuestName(e.target.value)} placeholder="氏名" className="w-full sm:w-1/2 bg-gray-50 border border-gray-300 rounded-lg focus:border-blue-500 px-3 py-2.5 sm:px-4 sm:py-3 outline-none text-xs sm:text-sm font-medium" />
+            </div>
+          )}
+
+          {currentQuestions.map((q, index) => {
+            if (q.type === "section") {
+              return (
+                <div key={q.id} className="bg-blue-600 text-white rounded-xl p-4 sm:p-8 shadow-md mt-6 sm:mt-10">
+                  <h2 className="text-lg sm:text-2xl font-black">{q.title}</h2>
+                  {q.description && <p className="text-xs sm:text-sm text-blue-100 mt-1.5 sm:mt-2 whitespace-pre-wrap">{q.description}</p>}
+                </div>
+              );
+            }
+            if (q.type === "description") {
+              return (
+                <div key={q.id} className="bg-white rounded-xl border border-gray-200 p-4 sm:p-8 shadow-sm">
+                  <h3 className="text-base sm:text-lg font-bold text-gray-900">{q.title}</h3>
+                  {q.description && <p className="text-xs sm:text-sm text-gray-600 mt-1.5 sm:mt-2 whitespace-pre-wrap">{q.description}</p>}
+                </div>
+              );
+            }
+
+            let globalIndex = 0;
+            for (let p=0; p<currentPageIndex; p++) {
+              globalIndex += pages[p].filter(x => x.type !== "section" && x.type !== "description").length;
+            }
+            const questionIndexInPage = currentQuestions.filter(x => x.type !== "section" && x.type !== "description").findIndex(x => x.id === q.id);
+            globalIndex += (questionIndexInPage + 1);
+
+            return (
+              <div key={q.id} className="bg-white rounded-xl shadow-sm border border-gray-200 p-4 sm:p-8">
+                <div className="mb-3 sm:mb-4">
+                  <h3 className="text-sm sm:text-lg font-bold text-gray-900 flex items-start">
+                    <span className="mr-1.5 sm:mr-2 leading-snug">
+                      {survey.settings.showQuestionNumbers && `${globalIndex}. `}
+                      {q.title}
+                    </span>
+                    {q.required && <span className="text-red-500 text-base sm:text-lg leading-none">*</span>}
+                  </h3>
+                  {q.description && <p className="text-[10px] sm:text-xs font-bold text-gray-500 mt-1 whitespace-pre-wrap">{q.description}</p>}
+                  {survey.settings.isQuiz && survey.settings.showPointValues && (
+                    <span className="text-[9px] sm:text-[10px] font-black text-gray-400 bg-gray-100 px-1.5 sm:px-2 py-0.5 rounded mt-1.5 sm:mt-2 inline-block">
+                      {q.points || 0} 点
+                    </span>
+                  )}
+                </div>
+                {renderQuestionUI(q)}
+              </div>
+            );
+          })}
+
+          {isLastPage && (
+            <div className={`rounded-xl shadow-sm border p-4 sm:p-6 mt-4 sm:mt-6 flex items-start ${isAnonymousView ? "bg-gray-50 border-gray-200" : "bg-blue-50 border-blue-200"}`}>
+              <Info className={`h-5 w-5 sm:h-6 sm:w-6 mr-2 sm:mr-3 flex-shrink-0 ${isAnonymousView ? "text-gray-400" : "text-blue-500"}`} />
+              <div>
+                <h4 className={`text-xs sm:text-sm font-bold mb-1 ${isAnonymousView ? "text-gray-700" : "text-blue-900"}`}>
+                  {isAnonymousView ? "このアンケートは匿名で記録されます" : "このアンケートは記名式です"}
+                </h4>
+                <p className={`text-[10px] sm:text-xs leading-relaxed font-bold ${isAnonymousView ? "text-gray-500" : "text-blue-700"}`}>
+                  {isAnonymousView ? "誰が送信したかは記録されません。" : `あなたのアカウント情報が管理者に記録・表示されます。`}
+                </p>
+              </div>
+            </div>
+          )}
+
+          {survey.settings.showProgressBar && (
+            <div className="bg-white rounded-xl border border-gray-200 p-3 sm:p-4 shadow-sm">
+              <div className="flex justify-between text-[10px] sm:text-xs font-bold text-gray-500 mb-1.5 sm:mb-2">
+                <span>全体の進行状況</span>
+                <span>{progressPercent}%</span>
+              </div>
+              <div className="w-full bg-gray-200 rounded-full h-1.5 sm:h-2">
+                <div className="bg-purple-600 h-1.5 sm:h-2 rounded-full transition-all duration-500" style={{ width: `${progressPercent}%` }}></div>
+              </div>
+            </div>
+          )}
+
+          <div className="flex flex-col sm:flex-row items-center justify-between bg-white rounded-xl shadow-sm border border-gray-200 p-4 sm:p-6 mt-4 sm:mt-6 gap-3 sm:gap-4">
+            
+            <div className="flex items-center gap-2 sm:gap-3 w-full sm:w-auto">
+              {currentPageIndex > 0 && (
+                <button type="button" onClick={handlePrevPage} className="w-full sm:w-auto px-4 sm:px-6 py-2.5 sm:py-3.5 bg-gray-100 hover:bg-gray-200 text-gray-700 font-bold text-xs sm:text-sm rounded-full transition-colors flex justify-center items-center">
+                  <ChevronLeft className="w-3.5 h-3.5 sm:w-4 sm:h-4 mr-1" /> 戻る
+                </button>
+              )}
+              
+              {!isLastPage ? (
+                <button type="submit" className="w-full sm:w-auto px-6 sm:px-10 py-2.5 sm:py-3.5 bg-indigo-600 hover:bg-indigo-700 text-white font-extrabold text-xs sm:text-sm rounded-full transition-colors flex justify-center items-center shadow-md">
+                  次へ <ChevronRight className="w-3.5 h-3.5 sm:w-4 sm:h-4 ml-1" />
+                </button>
+              ) : (
+                <button type="submit" disabled={isSubmitting} className="w-full sm:w-auto px-6 sm:px-10 py-2.5 sm:py-3.5 bg-purple-600 hover:bg-purple-700 text-white font-extrabold text-xs sm:text-sm rounded-full transition-colors flex justify-center items-center shadow-md disabled:opacity-70">
+                  {isSubmitting ? <Loader2 className="animate-spin h-4 w-4 sm:h-5 sm:w-5 mr-1.5 sm:mr-2" /> : <Send className="w-3.5 h-3.5 sm:w-4 sm:h-4 mr-1.5 sm:mr-2" />} 
+                  {existingResponse ? "更新する" : "送信する"}
+                </button>
+              )}
+            </div>
+            
+            {isLastPage && (
+              <div className="text-[9px] sm:text-[10px] font-bold text-gray-400 text-center sm:text-right leading-relaxed mt-1 sm:mt-0">
+                回答内容は管理者にのみ送信されます。<br className="hidden sm:block" />
+                {existingResponse ? "この回答は既に送信されており、現在は編集モードです。" : survey.settings.allowEditResponse ? "送信後も回答の編集が可能です。" : "送信後は内容の変更ができません。"}
+              </div>
+            )}
+          </div>
+        </form>
+      </div>
     </div>
   );
 }
