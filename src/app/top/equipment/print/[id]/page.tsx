@@ -6,6 +6,7 @@ import { doc, getDoc } from "firebase/firestore";
 import { auth, db } from "@/lib/firebase";
 import { Rental, Equipment, UserData, SchoolData } from "../../types";
 import { Printer, Download, X, Loader2, FileText } from "lucide-react";
+import LoadingScreen from "@/components/LoadingScreen";
 
 export default function RentalPrintPage() {
   const params = useParams();

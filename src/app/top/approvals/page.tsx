@@ -37,6 +37,7 @@ import {
   Sparkles,
   UserCheck
 } from "lucide-react";
+import LoadingScreen from "@/components/LoadingScreen";
 
 // ----------------------------------------------------------------------
 // 型定義

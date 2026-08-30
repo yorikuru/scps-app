@@ -13,6 +13,7 @@ import MessageHistory from "./MessageHistory";
 import MessageResponses from "./MessageResponses";
 import ActiveMessagesByTenant from "./ActiveMessagesByTenant";
 import { useDialog } from "@/components/DialogContext"; // ★追加
+import LoadingScreen from "@/components/LoadingScreen";
 
 export type MessageCategory = "info" | "warning" | "maintenance" | "event" | "update" | "survey" | "report";
 
