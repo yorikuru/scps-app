@@ -11,6 +11,7 @@ import { UserData, SchoolData } from "../page";
 import MessageForm from "./MessageForm";
 import MessageHistory from "./MessageHistory";
 import MessageResponses from "./MessageResponses";
+import LoadingScreen from "@/components/LoadingScreen";
 
 export type MessageCategory = "info" | "warning" | "maintenance" | "event" | "update" | "survey" | "report";
 
@@ -243,7 +244,7 @@ export default function MessageDelivery({ schoolData, users, currentUser, showAl
 
       <div className="animate-fade-in bg-white rounded-b-2xl shadow-sm border border-gray-200 min-h-[500px]">
         {isLoading ? (
-          <div className="flex justify-center items-center py-20"><Loader2 className="w-8 h-8 text-blue-600 animate-spin" /></div>
+          <LoadingScreen />
         ) : (
           <>
             {tab === "history" && <MessageHistory messages={messages} users={users} setQueryParams={setQueryParams} requestDelete={requestDelete} />}

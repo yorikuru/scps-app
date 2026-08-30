@@ -5,6 +5,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { doc, getDoc, updateDoc } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 import { Loader2, Lock, AlertCircle, CheckCircle2, Globe } from "lucide-react"; // ★ MessageCircle から Globe に変更
+import LoadingScreen from "@/components/LoadingScreen";
 
 function ResetPasswordForm() {
   const router = useRouter();
@@ -231,7 +232,7 @@ export default function ExternalResetPasswordPage() {
   return (
     <Suspense fallback={
       <div className="min-h-screen flex items-center justify-center bg-gray-50">
-        <Loader2 className="w-8 h-8 animate-spin text-blue-600" />
+        <LoadingScreen />
       </div>
     }>
       <ResetPasswordForm />

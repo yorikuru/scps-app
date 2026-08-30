@@ -14,6 +14,7 @@ import ChatRoomWindow from "./components/ChatRoomWindow";
 import UserProfileModal from "./components/UserProfileModal"; 
 import ChatSettings from "./components/ChatSettings"; 
 import { useDialog } from "@/components/DialogContext";
+import LoadingScreen from "@/components/LoadingScreen";
 
 const DynamicIcon = ({ name, className }: { name: string, className?: string }) => {
   const IconComponent = (LucideIcons as any)[name] || LucideIcons.Box;
@@ -301,7 +302,7 @@ export default function ChatPage() {
   };
 
   if (isLoading || !userData) {
-    return <div className="h-full flex justify-center items-center"><Loader2 className="w-8 h-8 animate-spin text-emerald-500" /></div>;
+    return <LoadingScreen />;
   }
 
   if (!hasPermission) {

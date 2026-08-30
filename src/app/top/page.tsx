@@ -5,10 +5,11 @@ import { useRouter } from "next/navigation";
 import { onAuthStateChanged, signOut } from "firebase/auth";
 import { doc, getDoc, collection, getDocs, updateDoc, arrayUnion, query, orderBy, where, onSnapshot } from "firebase/firestore";
 import { auth, db } from "@/lib/firebase";
-import { Loader2, AlertTriangle, ShieldBan, Building2 } from "lucide-react";
+import { AlertTriangle, ShieldBan, Building2 } from "lucide-react";
 
 import NormalTop from "./components/NormalTop";
 import SetupTutorial from "./components/SetupTutorial";
+import LoadingScreen from "@/components/LoadingScreen"; // ★ ここでインポート
 
 export type MfaPolicy = { allowSetup: boolean; forceSetup: boolean; allowUsage: boolean; };
 
@@ -278,12 +279,9 @@ export default function PortalTopPage() {
     }
   };
 
+  // ★ 共通コンポーネントに置き換え！
   if (isLoading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-50">
-        <Loader2 className="animate-spin h-10 w-10 text-indigo-600" />
-      </div>
-    );
+    return <LoadingScreen message="ダッシュボードを準備中..." />;
   }
 
   if (schoolData?.status === "suspended" && userData?.role !== "system_admin") {

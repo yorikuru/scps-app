@@ -12,6 +12,7 @@ import { ExternalUser } from "@/app/types/external";
 import { Survey, sanitizeSurveyData, getDefaultSurveySettings } from "@/app/top/surveys/types";
 import ExtHeader from "@/app/ext-top/components/ExtHeader";
 import { useDialog } from "@/components/DialogContext";
+import LoadingScreen from "@/components/LoadingScreen";
 
 export default function ExtSurveysPage() {
   const router = useRouter();
@@ -318,7 +319,7 @@ export default function ExtSurveysPage() {
     );
   };
 
-  if (isLoading) return <div className="h-[100dvh] flex justify-center items-center bg-gray-50"><Loader2 className="w-8 h-8 animate-spin text-indigo-500" /></div>;
+  if (isLoading) return <LoadingScreen />;
 
   if (error || !extUser) {
     return (

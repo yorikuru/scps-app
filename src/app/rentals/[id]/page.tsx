@@ -8,6 +8,7 @@ import {
   Package, Calendar as CalendarIcon, MapPin, CheckCircle2, AlertCircle, 
   Loader2, Wrench, FileText, Globe, LogIn, AlertTriangle
 } from "lucide-react";
+import LoadingScreen from "@/components/LoadingScreen";
 
 type RentalItem = { 
   equipmentId: string; 
@@ -52,7 +53,7 @@ export default function PublicRentalPage() {
     fetchRental();
   }, [rentalId]);
 
-  if (isLoading) return <div className="min-h-screen bg-gray-50 flex justify-center items-center"><Loader2 className="w-8 h-8 animate-spin text-indigo-600" /></div>;
+  if (isLoading) return <LoadingScreen />;
 
   if (!rental) return (
     <div className="min-h-screen bg-gray-50 flex flex-col items-center justify-center p-4">

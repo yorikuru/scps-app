@@ -5,13 +5,14 @@ import { useRouter, usePathname } from "next/navigation";
 import { onAuthStateChanged } from "firebase/auth";
 import { doc, collection, query, where, onSnapshot, orderBy, getDoc, setDoc, serverTimestamp } from "firebase/firestore";
 import { auth, db } from "@/lib/firebase";
-import { Loader2, ShieldAlert } from "lucide-react";
+import { ShieldAlert } from "lucide-react";
 
 import Sidebar from "./components/Sidebar";
 import Header from "./components/Header";
 import DisasterAlertWidget from "./components/DisasterAlertWidget";
 import { UserData, SchoolData, SystemMessage, SystemApp } from "./page";
 import { PresenceState } from "./presence/types";
+import LoadingScreen from "@/components/LoadingScreen"; // ★ ここでインポート
 
 type ExtendedSchoolData = SchoolData & {
   availableModules?: string[];
@@ -407,8 +408,9 @@ export default function TopLayout({ children }: { children: React.ReactNode }) {
     router.push("/login");
   };
 
+  // ★ 共通コンポーネントに置き換え！
   if (isLoading) {
-    return <div className="fixed inset-0 flex items-center justify-center bg-[#F9FAFB]"><Loader2 className="w-8 h-8 animate-spin text-indigo-600" /></div>;
+    return <LoadingScreen message="ポータルを準備中..." />;
   }
 
   const isPrintPage = pathname.includes("/equipment/print");
@@ -552,7 +554,6 @@ export default function TopLayout({ children }: { children: React.ReactNode }) {
           />
           
           <main className="flex-1 min-h-0 w-full relative flex flex-col overflow-y-auto overscroll-contain">
-            {/* ★ 下部の余白（pb）を pb-20 から pb-14 へ削減し、モバイルナビ分の余白を最小化 */}
             <div className={isBlurNeeded ? "pointer-events-none select-none blur-[4px] transition-all flex flex-col flex-1 min-h-full pb-14 md:pb-4" : "flex flex-col flex-1 min-h-full pb-14 md:pb-4"}>
               
               <div className="w-full max-w-7xl mx-auto px-3 sm:px-4 lg:px-6 pt-3 sm:pt-4 lg:pt-6 empty:hidden flex-shrink-0 z-40">

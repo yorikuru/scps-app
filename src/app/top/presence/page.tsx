@@ -14,6 +14,7 @@ import StatusOverview from "./components/StatusOverview";
 import MyStatusEditor from "./components/MyStatusEditor";
 import WeeklyScheduleEditor from "./components/WeeklyScheduleEditor";
 import LocationMaster from "./components/LocationMaster";
+import LoadingScreen from "@/components/LoadingScreen";
 
 const DynamicIcon = ({ name, className }: { name: string, className?: string }) => {
   const IconComponent = (LucideIcons as any)[name] || LucideIcons.Box;
@@ -276,7 +277,7 @@ export default function PresencePage() {
 
   const proxyTargetUser = tenantUsers.find(u => u.id === proxyParam) || null;
 
-  if (isLoading) return <div className="h-full bg-[#F9FAFB] flex justify-center items-center"><Loader2 className="w-8 h-8 animate-spin text-indigo-600" /></div>;
+  if (isLoading) return <LoadingScreen />;
   if (!hasPermission) return <div className="h-full flex flex-col items-center justify-center p-4"><AlertTriangle className="w-12 h-12 text-red-500 mb-4" /><h1 className="text-xl font-black">アクセス権限がありません</h1></div>;
 
   return (

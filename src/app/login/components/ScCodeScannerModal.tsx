@@ -252,7 +252,7 @@ export default function ScCodeScannerModal({ onClose, onLoginSuccess, showAlert 
                 {step === "success" ? (
                   <CheckCircle2 className="w-10 h-10 text-emerald-500 animate-bounce" />
                 ) : (
-                  <Loader2 className="w-8 h-8 text-emerald-600 animate-spin" />
+                  <LoadingScreen />
                 )}
               </div>
               <h3 className="text-base font-black text-gray-900 mb-2 tracking-wide">

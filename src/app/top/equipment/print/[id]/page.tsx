@@ -104,7 +104,7 @@ export default function RentalPrintPage() {
   if (isLoading) {
     return (
       <div className="min-h-screen bg-gray-100 flex flex-col items-center justify-center font-bold text-gray-500">
-        <Loader2 className="w-8 h-8 animate-spin text-indigo-600 mb-2" />
+        <LoadingScreen />
         <p>貸出票データを準備中...</p>
       </div>
     );

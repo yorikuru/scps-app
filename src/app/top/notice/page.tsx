@@ -11,6 +11,7 @@ import {
   Search, ChevronLeft, ExternalLink, Loader2, X
 } from "lucide-react";
 import { useDialog } from "@/components/DialogContext";
+import LoadingScreen from "@/components/LoadingScreen";
 
 type AppNotification = {
   id: string;
@@ -361,7 +362,7 @@ export default function NoticePage() {
   };
 
   if (isLoading) {
-    return <div className="h-full flex justify-center items-center bg-gray-50"><Loader2 className="w-8 h-8 animate-spin text-blue-500" /></div>;
+    return <LoadingScreen />;
   }
 
   const unreadCount = visibleNotifications.filter(n => !n.isRead).length;

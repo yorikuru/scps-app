@@ -12,6 +12,7 @@ import * as LucideIcons from "lucide-react";
 
 import { ExternalUser } from "@/app/types/external";
 import ExtHeader from "./components/ExtHeader"; 
+import LoadingScreen from "@/components/LoadingScreen";
 
 const DynamicIcon = ({ name, className }: { name: string, className?: string }) => {
   const IconComponent = (LucideIcons as any)[name] || LucideIcons.Box;
@@ -198,7 +199,7 @@ export default function ExtTopPage() {
     router.push("/ext-login");
   };
 
-  if (isLoading) return <div className="min-h-screen flex justify-center items-center bg-gray-50"><Loader2 className="w-8 h-8 animate-spin text-indigo-500" /></div>;
+  if (isLoading) return <LoadingScreen />;
   if (!extUser) return null;
 
   const allowedModules: string[] = extUser.allowedModules || ["chat"];

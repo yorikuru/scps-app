@@ -252,7 +252,7 @@ export default function MessageDelivery({ tenants, users }: Props) {
 
       <div className="animate-fade-in bg-white rounded-b-2xl shadow-sm border border-gray-200 min-h-[500px]">
         {isLoading ? (
-          <div className="flex justify-center items-center py-20"><Loader2 className="w-8 h-8 text-blue-600 animate-spin" /></div>
+          <LoadingScreen />
         ) : (
           <>
             {tab === "history" && <MessageHistory messages={messages} tenants={tenants} users={users} setQueryParams={setQueryParams} requestDelete={requestDelete} />}

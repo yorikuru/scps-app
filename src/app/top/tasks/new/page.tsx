@@ -7,6 +7,7 @@ import { doc, getDoc, getDocs, collection, query, where, addDoc, serverTimestamp
 import { auth, db } from "@/lib/firebase";
 import { ArrowLeft, CheckCircle2, AlertCircle, Search, User as UserIcon, Loader2, Star, X, CheckSquare } from "lucide-react";
 import CustomSelect from "@/components/CustomSelect";
+import LoadingScreen from "@/components/LoadingScreen";
 
 type UserData = { id: string; name: string; schoolId: string; role: string; };
 type TaskStatus = "not_started" | "in_progress" | "waiting" | "pending" | "done";
@@ -175,7 +176,7 @@ export default function NewTaskPage() {
     }
   };
 
-  if (isLoading) return <div className="h-[100dvh] bg-[#F9FAFB] flex justify-center items-center"><Loader2 className="w-8 h-8 animate-spin text-indigo-600" /></div>;
+  if (isLoading) return <LoadingScreen />;
 
   return (
     // ★ flex-1 h-full と overscroll-none を追加

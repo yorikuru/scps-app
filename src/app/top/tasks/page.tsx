@@ -10,10 +10,11 @@ import {
 import { auth, db } from "@/lib/firebase";
 import * as LucideIcons from "lucide-react";
 import { 
-  ArrowLeft, Search, Plus, Trash2, CheckCircle2, 
+  Search, Plus, Trash2, CheckCircle2, 
   AlertCircle, Calendar as CalendarIcon, User as UserIcon, 
-  Flag, AlertTriangle, ChevronDown, Loader2, Users, KanbanSquare, Clock
+  Flag, AlertTriangle, ChevronDown, Users, KanbanSquare, Clock ,Printer
 } from "lucide-react";
+import LoadingScreen from "@/components/LoadingScreen";
 
 type UserData = { id: string; name: string; schoolId: string; role: string; };
 type TaskStatus = "not_started" | "in_progress" | "waiting" | "pending" | "done";
@@ -23,6 +24,7 @@ type CompletionReq = "anyone" | "all" | "leader";
 type Task = {
   id: string; title: string; description: string; status: TaskStatus; priority: TaskPriority;
   startDate: string | null; dueDate: string | null; dueTime?: string | null;
+  completedAt?: string | null; // ★ 完了日を追加
   assignees: string[]; leaderId: string | null; completionRequirement: CompletionReq;
   completedBy: string[]; createdAt: string;
 };
@@ -53,10 +55,10 @@ const STATUS_CONFIG: Record<TaskStatus, { label: string, color: string, badge: s
 };
 
 const PRIORITY_CONFIG: Record<TaskPriority, { label: string, color: string, icon: React.ReactNode }> = {
-  urgent: { label: "緊急", color: "text-red-700 bg-red-100 border-red-500 font-black shadow-2xs", icon: <AlertTriangle className="w-3 h-3 text-red-600" /> },
-  high: { label: "高", color: "text-orange-700 bg-orange-100 border-orange-200", icon: <Flag className="w-3 h-3 text-orange-600" /> },
-  medium: { label: "中", color: "text-blue-700 bg-blue-100 border-blue-200", icon: <Flag className="w-3 h-3 text-blue-600" /> },
-  low: { label: "低", color: "text-gray-600 bg-gray-100 border-gray-200", icon: <Flag className="w-3 h-3 text-gray-500" /> },
+  urgent: { label: "緊急", color: "text-red-700 bg-red-100 border-red-500 font-black shadow-2xs", icon: <AlertTriangle className="w-2.5 h-2.5 sm:w-3 sm:h-3 text-red-600" /> },
+  high: { label: "高", color: "text-orange-700 bg-orange-100 border-orange-200", icon: <Flag className="w-2.5 h-2.5 sm:w-3 sm:h-3 text-orange-600" /> },
+  medium: { label: "中", color: "text-blue-700 bg-blue-100 border-blue-200", icon: <Flag className="w-2.5 h-2.5 sm:w-3 sm:h-3 text-blue-600" /> },
+  low: { label: "低", color: "text-gray-600 bg-gray-100 border-gray-200", icon: <Flag className="w-2.5 h-2.5 sm:w-3 sm:h-3 text-gray-500" /> },
 };
 
 function CustomSelect({ value, options, onChange, className, ringClass, dropUp = false }: any) {
@@ -111,7 +113,6 @@ export default function TasksPage() {
   const [uiAlert, setUiAlert] = useState<AlertState>({ show: false, type: "success", message: "" });
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
 
-  // スマホ表示用のステータスタブ
   const [activeMobileTab, setActiveMobileTab] = useState<TaskStatus>("not_started");
 
   useEffect(() => {
@@ -162,6 +163,7 @@ export default function TasksPage() {
                 id: d.id, title: td.title, description: td.description || "",
                 status: td.status || "not_started", priority: td.priority || "medium",
                 startDate: td.startDate || null, dueDate: td.dueDate || null, dueTime: td.dueTime || null,
+                completedAt: td.completedAt || null,
                 assignees: td.assignees || (td.assigneeId ? [td.assigneeId] : []),
                 leaderId: td.leaderId || null, completionRequirement: td.completionRequirement || "anyone",
                 completedBy: td.completedBy || [],
@@ -205,8 +207,21 @@ export default function TasksPage() {
         }
       }
     }
-    if (task.status === "done" && newStatus !== "done") payload.completedBy = [];
-    if (finalStatus !== task.status) payload.status = finalStatus;
+    
+    // ★ 完了状態から戻す場合は完了日をリセット
+    if (task.status === "done" && newStatus !== "done") {
+      payload.completedBy = [];
+      payload.completedAt = null;
+    }
+    
+    if (finalStatus !== task.status) {
+      payload.status = finalStatus;
+      // ★ 新しく完了になった場合に完了日を自動記録
+      if (finalStatus === "done") {
+        payload.completedAt = new Date().toISOString().split("T")[0];
+      }
+    }
+
     if (Object.keys(payload).length > 0) {
       try { await updateDoc(doc(db, "tasks", task.id), payload); } 
       catch (error) { showToast("error", "ステータス変更に失敗しました。"); }
@@ -248,9 +263,9 @@ export default function TasksPage() {
 
   const columns: TaskStatus[] = ["not_started", "in_progress", "waiting", "pending", "done"];
   const assigneeOptions = [{label:"すべての担当者", value:"all"}, {label:"自分のタスク", value:"my"}, {label:"未割り当て", value:"unassigned"}];
-  const statusOptions = Object.entries(STATUS_CONFIG).map(([key, conf]) => ({ label: conf.label, value: key, badgeClass: conf.badge.split(" ")[0] + " " + conf.badge.split(" ")[1] + " px-1.5 py-0.5 rounded-md border" }));
+  const statusOptions = Object.entries(STATUS_CONFIG).map(([key, conf]) => ({ label: conf.label, value: key, badgeClass: conf.badge.split(" ")[0] + " " + conf.badge.split(" ")[1] + " px-1 py-0.5 rounded-md border text-[9px]" }));
 
-  if (isLoading) return <div className="h-full bg-[#F9FAFB] flex justify-center items-center"><Loader2 className="w-8 h-8 animate-spin text-indigo-600" /></div>;
+  if (isLoading) return <LoadingScreen message="タスクを準備中..." />;
   if (!hasPermission) return <div className="h-full flex flex-col items-center justify-center p-4"><AlertTriangle className="w-12 h-12 text-red-500 mb-4" /><h1 className="text-xl font-black">アクセス権限がありません</h1></div>;
 
   const renderTaskCard = (t: Task) => {
@@ -263,36 +278,36 @@ export default function TasksPage() {
         key={t.id} 
         draggable onDragStart={(e) => handleDragStart(e, t.id)}
         onClick={() => router.push(`/top/tasks/detail/${t.id}`)} 
-        className={`p-3 rounded-xl transition-all cursor-grab active:cursor-grabbing group flex flex-col gap-2 relative overflow-visible ${overdue ? 'bg-red-50/80 border-red-400 shadow-[0_0_12px_rgba(239,68,68,0.2)]' : 'bg-white border border-gray-200 shadow-sm hover:border-indigo-300 hover:shadow-md'}`}
+        className={`p-1.5 sm:p-2.5 rounded-lg sm:rounded-xl transition-all cursor-grab active:cursor-grabbing group flex flex-col gap-1 relative overflow-visible ${overdue ? 'bg-red-50/80 border-red-400 shadow-[0_0_8px_rgba(239,68,68,0.2)]' : 'bg-white border border-gray-200 shadow-2xs hover:border-indigo-300 hover:shadow-sm'}`}
       >
-        {overdue && <div className="absolute top-0 left-0 right-0 h-1 bg-red-500 animate-pulse rounded-t-xl"></div>}
-        <div className="flex justify-between items-start pt-0.5">
-          <div className="flex flex-wrap gap-1.5 mb-1.5">
-            {overdue && <span className="px-1.5 py-0.5 rounded text-[9px] font-black bg-red-600 text-white border border-red-700 animate-pulse"><AlertTriangle className="w-2.5 h-2.5 mr-0.5 inline" />期限超過</span>}
-            <span className={`px-1.5 py-0.5 rounded text-[9px] font-bold flex items-center border ${PRIORITY_CONFIG[t.priority].color}`}>{PRIORITY_CONFIG[t.priority].icon} <span className="ml-0.5">{PRIORITY_CONFIG[t.priority].label}</span></span>
-          </div>
-          <button onClick={(e) => { e.stopPropagation(); setDeleteConfirmId(t.id); }} className="opacity-100 md:opacity-0 group-hover:opacity-100 p-1.5 text-gray-300 hover:text-red-600 hover:bg-red-50 rounded transition-colors absolute top-1 right-1 z-10"><Trash2 className="w-4 h-4" /></button>
-        </div>
-        <h4 className={`text-sm font-black leading-snug break-words pr-6 ${t.status === 'done' ? 'text-gray-400 line-through' : (overdue ? 'text-red-900' : 'text-gray-900')}`}>{t.title}</h4>
+        {overdue && <div className="absolute top-0 left-0 right-0 h-0.5 bg-red-500 animate-pulse rounded-t-lg sm:rounded-t-xl"></div>}
         
-        <div className="flex flex-col gap-2 mt-1 pt-2 border-t border-gray-100/80">
-          <div className="flex items-center gap-2">
-            <div className="flex -space-x-1.5">
-              {t.assignees.length === 0 ? <div className="w-5 h-5 rounded-full bg-gray-100 border-2 border-white flex items-center justify-center"><UserIcon className="w-2.5 h-2.5 text-gray-400" /></div> : t.assignees.slice(0, 3).map(id => <div key={id} className={`w-5 h-5 rounded-full flex items-center justify-center text-[9px] font-bold text-white border-2 border-white ${id === t.leaderId ? 'bg-amber-500 z-10' : 'bg-gray-400'}`}>{tenantUsers.find(tu=>tu.id===id)?.name.charAt(0) || "?"}</div>)}
-            </div>
-            {t.dueDate && <div className={`flex items-center gap-1 text-[10px] font-bold ${overdue ? 'text-red-700' : 'text-gray-500'}`}><CalendarIcon className="w-3 h-3" /> {new Date(t.dueDate).toLocaleDateString('ja-JP', {month:'short', day:'numeric'})}</div>}
+        <div className="flex justify-between items-center">
+          <div className="flex items-center gap-1">
+            {overdue && <span className="px-1 py-0.5 rounded-sm text-[7px] font-black bg-red-600 text-white border border-red-700 animate-pulse flex items-center"><AlertTriangle className="w-2 h-2 mr-0.5" />超過</span>}
+            <span className={`px-1 py-0.5 rounded-sm text-[7px] font-bold flex items-center border ${PRIORITY_CONFIG[t.priority].color}`}>{PRIORITY_CONFIG[t.priority].icon} <span className="ml-0.5">{PRIORITY_CONFIG[t.priority].label}</span></span>
+            {t.dueDate && <span className={`text-[8px] font-bold flex items-center gap-0.5 ${overdue ? 'text-red-700' : 'text-gray-400'}`}><CalendarIcon className="w-2 h-2" />{new Date(t.dueDate).toLocaleDateString('ja-JP', {month:'short', day:'numeric'})}</span>}
+          </div>
+          <button onClick={(e) => { e.stopPropagation(); setDeleteConfirmId(t.id); }} className="opacity-100 md:opacity-0 group-hover:opacity-100 p-0.5 text-gray-300 hover:text-red-600 hover:bg-red-50 rounded transition-colors"><Trash2 className="w-3 h-3" /></button>
+        </div>
+        
+        <h4 className={`text-[11px] font-black leading-tight break-words ${t.status === 'done' ? 'text-gray-400 line-through' : (overdue ? 'text-red-900' : 'text-gray-900')}`}>{t.title}</h4>
+        
+        <div className="flex flex-wrap items-center justify-between gap-1 mt-0.5">
+          <div className="flex -space-x-1">
+            {t.assignees.length === 0 ? <div className="w-4 h-4 rounded-full bg-gray-100 border border-white flex items-center justify-center"><UserIcon className="w-2 h-2 text-gray-400" /></div> : t.assignees.slice(0, 3).map(id => <div key={id} className={`w-4 h-4 rounded-full flex items-center justify-center text-[7px] font-bold text-white border border-white ${id === t.leaderId ? 'bg-amber-500 z-10' : 'bg-gray-400'}`}>{tenantUsers.find(tu=>tu.id===id)?.name.charAt(0) || "?"}</div>)}
           </div>
           
-          <div className="flex flex-wrap items-center justify-between gap-2 mt-1">
-            <div onClick={e => e.stopPropagation()} className="w-24 sm:w-24 flex-shrink-0">
-              <CustomSelect value={t.status} options={statusOptions} onChange={(val: any) => changeTaskStatus(t, val)} className="bg-gray-50 hover:bg-gray-100" dropUp={true} />
+          <div className="flex items-center gap-1">
+            <div onClick={e => e.stopPropagation()} className="w-20 flex-shrink-0">
+              <CustomSelect value={t.status} options={statusOptions} onChange={(val: any) => changeTaskStatus(t, val)} className="bg-gray-50 hover:bg-gray-100 py-0.5 text-[9px]" dropUp={true} />
             </div>
             {t.status !== "done" && (
-              <button onClick={(e) => { e.stopPropagation(); changeTaskStatus(t, "done"); }} className="px-2.5 py-1.5 bg-emerald-50 text-emerald-600 hover:bg-emerald-500 hover:text-white border border-emerald-200 hover:border-emerald-500 text-[10px] font-bold rounded-lg shadow-sm flex items-center transition-colors flex-shrink-0">
-                <CheckCircle2 className="w-3.5 h-3.5 mr-0.5" />完了
+              <button onClick={(e) => { e.stopPropagation(); changeTaskStatus(t, "done"); }} className="px-1.5 py-0.5 bg-emerald-50 text-emerald-600 hover:bg-emerald-500 hover:text-white border border-emerald-200 hover:border-emerald-500 text-[8px] font-bold rounded shadow-2xs flex items-center transition-colors">
+                <CheckCircle2 className="w-2.5 h-2.5 mr-0.5" />完了
               </button>
             )}
-            {t.status === "done" && hasReported && <span className="text-[10px] font-bold text-emerald-600 flex items-center bg-emerald-50 px-2.5 py-1.5 rounded-lg border border-emerald-100"><CheckCircle2 className="w-3 h-3 mr-0.5" />完了済</span>}
+            {t.status === "done" && hasReported && <span className="text-[8px] font-bold text-emerald-600 flex items-center bg-emerald-50 px-1.5 py-0.5 rounded border border-emerald-100"><CheckCircle2 className="w-2.5 h-2.5 mr-0.5" />完了済</span>}
           </div>
         </div>
       </div>
@@ -300,52 +315,48 @@ export default function TasksPage() {
   };
 
   return (
-    // ★ h-full flex-1 w-full で親フレームにぴったり固定
-    <div className="h-full flex-1 w-full bg-[#F9FAFB] font-sans flex flex-col text-gray-900 overflow-hidden relative min-h-0">
+    <div className="h-[100dvh] flex flex-col w-full bg-[#F9FAFB] font-sans text-gray-900 overflow-hidden relative overscroll-none">
       
-      {/* ナビゲーションタブ (固定) */}
-      <div className="px-3 sm:px-6 py-2 sm:py-3 border-b border-gray-200 bg-white flex flex-col sm:flex-row sm:items-center justify-between gap-2 flex-shrink-0">
-        <div className="flex items-center gap-2 sm:gap-3">
-          <div className={`p-1.5 sm:p-2 ${c.lightBg} ${c.text} rounded-lg sm:rounded-xl shadow-2xs`}><DynamicIcon name={appConfig.icon} className="w-4 h-4 sm:w-5 sm:h-5" /></div>
+      <div className="px-2 sm:px-6 py-1.5 sm:py-3 border-b border-gray-200 bg-white flex flex-col sm:flex-row sm:items-center justify-between gap-1.5 flex-shrink-0">
+        <div className="flex items-center gap-1.5 sm:gap-3">
+          <div className={`p-1.5 sm:p-2 ${c.lightBg} ${c.text} rounded-lg sm:rounded-xl shadow-2xs`}><DynamicIcon name={appConfig.icon} className="w-3.5 h-3.5 sm:w-5 sm:h-5" /></div>
           <div>
             <h1 className="text-sm sm:text-base font-black text-gray-900 tracking-tight">{appConfig.name}</h1>
             <p className="hidden sm:block text-[10px] font-bold text-gray-500">ドラッグ＆ドロップでステータス変更。詳細なタスク登録が可能。</p>
           </div>
         </div>
         
-        {/* スマホ横スクロール対応タブ */}
-        <div className="flex items-center gap-1 bg-gray-100 p-1 rounded-xl overflow-x-auto custom-scrollbar whitespace-nowrap">
-          <button className="px-3 py-1.5 text-xs font-bold bg-white text-indigo-600 rounded-lg shadow-2xs flex items-center gap-1">
-            <KanbanSquare className="w-3.5 h-3.5" /> カンバン
-          </button>
-          <button onClick={() => router.push("/top/tasks/personal")} className="px-3 py-1.5 text-xs font-bold text-gray-600 hover:text-gray-900 rounded-lg transition-colors flex items-center gap-1">
-            <Users className="w-3.5 h-3.5" /> パーソナル
-          </button>
-          <button onClick={() => router.push("/top/tasks/timeline")} className="px-3 py-1.5 text-xs font-bold text-gray-600 hover:text-gray-900 rounded-lg transition-colors flex items-center gap-1">
-            <Clock className="w-3.5 h-3.5" /> タイムライン
-          </button>
-        </div>
+        <div className="flex items-center gap-1 bg-gray-100 p-1 rounded-lg overflow-x-auto custom-scrollbar whitespace-nowrap">
+        <button className="px-2 sm:px-3 py-1 sm:py-1.5 text-[10px] sm:text-xs font-bold bg-white text-indigo-600 rounded-md sm:rounded-lg shadow-2xs flex items-center gap-1">
+    <KanbanSquare className="w-3 h-3 sm:w-3.5 sm:h-3.5" /> カンバン
+  </button>
+  <button onClick={() => router.push("/top/tasks/personal")} className="px-2 sm:px-3 py-1 sm:py-1.5 text-[10px] sm:text-xs font-bold text-gray-600 hover:text-gray-900 rounded-md sm:rounded-lg transition-colors flex items-center gap-1">
+    <Users className="w-3 h-3 sm:w-3.5 sm:h-3.5" /> パーソナル
+  </button>
+  <button onClick={() => router.push("/top/tasks/timeline")} className="px-2 sm:px-3 py-1 sm:py-1.5 text-[10px] sm:text-xs font-bold text-gray-600 hover:text-gray-900 rounded-md sm:rounded-lg transition-colors flex items-center gap-1">
+    <Clock className="w-3 h-3 sm:w-3.5 sm:h-3.5" /> タイムライン
+  </button>
+  <button onClick={() => router.push("/top/tasks/print")} className="px-2 sm:px-3 py-1 sm:py-1.5 text-[10px] sm:text-xs font-bold text-gray-600 hover:text-gray-900 rounded-md sm:rounded-lg transition-colors flex items-center gap-1">
+    <Printer className="w-3 h-3 sm:w-3.5 sm:h-3.5" /> 出力
+  </button>          </div>
       </div>
 
       <main className="flex-1 flex flex-col h-full min-h-0">
         
-        {/* コントロールバー（固定） */}
-        <div className="px-3 sm:px-8 py-2 sm:py-3 bg-white border-b border-gray-100 flex-shrink-0 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-          <div className="flex w-full sm:w-auto items-center gap-2">
-            <div className="relative flex-1 sm:w-48">
-              <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-400" />
-              {/* ★ スマホズーム対策 text-[16px] */}
-              <input type="text" placeholder="タスク検索..." value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} className={`w-full pl-8 pr-3 py-1.5 bg-gray-50 border border-gray-200 rounded-lg text-[16px] sm:text-xs font-bold focus:outline-none focus:ring-1 focus:bg-white transition-all ${c.ring}`} />
+        <div className="px-2 sm:px-8 py-1.5 sm:py-3 bg-white border-b border-gray-100 flex-shrink-0 flex items-center justify-between gap-2">
+          <div className="flex flex-1 items-center gap-1.5">
+            <div className="relative flex-1 sm:w-48 max-w-[200px]">
+              <Search className="absolute left-2 top-1/2 -translate-y-1/2 w-3 h-3 text-gray-400" />
+              <input type="text" placeholder="タスク検索..." value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} className={`w-full pl-6 pr-2 py-1 bg-gray-50 border border-gray-200 rounded-md text-[16px] sm:text-xs font-bold focus:outline-none focus:ring-1 focus:bg-white transition-all ${c.ring}`} />
             </div>
-            <div className="w-32 sm:w-36">
-              <CustomSelect value={filterAssignee} options={assigneeOptions} onChange={(v: any) => setFilterAssignee(v)} ringClass={c.ring} />
+            <div className="w-24 sm:w-36">
+              <CustomSelect value={filterAssignee} options={assigneeOptions} onChange={(v: any) => setFilterAssignee(v)} ringClass={c.ring} className="py-0.5" />
             </div>
           </div>
-          <button onClick={() => router.push("/top/tasks/new")} className={`w-full sm:w-auto px-4 py-2 sm:py-1.5 ${c.bg} ${c.hover} text-white text-xs font-bold rounded-lg shadow-sm flex items-center justify-center shrink-0`}><Plus className="w-4 h-4 mr-1" /> タスク作成</button>
+          <button onClick={() => router.push("/top/tasks/new")} className={`px-2.5 py-1 sm:px-4 sm:py-1.5 ${c.bg} ${c.hover} text-white text-[10px] sm:text-xs font-bold rounded-md sm:rounded-lg shadow-sm flex items-center justify-center shrink-0`}><Plus className="w-3 h-3 mr-0.5 sm:mr-1" /> 追加</button>
         </div>
 
-        {/* スマホ専用ステータスタブ（固定） */}
-        <div className="md:hidden flex overflow-x-auto gap-2 p-3 bg-white border-b border-gray-200 custom-scrollbar shrink-0">
+        <div className="md:hidden flex overflow-x-auto gap-1.5 p-1.5 bg-gray-50/80 border-b border-gray-200 custom-scrollbar shrink-0 text-[10px]">
           {columns.map(status => {
             const conf = STATUS_CONFIG[status];
             const colTasks = filteredTasks.filter(t => t.status === status);
@@ -354,10 +365,10 @@ export default function TasksPage() {
               <button 
                 key={status} 
                 onClick={() => setActiveMobileTab(status)}
-                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl whitespace-nowrap text-xs font-bold transition-all ${isActive ? `${c.bg} text-white shadow-sm` : 'bg-gray-50 text-gray-600 hover:bg-gray-100 border border-gray-200'}`}
+                className={`flex items-center gap-1 px-2.5 py-1.5 rounded-lg whitespace-nowrap font-bold transition-all ${isActive ? `${c.bg} text-white shadow-sm` : 'bg-white text-gray-600 hover:bg-gray-100 border border-gray-200 shadow-2xs'}`}
               >
                 {conf.label} 
-                <span className={`px-1.5 py-0.5 rounded-md text-[10px] ${isActive ? 'bg-white/20 text-white' : 'bg-gray-200 text-gray-600'}`}>
+                <span className={`px-1 py-0.5 rounded text-[9px] ${isActive ? 'bg-white/20 text-white' : 'bg-gray-100 text-gray-500'}`}>
                   {colTasks.length}
                 </span>
               </button>
@@ -373,9 +384,8 @@ export default function TasksPage() {
           </div>
         )}
 
-        {/* カンバンボード本体（ここで縦横スクロールさせる） */}
-        <div className="flex-1 overflow-x-auto overflow-y-auto custom-scrollbar p-3 md:p-6 bg-gray-100/50 pb-24 md:pb-6">
-          <div className="flex gap-4 md:gap-6 md:min-w-max h-full min-h-0">
+        <div className="flex-1 overflow-x-auto overflow-y-auto custom-scrollbar p-2 md:p-6 bg-gray-100/50 pb-20 md:pb-6">
+          <div className="flex gap-2 md:gap-6 md:min-w-max h-full min-h-0">
             {columns.map(status => {
               const conf = STATUS_CONFIG[status];
               const colTasks = filteredTasks.filter(t => t.status === status);
@@ -386,22 +396,19 @@ export default function TasksPage() {
                   key={status} 
                   onDragOver={handleDragOver} 
                   onDrop={(e) => handleDrop(e, status)} 
-                  // ★ h-full と min-h-0 で無駄な押し出しを防ぎ、内部スクロールに任せる
-                  className={`${isMobileActive ? 'flex' : 'hidden'} md:flex w-full md:w-[300px] flex-col h-full min-h-0 ${conf.color} rounded-2xl border border-gray-200/60 overflow-hidden transition-colors hover:bg-gray-50/80`}
+                  className={`${isMobileActive ? 'flex' : 'hidden'} md:flex w-full md:w-[280px] flex-col h-full min-h-0 ${conf.color} rounded-xl md:rounded-2xl border border-gray-200/60 overflow-hidden transition-colors hover:bg-gray-50/80`}
                 >
-                  <div className="p-3 border-b border-gray-200/60 flex items-center justify-between bg-white shadow-2xs pointer-events-none shrink-0">
-                    <h3 className="text-xs font-black text-gray-700 flex items-center gap-1.5"><span className={`w-2 h-2 rounded-full ${conf.dot}`}></span> {conf.label}</h3>
-                    <span className={`px-2 py-0.5 rounded-md text-[10px] font-bold ${conf.badge.split(' ').slice(0, 2).join(' ')}`}>{colTasks.length}</span>
+                  <div className="p-2 md:p-3 border-b border-gray-200/60 flex items-center justify-between bg-white shadow-2xs pointer-events-none shrink-0">
+                    <h3 className="text-[11px] md:text-xs font-black text-gray-700 flex items-center gap-1.5"><span className={`w-2 h-2 rounded-full ${conf.dot}`}></span> {conf.label}</h3>
+                    <span className={`px-1.5 py-0.5 rounded text-[9px] md:text-[10px] font-bold ${conf.badge.split(' ').slice(0, 2).join(' ')}`}>{colTasks.length}</span>
                   </div>
                   
-                  {/* ★ カラムのカードリスト（縦スクロール領域） */}
-                  <div className="flex-1 p-2 md:p-2.5 overflow-y-auto custom-scrollbar space-y-2.5 min-h-0">
+                  <div className="flex-1 p-1.5 md:p-2.5 overflow-y-auto custom-scrollbar space-y-1.5 md:space-y-2.5 min-h-0">
                     {colTasks.map(renderTaskCard)}
                     
-                    {/* 各カラムの一番下にタスク追加ボタン */}
-                    <div className="p-1 pt-0">
-                        <button onClick={() => router.push(`/top/tasks/new?status=${status}`)} className="w-full py-2 mt-2 border border-dashed border-gray-300 text-gray-500 rounded-xl text-xs font-bold hover:border-indigo-300 hover:text-indigo-600 hover:bg-white transition-colors flex items-center justify-center gap-1 shadow-sm">
-                          <Plus className="w-3.5 h-3.5" /> タスクを追加
+                    <div className="pt-1 pb-2">
+                        <button onClick={() => router.push(`/top/tasks/new?status=${status}`)} className="w-full py-1.5 md:py-2 border border-dashed border-gray-300 text-gray-500 rounded-lg text-[10px] md:text-xs font-bold hover:border-indigo-300 hover:text-indigo-600 hover:bg-white transition-colors flex items-center justify-center gap-1 shadow-2xs">
+                          <Plus className="w-3 h-3 md:w-3.5 md:h-3.5" /> 追加
                         </button>
                     </div>
                   </div>
@@ -417,11 +424,11 @@ export default function TasksPage() {
           <div className="bg-white border border-gray-200 rounded-2xl shadow-xl w-full max-w-sm flex flex-col overflow-hidden">
             <div className="p-5 flex items-start gap-3">
               <div className="p-2 bg-red-100 text-red-600 rounded-full flex-shrink-0"><AlertCircle className="w-5 h-5" /></div>
-              <div><h3 className="text-sm font-black text-gray-900 mb-1">タスクを削除しますか？</h3><p className="text-xs font-medium text-gray-500 leading-relaxed">この操作は取り消せません。</p></div>
+              <div><h3 className="text-sm font-black text-gray-900 mb-1">タスクを削除しますか？</h3><p className="text-[10px] font-medium text-gray-500 leading-relaxed">この操作は取り消せません。</p></div>
             </div>
             <div className="p-3 bg-gray-50 border-t border-gray-100 flex justify-end gap-2">
-              <button onClick={() => setDeleteConfirmId(null)} className="px-4 py-1.5 text-xs font-bold text-gray-600 bg-white border hover:bg-gray-50 rounded-lg">キャンセル</button>
-              <button onClick={executeDelete} className="px-4 py-1.5 text-xs font-bold text-white bg-red-600 hover:bg-red-700 rounded-lg">削除する</button>
+              <button onClick={() => setDeleteConfirmId(null)} className="px-4 py-1.5 text-[10px] font-bold text-gray-600 bg-white border hover:bg-gray-50 rounded-lg">キャンセル</button>
+              <button onClick={executeDelete} className="px-4 py-1.5 text-[10px] font-bold text-white bg-red-600 hover:bg-red-700 rounded-lg">削除する</button>
             </div>
           </div>
         </div>

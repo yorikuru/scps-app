@@ -7,6 +7,7 @@ import { doc, getDoc, updateDoc } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 import { Loader2, Save, Settings } from "lucide-react";
 import { useDialog } from "@/components/DialogContext";
+import LoadingScreen from "@/components/LoadingScreen";
 
 type Props = {
   schoolId: string;
@@ -49,7 +50,7 @@ export default function SurveyDefaultSettings({ schoolId, tenantUsers }: Props) 
     }
   };
 
-  if (isLoading) return <div className="py-12 flex justify-center"><Loader2 className="w-8 h-8 animate-spin text-purple-600" /></div>;
+  if (isLoading) return <LoadingScreen />;
 
   return (
     <div className="max-w-4xl mx-auto space-y-6">

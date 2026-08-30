@@ -4,7 +4,7 @@ import React, { useRef, useEffect, useState, useMemo } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { 
   PanelLeftClose, PanelLeft, LogOut, Clock,
-  BellRing, Mail, MailOpen, Star, Trash2, CheckCircle2, ChevronRight, Home
+  BellRing, Mail, MailOpen, Star, Trash2, CheckCircle2, ChevronRight, Home, RefreshCw
 } from "lucide-react";
 import * as LucideIcons from "lucide-react";
 import { doc, getDoc, getDocs, collection, query, where, onSnapshot, updateDoc, deleteDoc, writeBatch } from "firebase/firestore";
@@ -241,6 +241,11 @@ export default function Header({
         
         <button onClick={() => router.push('/top')} className="p-1.5 text-indigo-600 hover:bg-indigo-50 rounded-md transition-colors" title="ホーム画面へ">
           <Home className="w-4 h-4" />
+        </button>
+
+        {/* ★ リロードボタンを追加 */}
+        <button onClick={() => window.location.reload()} className="p-1.5 text-gray-500 hover:bg-gray-100 hover:text-indigo-600 rounded-md transition-colors" title="ページを再読み込み">
+          <RefreshCw className="w-4 h-4" />
         </button>
 
         {/* スマホ用: テナントロゴとテナント名 */}

@@ -7,6 +7,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { doc, getDoc, updateDoc } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 import { Loader2, User, Mail, Phone, AlertCircle, MessageCircle, Send, ShieldCheck, CheckCircle2 } from "lucide-react";
+import LoadingScreen from "@/components/LoadingScreen";
 
 function SetupContent() {
   const router = useRouter();
@@ -119,7 +120,7 @@ function SetupContent() {
   };
 
   if (isLoading) {
-    return <div className="min-h-screen flex justify-center items-center bg-gray-50"><Loader2 className="w-8 h-8 animate-spin text-blue-600" /></div>;
+    return <LoadingScreen />;
   }
 
   if (isSent) {
@@ -326,7 +327,7 @@ function SetupContent() {
 
 export default function ExternalChatSetup() {
   return (
-    <Suspense fallback={<div className="min-h-screen flex justify-center items-center bg-gray-50"><Loader2 className="w-8 h-8 animate-spin text-blue-600" /></div>}>
+    <Suspense fallback={<LoadingScreen />}>
       <SetupContent />
     </Suspense>
   );

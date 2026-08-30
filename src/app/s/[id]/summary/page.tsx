@@ -6,6 +6,7 @@ import { doc, getDoc, collection, query, where, getDocs } from "firebase/firesto
 import { db } from "@/lib/firebase";
 import { Loader2, AlertCircle, BarChart3, CheckCircle2 } from "lucide-react";
 import { Survey, Question } from "../types";
+import LoadingScreen from "@/components/LoadingScreen";
 
 export default function SurveySummaryPage() {
   const params = useParams();
@@ -43,7 +44,7 @@ export default function SurveySummaryPage() {
     fetchData();
   }, [surveyId]);
 
-  if (isLoading) return <div className="min-h-screen flex justify-center items-center"><Loader2 className="w-10 h-10 animate-spin text-purple-600"/></div>;
+  if (isLoading) return <LoadingScreen />;
   if (errorMsg) return (
     <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
       <div className="bg-white p-8 rounded-xl shadow-sm text-center border-t-4 border-gray-400">

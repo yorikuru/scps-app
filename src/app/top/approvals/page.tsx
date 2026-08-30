@@ -365,7 +365,7 @@ export default function ApprovalsPage() {
   if (isLoading) {
     return (
       <div className="min-h-screen flex flex-col items-center justify-center bg-gray-50 dark:bg-gray-950 text-gray-500 dark:text-gray-400">
-        <Loader2 className="w-8 h-8 animate-spin text-indigo-600 dark:text-indigo-400 mb-3" />
+        <LoadingScreen />
         <p className="text-sm font-bold tracking-wide">稟議ワークフローを読み込み中...</p>
       </div>
     );

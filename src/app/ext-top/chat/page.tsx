@@ -15,6 +15,7 @@ import ChatList from "@/app/top/chat/components/ChatList";
 import ChatRoomWindow from "@/app/top/chat/components/ChatRoomWindow";
 import UserProfileModal from "@/app/top/chat/components/UserProfileModal";
 import ExtHeader from "@/app/ext-top/components/ExtHeader";
+import LoadingScreen from "@/components/LoadingScreen";
 
 function ExternalChatContent() {
   const router = useRouter();
@@ -318,7 +319,7 @@ function ExternalChatContent() {
     }
   };
 
-  if (isLoading) return <div className="h-[100dvh] flex justify-center items-center bg-gray-50"><Loader2 className="w-8 h-8 animate-spin text-indigo-500" /></div>;
+  if (isLoading) return <LoadingScreen />;
 
   if (error || !extUser) {
     return (
@@ -441,7 +442,7 @@ export default function ExternalChatMainPage() {
   return (
     <Suspense fallback={
       <div className="h-[100dvh] flex justify-center items-center bg-gray-50">
-        <Loader2 className="w-8 h-8 animate-spin text-indigo-500" />
+        <LoadingScreen />
       </div>
     }>
       <ExternalChatContent />

@@ -19,6 +19,7 @@ import CustomSelect from "@/components/CustomSelect"; // ★ CustomSelectをイ�
 import ExternalUserList from "./components/ExternalUserList";
 import ExternalUserForm from "./components/ExternalUserForm";
 import ExternalAppManagementTab from "./components/ExternalAppManagementTab";
+import LoadingScreen from "@/components/LoadingScreen";
 
 type UserData = any; 
 type SystemApp = any;
@@ -249,7 +250,7 @@ export default function ExternalUsersPage() {
     }
   };
 
-  if (isLoading) return <div className="h-full flex justify-center items-center"><Loader2 className="w-8 h-8 animate-spin text-indigo-500" /></div>;
+  if (isLoading) return <LoadingScreen />;
 
   if (!hasPermission) {
     return (

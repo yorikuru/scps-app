@@ -13,6 +13,7 @@ import TenantSettings from "./components/TenantSettings";
 import SecuritySettings from "./components/SecuritySettings";
 import PositionManagement from "./components/PositionManagement";
 import LineAdminSettings from "./components/LineAdminSettings";
+import LoadingScreen from "@/components/LoadingScreen";
 
 export type UserData = {
   id: string;
@@ -232,7 +233,7 @@ function TopAdminPageContent() {
 
 export default function TopAdminPage() {
   return (
-    <Suspense fallback={<div className="h-full flex items-center justify-center bg-gray-50"><Loader2 className="w-8 h-8 animate-spin text-indigo-600"/></div>}>
+    <Suspense fallback={<LoadingScreen />}>
       <TopAdminPageContent />
     </Suspense>
   );

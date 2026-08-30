@@ -6,6 +6,7 @@ import { doc, getDoc, getDocs, collection, query, where, updateDoc, addDoc, serv
 import { createUserWithEmailAndPassword, signInWithEmailAndPassword, updatePassword } from "firebase/auth";
 import { auth, db } from "@/lib/firebase";
 import { Loader2, CheckCircle2, Lock, AlertCircle, MessageCircle } from "lucide-react";
+import LoadingScreen from "@/components/LoadingScreen";
 
 function VerifyContent() {
   const router = useRouter();
@@ -165,7 +166,7 @@ function VerifyContent() {
   };
 
   if (isLoading) {
-    return <div className="min-h-screen flex justify-center items-center bg-gray-50"><Loader2 className="w-8 h-8 animate-spin text-blue-600" /></div>;
+    return <LoadingScreen />;
   }
 
   if (globalError) {
@@ -285,7 +286,7 @@ function VerifyContent() {
 
 export default function ExternalChatVerify() {
   return (
-    <Suspense fallback={<div className="min-h-screen flex justify-center items-center bg-gray-50"><Loader2 className="w-8 h-8 animate-spin text-blue-600" /></div>}>
+    <Suspense fallback={<LoadingScreen />}>
       <VerifyContent />
     </Suspense>
   );

@@ -6,14 +6,17 @@ import { onAuthStateChanged } from "firebase/auth";
 import { doc, getDoc, getDocs, collection, query, where, onSnapshot } from "firebase/firestore";
 import { auth, db } from "@/lib/firebase";
 import * as LucideIcons from "lucide-react";
-import { ArrowLeft, Search, AlertTriangle, Users, KanbanSquare, Loader2, Clock, Plus, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight } from "lucide-react";
+import { Search, AlertTriangle, Users, KanbanSquare, Clock, Plus, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, CheckSquare ,Printer } from "lucide-react";
+import LoadingScreen from "@/components/LoadingScreen";
 
 type UserData = { id: string; name: string; schoolId: string; role: string; };
 type TaskStatus = "not_started" | "in_progress" | "waiting" | "pending" | "done";
+type TaskPriority = "urgent" | "high" | "medium" | "low";
 
 type Task = {
-  id: string; title: string; status: TaskStatus;
+  id: string; title: string; status: TaskStatus; priority: TaskPriority;
   startDate: string | null; dueDate: string | null; dueTime?: string | null;
+  completedAt?: string | null; // ★ 完了日を追加
   assignees: string[]; createdAt: string;
 };
 
@@ -30,6 +33,10 @@ const STATUS_CONFIG: Record<TaskStatus, { label: string, barColor: string }> = {
   done: { label: "完了", barColor: "bg-emerald-500 opacity-60" },
 };
 
+const PRIORITY_SCORE: Record<TaskPriority, number> = {
+  urgent: 4, high: 3, medium: 2, low: 1
+};
+
 export default function TimelineTasksPage() {
   const router = useRouter();
   const [userData, setUserData] = useState<UserData | null>(null);
@@ -40,6 +47,7 @@ export default function TimelineTasksPage() {
   
   const [tasks, setTasks] = useState<Task[]>([]);
   const [searchQuery, setSearchQuery] = useState("");
+  const [showCompleted, setShowCompleted] = useState(false);
   const [holidays, setHolidays] = useState<Record<string, string>>({});
   
   const [daysCount, setDaysCount] = useState(14);
@@ -116,8 +124,9 @@ export default function TimelineTasksPage() {
             snapshot.forEach((d) => {
               const td = d.data();
               fetched.push({
-                id: d.id, title: td.title, status: td.status || "not_started",
+                id: d.id, title: td.title, status: td.status || "not_started", priority: td.priority || "medium",
                 startDate: td.startDate || null, dueDate: td.dueDate || null, dueTime: td.dueTime || null,
+                completedAt: td.completedAt || null,
                 assignees: td.assignees || [], createdAt: td.createdAt ? td.createdAt.toDate().toISOString() : new Date().toISOString(),
               });
             });
@@ -130,114 +139,163 @@ export default function TimelineTasksPage() {
     return () => { unsubscribeAuth(); if (unsubTasks) unsubTasks(); };
   }, [router]);
 
-  const filteredTasks = tasks.filter(t => t.title.toLowerCase().includes(searchQuery.toLowerCase()));
+  // ★ 完了済みのものは completedAt、それ以外は dueDate または startDate をバーの終了に設定してソート
+  const filteredTasks = tasks
+    .filter(t => {
+      if (!showCompleted && t.status === "done") return false;
+      if (searchQuery && !t.title.toLowerCase().includes(searchQuery.toLowerCase())) return false;
+      return true;
+    })
+    .sort((a, b) => {
+      const getStartDate = (t: Task) => t.startDate || t.dueDate || t.createdAt;
+      const timeA = new Date(getStartDate(a)).getTime();
+      const timeB = new Date(getStartDate(b)).getTime();
+      
+      if (timeA !== timeB) return timeA - timeB; 
+      
+      const pA = PRIORITY_SCORE[a.priority] || 0;
+      const pB = PRIORITY_SCORE[b.priority] || 0;
+      return pB - pA; 
+    });
 
-  if (isLoading) return <div className="h-full bg-[#F9FAFB] flex justify-center items-center"><Loader2 className="w-8 h-8 animate-spin text-indigo-600" /></div>;
-  if (!hasPermission) return <div className="h-full flex flex-col items-center justify-center p-4"><AlertTriangle className="w-12 h-12 text-red-500 mb-4" /><h1 className="text-xl font-black">アクセス権限がありません</h1></div>;
+  if (isLoading) return <LoadingScreen message="タイムラインを準備中..." />;
+  if (!hasPermission) return <div className="h-[100dvh] flex flex-col items-center justify-center p-4"><AlertTriangle className="w-12 h-12 text-red-500 mb-4" /><h1 className="text-xl font-black">アクセス権限がありません</h1></div>;
 
   return (
-    // ★ h-full flex-1 w-full min-h-0 を指定して外側にスクロールを漏らさない
-    <div className="h-full flex-1 w-full bg-[#F9FAFB] font-sans flex flex-col text-gray-900 overflow-hidden relative min-h-0">
+    <div className="h-[100dvh] flex-1 w-full bg-[#F9FAFB] font-sans flex flex-col text-gray-900 overflow-hidden relative min-h-0 overscroll-none">
 
-      {/* ナビゲーション */}
-      <div className="px-3 sm:px-6 py-2 sm:py-3 border-b border-gray-200 bg-white flex flex-col sm:flex-row sm:items-center justify-between gap-2 flex-shrink-0">
-        <div className="flex items-center gap-2 sm:gap-3">
-          <div className="p-1.5 sm:p-2 bg-indigo-100 text-indigo-600 rounded-lg sm:rounded-xl shadow-2xs"><Clock className="w-4 h-4 sm:w-5 sm:h-5" /></div>
-          <div><h1 className="text-sm sm:text-base font-black text-gray-900 tracking-tight">タイムラインガント</h1></div>
+      <div className="px-2 sm:px-6 py-1.5 sm:py-2 border-b border-gray-200 bg-white flex flex-col sm:flex-row sm:items-center justify-between gap-1.5 flex-shrink-0">
+        <div className="flex items-center gap-1.5 sm:gap-3">
+          <div className="p-1.5 bg-indigo-100 text-indigo-600 rounded-lg shadow-2xs"><Clock className="w-3.5 h-3.5 sm:w-4 sm:h-4" /></div>
+          <div><h1 className="text-[11px] sm:text-xs font-black text-gray-900 tracking-tight">タイムラインガント</h1></div>
         </div>
 
-        <div className="flex items-center gap-1 bg-gray-100 p-1 rounded-xl overflow-x-auto custom-scrollbar whitespace-nowrap">
-          <button onClick={() => router.push("/top/tasks")} className="px-3 py-1.5 text-xs font-bold text-gray-600 hover:text-gray-900 rounded-lg transition-colors flex items-center gap-1">
-            <KanbanSquare className="w-3.5 h-3.5" /> カンバン
-          </button>
-          <button onClick={() => router.push("/top/tasks/personal")} className="px-3 py-1.5 text-xs font-bold text-gray-600 hover:text-gray-900 rounded-lg transition-colors flex items-center gap-1">
-            <Users className="w-3.5 h-3.5" /> パーソナル
-          </button>
-          <button className="px-3 py-1.5 text-xs font-bold bg-white text-indigo-600 rounded-lg shadow-2xs flex items-center gap-1">
-            <Clock className="w-3.5 h-3.5" /> タイムライン
-          </button>
-        </div>
-      </div>
+        <div className="flex items-center gap-1 bg-gray-100 p-1 rounded-lg overflow-x-auto custom-scrollbar whitespace-nowrap">
+  <button onClick={() => router.push("/top/tasks")} className="px-2 py-1 text-[10px] font-bold text-gray-600 hover:text-gray-900 rounded-md transition-colors flex items-center gap-1">
+    <KanbanSquare className="w-3 h-3" /> カンバン
+  </button>
+  <button onClick={() => router.push("/top/tasks/personal")} className="px-2 py-1 text-[10px] font-bold text-gray-600 hover:text-gray-900 rounded-md transition-colors flex items-center gap-1">
+    <Users className="w-3 h-3" /> パーソナル
+  </button>
+  <button className="px-2 py-1 text-[10px] font-bold bg-white text-indigo-600 rounded-md shadow-2xs flex items-center gap-1">
+    <Clock className="w-3 h-3" /> タイムライン
+  </button>
+  <button onClick={() => router.push("/top/tasks/print")} className="px-2 py-1 text-[10px] font-bold text-gray-600 hover:text-gray-900 rounded-md transition-colors flex items-center gap-1">
+    <Printer className="w-3 h-3" /> 出力
+  </button>
+</div>      </div>
 
-      <main className="flex-1 flex flex-col overflow-hidden p-2 sm:p-4 pb-20 md:pb-6 min-h-0">
+      <main className="flex-1 w-full max-w-[1600px] mx-auto flex flex-col overflow-hidden p-1.5 sm:p-4 pb-20 md:pb-6 min-h-0">
         
-        {/* 操作バー */}
-        <div className="flex flex-col sm:flex-row justify-between items-center mb-3 gap-3 shrink-0">
-          <div className="flex items-center gap-1 bg-white border border-gray-200 p-1 rounded-xl shadow-sm w-full sm:w-auto justify-between sm:justify-start">
-            <button onClick={() => setStartDateOffset(p => p - 7)} className="p-2 sm:p-1.5 hover:bg-gray-100 rounded text-gray-600 transition-colors"><ChevronsLeft className="w-4 h-4" /></button>
-            <button onClick={() => setStartDateOffset(p => p - 1)} className="p-2 sm:p-1.5 hover:bg-gray-100 rounded text-gray-600 transition-colors"><ChevronLeft className="w-4 h-4" /></button>
-            <button onClick={() => setStartDateOffset(0)} className="px-4 py-1.5 text-xs font-bold text-gray-700 hover:bg-gray-100 rounded transition-colors flex-1 sm:flex-none text-center">今日</button>
-            <button onClick={() => setStartDateOffset(p => p + 1)} className="p-2 sm:p-1.5 hover:bg-gray-100 rounded text-gray-600 transition-colors"><ChevronRight className="w-4 h-4" /></button>
-            <button onClick={() => setStartDateOffset(p => p + 7)} className="p-2 sm:p-1.5 hover:bg-gray-100 rounded text-gray-600 transition-colors"><ChevronsRight className="w-4 h-4" /></button>
+        <div className="px-2 py-1.5 bg-white border border-gray-200 rounded-t-lg sm:rounded-t-xl flex flex-wrap items-center justify-between gap-2 shrink-0 shadow-sm">
+          <div className="flex items-center gap-1 bg-gray-50 border border-gray-200 p-0.5 rounded-lg w-full sm:w-auto justify-between sm:justify-start">
+            <button onClick={() => setStartDateOffset(p => p - 7)} className="p-1.5 hover:bg-gray-200 rounded text-gray-600 transition-colors"><ChevronsLeft className="w-3.5 h-3.5" /></button>
+            <button onClick={() => setStartDateOffset(p => p - 1)} className="p-1.5 hover:bg-gray-200 rounded text-gray-600 transition-colors"><ChevronLeft className="w-3.5 h-3.5" /></button>
+            <button onClick={() => setStartDateOffset(0)} className="px-3 py-1 text-[10px] sm:text-xs font-bold text-gray-700 hover:bg-gray-200 rounded transition-colors flex-1 sm:flex-none text-center">今日</button>
+            <button onClick={() => setStartDateOffset(p => p + 1)} className="p-1.5 hover:bg-gray-200 rounded text-gray-600 transition-colors"><ChevronRight className="w-3.5 h-3.5" /></button>
+            <button onClick={() => setStartDateOffset(p => p + 7)} className="p-1.5 hover:bg-gray-200 rounded text-gray-600 transition-colors"><ChevronsRight className="w-3.5 h-3.5" /></button>
           </div>
           
-          <div className="relative w-full sm:w-64">
-            <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-400" />
-            {/* ★ ズーム対策: text-[16px] sm:text-xs */}
-            <input type="text" placeholder="タスク検索..." value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} className="w-full pl-8 pr-3 py-2 sm:py-1.5 bg-white border border-gray-200 rounded-xl text-[16px] sm:text-xs font-bold focus:outline-none focus:ring-1 focus:ring-indigo-500 transition-all shadow-sm" />
+          <div className="flex items-center gap-1.5 flex-1 min-w-[200px] justify-end">
+            <div className="relative flex-1 max-w-[140px]">
+              <Search className="absolute left-1.5 top-1/2 -translate-y-1/2 w-3 h-3 text-gray-400" />
+              <input type="text" placeholder="タスク名検索..." value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} className="w-full pl-5 pr-1.5 py-1 bg-gray-50 border border-gray-200 rounded-md text-[16px] sm:text-[10px] font-bold focus:outline-none focus:ring-1 focus:ring-indigo-500 shadow-2xs" />
+            </div>
+            <button 
+              onClick={() => setShowCompleted(!showCompleted)} 
+              className={`px-2 py-1 text-[9px] font-bold rounded-md border shadow-2xs flex items-center gap-1 transition-colors ${showCompleted ? 'bg-indigo-50 text-indigo-700 border-indigo-200' : 'bg-white text-gray-500 border-gray-200 hover:bg-gray-50'}`}
+            >
+              <CheckSquare className="w-3 h-3" /> <span className="hidden sm:inline">完了済を</span>表示
+            </button>
           </div>
         </div>
 
-        {/* タイムライン本体（縦横スクロール） */}
-        <div className="flex-1 bg-white rounded-2xl border border-gray-200 shadow-sm overflow-auto custom-scrollbar relative min-h-0">
+        <div className="flex-1 bg-white rounded-b-lg sm:rounded-b-xl border border-gray-200 border-t-0 shadow-sm overflow-auto custom-scrollbar relative min-h-0">
           
           <div className="flex border-b border-gray-200 bg-gray-50/90 backdrop-blur sticky top-0 z-30 min-w-max">
-            <div className="w-24 sm:w-48 p-2 sm:p-3 border-r border-gray-200 flex-shrink-0 text-[10px] sm:text-xs font-black text-gray-700 bg-gray-50/90 sticky left-0 z-40 shadow-[2px_0_5px_rgba(0,0,0,0.05)] flex items-center">
+            <div className="w-24 sm:w-48 p-1.5 sm:p-2 border-r border-gray-200 flex-shrink-0 text-[9px] sm:text-xs font-black text-gray-700 bg-gray-50/90 sticky left-0 z-40 shadow-[2px_0_5px_rgba(0,0,0,0.05)] flex items-center justify-center sm:justify-start">
               タスク / 担当
             </div>
-            <div className="flex-1 flex min-w-[500px]">
+            <div className="flex-1 flex min-w-[300px] sm:min-w-[500px]">
               {dateRange.map(d => (
-                <div key={d.dateStr} className={`group flex-1 text-center py-2 border-r border-gray-100 flex flex-col items-center relative min-w-[40px] sm:min-w-[45px] ${d.isToday ? 'bg-indigo-50/80 font-black' : ''} ${d.isHoliday || d.isWeekend ? 'text-red-500' : 'text-gray-700'}`}>
-                  <span className="text-[9px] font-bold opacity-80">{d.monthNum}/{d.dayNum}</span>
-                  <span className="text-[8px] font-bold opacity-60">({d.dayOfWeek})</span>
-                  {d.holidayName && <span className="text-[7px] text-red-500 font-bold truncate w-full px-0.5 hidden sm:block">{d.holidayName}</span>}
-                  {d.isToday && <span className="text-[8px] bg-indigo-600 text-white px-1 rounded font-bold mt-0.5 absolute top-1 right-1">今</span>}
+                <div key={d.dateStr} className={`group flex-1 text-center py-1 sm:py-1.5 border-r border-gray-100 flex flex-col items-center justify-center relative min-w-[32px] sm:min-w-[45px] transition-colors ${d.isToday ? 'bg-indigo-50/80 font-black' : ''} ${d.isHoliday || d.isWeekend ? 'text-red-500' : 'text-gray-700'}`}>
+                  
+                  <div className="flex flex-col items-center transition-opacity group-hover:opacity-10">
+                    <span className="text-[8px] sm:text-[9px] font-bold opacity-80">{d.monthNum}/{d.dayNum}</span>
+                    <span className="text-[7px] sm:text-[8px] font-bold opacity-60">({d.dayOfWeek})</span>
+                  </div>
+                  
+                  <button 
+                    onClick={(e) => { e.stopPropagation(); router.push(`/top/tasks/new?startDate=${d.dateStr}`); }}
+                    className="absolute inset-0 m-auto w-4 h-4 sm:w-5 sm:h-5 rounded-md bg-indigo-100 text-indigo-600 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-all shadow-sm cursor-pointer hover:bg-indigo-200"
+                    title={`${d.monthNum}/${d.dayNum}のタスクを追加`}
+                  >
+                    <Plus className="w-3 h-3 sm:w-3.5 sm:h-3.5" />
+                  </button>
+
+                  {d.holidayName && <span className="text-[6px] sm:text-[7px] text-red-500 font-bold truncate w-full px-0.5 hidden sm:block absolute bottom-0 pb-0.5 transition-opacity group-hover:opacity-10">{d.holidayName}</span>}
+                  {d.isToday && <span className="text-[6px] sm:text-[7px] bg-indigo-600 text-white px-0.5 sm:px-1 rounded font-bold mt-0.5 absolute top-0.5 right-0.5 transition-opacity group-hover:opacity-0">今</span>}
                 </div>
               ))}
             </div>
           </div>
 
-          <div className="divide-y divide-gray-100 min-w-max">
+          <div className="divide-y divide-gray-100 min-w-max pb-4">
             {filteredTasks.length === 0 ? (
-              <div className="p-12 text-center text-gray-400 font-bold text-xs sticky left-0 w-full">表示するタスクがありません</div>
+              <div className="p-8 text-center text-gray-400 font-bold text-[10px] sm:text-xs sticky left-0 w-full">表示するタスクがありません</div>
             ) : (
               filteredTasks.map(t => {
+                // ★ 完了済みなら completedAt、それ以外なら dueDate を使用
+                const endDateToUse = t.status === "done" && t.completedAt ? t.completedAt : (t.dueDate || t.startDate || dateRange[daysCount - 1].dateStr);
+                
                 const sIndex = dateRange.findIndex(d => d.dateStr === (t.startDate || t.dueDate || dateRange[0].dateStr));
-                const eIndex = dateRange.findIndex(d => d.dateStr === (t.dueDate || t.startDate || dateRange[daysCount - 1].dateStr));
+                const eIndex = dateRange.findIndex(d => d.dateStr === endDateToUse);
 
-                const startIndex = sIndex === -1 ? 0 : sIndex;
-                const endIndex = eIndex === -1 ? daysCount - 1 : Math.max(startIndex, eIndex);
+                let startIndex = sIndex === -1 ? 0 : sIndex;
+                let endIndex = eIndex;
+                
+                // ガントの表示範囲内に収める補正
+                if (eIndex === -1) {
+                  const targetTime = new Date(endDateToUse).getTime();
+                  const firstTime = new Date(dateRange[0].dateStr).getTime();
+                  if (targetTime < firstTime) endIndex = 0;
+                  else endIndex = daysCount - 1;
+                }
+                
+                if (sIndex === -1) {
+                  const targetTime = new Date(t.startDate || t.dueDate || "").getTime();
+                  const firstTime = new Date(dateRange[0].dateStr).getTime();
+                  if (targetTime < firstTime) startIndex = 0;
+                  else startIndex = daysCount - 1;
+                }
+
+                endIndex = Math.max(startIndex, endIndex);
                 const spanLength = (endIndex - startIndex) + 1;
 
                 return (
                   <div key={t.id} onClick={() => router.push(`/top/tasks/detail/${t.id}`)} className="flex hover:bg-gray-50 transition-colors cursor-pointer group relative">
-                    <div className="w-24 sm:w-48 p-2 sm:p-3 border-r border-gray-200 flex-shrink-0 flex flex-col justify-center bg-white group-hover:bg-gray-50 sticky left-0 z-20 shadow-[2px_0_5px_rgba(0,0,0,0.02)] transition-colors">
-                      <div className="flex flex-col sm:flex-row sm:items-center gap-1 mb-1">
-                        <span className={`px-1 rounded text-[8px] sm:text-[9px] font-bold ${STATUS_CONFIG[t.status].barColor} text-white w-max`}>{STATUS_CONFIG[t.status].label}</span>
-                        <span className="text-[8px] sm:text-[9px] text-gray-400 font-bold truncate">
+                    <div className="w-24 sm:w-48 px-1.5 py-1.5 sm:p-2 border-r border-gray-200 flex-shrink-0 flex flex-col justify-center bg-white group-hover:bg-gray-50 sticky left-0 z-20 shadow-[2px_0_5px_rgba(0,0,0,0.02)] transition-colors">
+                      <div className="flex flex-col sm:flex-row sm:items-center gap-0.5 sm:gap-1 mb-0.5">
+                        <span className={`px-1 rounded text-[7px] font-bold ${STATUS_CONFIG[t.status].barColor} text-white w-max`}>{STATUS_CONFIG[t.status].label}</span>
+                        <span className="text-[7px] sm:text-[8px] text-gray-400 font-bold truncate">
                           {t.assignees.map(aid => tenantUsers.find(u => u.id === aid)?.name.split(" ")[0]).join(", ") || "未割当"}
                         </span>
                       </div>
-                      <h4 className="text-[10px] sm:text-xs font-black text-gray-900 line-clamp-2 sm:truncate group-hover:text-indigo-600">{t.title}</h4>
+                      <h4 className={`text-[9px] sm:text-[11px] font-black leading-tight line-clamp-2 sm:truncate group-hover:text-indigo-600 ${t.status === 'done' ? 'text-gray-400 line-through' : 'text-gray-900'}`}>{t.title}</h4>
                     </div>
 
-                    <div className="flex-1 flex relative items-center py-2 min-w-[500px]">
+                    <div className="flex-1 flex relative items-center py-1 sm:py-2 min-w-[300px] sm:min-w-[500px]">
                       {dateRange.map(d => (
-                        <div key={d.dateStr} className={`flex-1 h-full border-r border-gray-100/60 min-w-[40px] sm:min-w-[45px] ${d.isToday ? 'bg-indigo-50/20' : ''}`}>
-                          <div 
-                            onClick={(e) => { e.stopPropagation(); router.push(`/top/tasks/new?startDate=${d.dateStr}`); }}
-                            className="w-full h-full opacity-0 hover:opacity-100 bg-indigo-50/50 flex items-center justify-center transition-opacity"
-                          >
-                            <Plus className="w-3 h-3 text-indigo-400" />
-                          </div>
+                        <div key={d.dateStr} className={`flex-1 h-full border-r border-gray-100/60 min-w-[32px] sm:min-w-[45px] ${d.isToday ? 'bg-indigo-50/20' : ''}`}>
                         </div>
                       ))}
 
+                      {/* ガントチャートのバー */}
                       <div 
-                        className={`absolute h-6 sm:h-7 rounded-lg shadow-sm border border-white/40 flex items-center px-1.5 sm:px-2 text-[9px] sm:text-[10px] font-black text-white truncate transition-transform hover:scale-[1.02] ${STATUS_CONFIG[t.status].barColor} pointer-events-none`}
+                        className={`absolute h-4 sm:h-6 rounded-md shadow-sm border border-white/40 flex items-center px-1.5 text-[8px] sm:text-[9px] font-black text-white truncate transition-transform hover:scale-[1.02] ${STATUS_CONFIG[t.status].barColor} pointer-events-none`}
                         style={{ left: `${(startIndex / daysCount) * 100}%`, width: `${(spanLength / daysCount) * 100}%` }}
                       >
-                        {t.title}
+                        {spanLength > 1 && t.title}
                       </div>
                     </div>
                   </div>

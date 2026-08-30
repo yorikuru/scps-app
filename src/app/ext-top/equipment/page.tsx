@@ -17,6 +17,7 @@ import { useDialog } from "@/components/DialogContext";
 import { ExternalUser } from "@/app/types/external";
 import ExtHeader from "@/app/ext-top/components/ExtHeader";
 import { Rental } from "@/app/top/equipment/types";
+import LoadingScreen from "@/components/LoadingScreen";
 
 type AppConfig = { name: string; icon: string; color: string; };
 
@@ -215,7 +216,7 @@ function ExternalEquipmentContent() {
     }
   };
 
-  if (isLoading) return <div className="h-[100dvh] flex justify-center items-center bg-gray-50"><Loader2 className="w-8 h-8 animate-spin text-indigo-500" /></div>;
+  if (isLoading) return <LoadingScreen />;
 
   if (error || !extUser) {
     return (
@@ -569,7 +570,7 @@ export default function ExternalEquipmentMainPage() {
   return (
     <Suspense fallback={
       <div className="h-[100dvh] flex justify-center items-center bg-gray-50">
-        <Loader2 className="w-8 h-8 animate-spin text-indigo-500" />
+        <LoadingScreen />
       </div>
     }>
       <ExternalEquipmentContent />

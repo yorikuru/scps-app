@@ -15,6 +15,7 @@ import BoardManagement from "./components/BoardManagement";
 import CategoryManager from "./components/CategoryManager"; 
 import { useDialog } from "@/components/DialogContext"; 
 import { ExternalUser } from "@/app/types/external"; 
+import LoadingScreen from "@/components/LoadingScreen";
 
 const DynamicIcon = ({ name, className }: { name: string, className?: string }) => {
   const IconComponent = (LucideIcons as any)[name] || LucideIcons.Box;
@@ -378,7 +379,7 @@ export default function BoardPage() {
     );
   };
 
-  if (isLoading) return <div className="h-full flex justify-center items-center"><Loader2 className="w-8 h-8 animate-spin text-indigo-600" /></div>;
+  if (isLoading) return <LoadingScreen />;
 
   if (!hasPermission) {
     return (

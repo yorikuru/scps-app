@@ -10,6 +10,7 @@ import {
   User as UserIcon, Flag, AlertTriangle, Loader2, Star, Trash2, Edit3, X, Search, ChevronRight
 } from "lucide-react";
 import CustomSelect from "@/components/CustomSelect"; 
+import LoadingScreen from "@/components/LoadingScreen";
 
 type UserData = { id: string; name: string; schoolId: string; role: string; };
 type TaskStatus = "not_started" | "in_progress" | "waiting" | "pending" | "done";
@@ -19,6 +20,7 @@ type CompletionReq = "anyone" | "all" | "leader";
 type Task = {
   id: string; title: string; description: string; status: TaskStatus; priority: TaskPriority;
   startDate: string | null; dueDate: string | null; dueTime?: string | null;
+  completedAt?: string | null; // ★ 完了日を追加
   assignees: string[]; leaderId: string | null; completionRequirement: CompletionReq;
   completedBy: string[]; createdAt: string;
 };
@@ -93,6 +95,7 @@ export default function TaskDetailPage() {
               id: taskDocSnap.id, title: td.title, description: td.description || "",
               status: td.status || "not_started", priority: td.priority || "medium",
               startDate: td.startDate || null, dueDate: td.dueDate || null, dueTime: td.dueTime || null,
+              completedAt: td.completedAt || null,
               assignees: td.assignees || (td.assigneeId ? [td.assigneeId] : []),
               leaderId: td.leaderId || null, completionRequirement: td.completionRequirement || "anyone",
               completedBy: td.completedBy || [],
@@ -136,12 +139,20 @@ export default function TaskDetailPage() {
     if (!formTitle.trim() || !userData) { showToast("error", "タスク名を入力してください。"); return; }
     setIsSubmitting(true);
 
-    const payload = {
+    const payload: any = {
       title: formTitle.trim(), description: formDesc.trim(), status: formStatus, priority: formPriority,
       startDate: formStartDate || null, dueDate: formDueDate || null, dueTime: formDueTime || null,
       assignees: formAssignees, leaderId: formAssignees.includes(formLeaderId || "") ? formLeaderId : null,
       completionRequirement: formAssignees.length > 1 ? formCompletionReq : "anyone",
     };
+
+    // ★ 完了になった場合は、手動編集画面からの変更であっても完了日を記録
+    if (formStatus === "done" && task?.status !== "done") {
+      payload.completedAt = new Date().toISOString().split("T")[0];
+    } else if (formStatus !== "done" && task?.status === "done") {
+      payload.completedAt = null;
+      payload.completedBy = [];
+    }
 
     try {
       await updateDoc(doc(db, "tasks", taskId), payload);
@@ -273,8 +284,19 @@ export default function TaskDetailPage() {
       }
     }
     
-    if (task.status === "done" && newStatus !== "done") payload.completedBy = [];
-    if (finalStatus !== task.status) payload.status = finalStatus;
+    // ★ 完了以外に戻す場合は完了日をリセット
+    if (task.status === "done" && newStatus !== "done") {
+      payload.completedBy = [];
+      payload.completedAt = null;
+    }
+    
+    if (finalStatus !== task.status) {
+      payload.status = finalStatus;
+      // ★ 完了になった場合は完了日を記録
+      if (finalStatus === "done") {
+        payload.completedAt = new Date().toISOString().split("T")[0];
+      }
+    }
     
     if (Object.keys(payload).length > 0) {
       try { 
@@ -288,7 +310,27 @@ export default function TaskDetailPage() {
     }
   };
 
-  if (isLoading) return <div className="h-[100dvh] bg-[#F9FAFB] flex justify-center items-center"><Loader2 className="w-8 h-8 animate-spin text-indigo-600" /></div>;
+  // ★ 経過日数の計算ロジック
+  const getElapsedDaysText = () => {
+    if (!task || !task.startDate) return null;
+    const start = new Date(task.startDate);
+    start.setHours(0,0,0,0);
+    
+    const endStr = task.status === "done" && task.completedAt ? task.completedAt : new Date().toISOString().split("T")[0];
+    const end = new Date(endStr);
+    end.setHours(0,0,0,0);
+
+    const diffTime = end.getTime() - start.getTime();
+    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+    
+    if (task.status === "done") {
+      return `所要日数: ${diffDays + 1}日`;
+    } else {
+      return diffDays >= 0 ? `経過日数: ${diffDays}日` : `開始前 (あと${Math.abs(diffDays)}日)`;
+    }
+  };
+
+  if (isLoading) return <LoadingScreen message="タスク詳細を読み込み中..." />;
 
   if (!task) return (
     <div className="h-[100dvh] bg-[#F9FAFB] flex flex-col items-center justify-center p-4">
@@ -302,7 +344,6 @@ export default function TaskDetailPage() {
   const hasReported = isAllRequirement && task.completedBy.includes(userData?.id || "");
 
   return (
-    // ★ flex-1 h-full と overscroll-none を追加
     <div className="flex-1 h-full w-full bg-[#F9FAFB] font-sans flex flex-col text-gray-900 overflow-hidden relative min-h-0 overscroll-none">
 
       {toast.show && (
@@ -378,9 +419,18 @@ export default function TaskDetailPage() {
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4 p-3 sm:p-4 bg-gray-50/80 rounded-xl sm:rounded-2xl border border-gray-100">
                 <div className="space-y-1">
                   <span className="text-[9px] sm:text-[10px] font-bold text-gray-400 uppercase tracking-wider block">実施期間・期限</span>
-                  <div className="text-[10px] sm:text-[11px] font-bold text-gray-800 flex items-center gap-1 sm:gap-1.5">
-                    <CalendarIcon className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-indigo-500 flex-shrink-0" />
-                    <span>{task.startDate || "開始日未設定"} 〜 {task.dueDate || "期限未設定"} {task.dueTime || ""}</span>
+                  <div className="text-[10px] sm:text-[11px] font-bold text-gray-800 flex flex-col gap-1 sm:gap-1.5">
+                    <div className="flex items-center gap-1.5">
+                      <CalendarIcon className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-indigo-500 flex-shrink-0" />
+                      {/* ★ 完了日の表示 */}
+                      <span>{task.startDate || "開始日未設定"} 〜 {task.status === "done" && task.completedAt ? `${task.completedAt} (完了)` : (task.dueDate || "期限未設定")} {task.status !== "done" ? (task.dueTime || "") : ""}</span>
+                    </div>
+                    {/* ★ 経過日数の表示 */}
+                    {task.startDate && (
+                      <div className="text-[9px] font-bold text-gray-500 ml-5">
+                        {getElapsedDaysText()}
+                      </div>
+                    )}
                   </div>
                 </div>
 

@@ -10,6 +10,7 @@ import { Loader2, ArrowLeft, ShieldAlert, CheckCircle2, AlertCircle } from "luci
 import MessageDelivery from "../components/MessageDelivery";
 // ★ 型のインポート先を Top ではなく Admin 側の page.tsx (../page) に修正
 import { SchoolData, UserData } from "../page";
+import LoadingScreen from "@/components/LoadingScreen";
 
 export default function TenantMessageDeliveryPage() {
   const router = useRouter();
@@ -78,7 +79,7 @@ export default function TenantMessageDeliveryPage() {
   if (loading) {
     return (
       <div className="h-full flex items-center justify-center bg-gray-50">
-        <Loader2 className="w-8 h-8 text-indigo-600 animate-spin" />
+        <LoadingScreen />
       </div>
     );
   }

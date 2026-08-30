@@ -20,6 +20,7 @@ import CategoriesTab from "./components/CategoriesTab";
 import LocationsTab from "./components/LocationsTab";
 import BorrowingsTab from "./components/BorrowingsTab";
 import QRScannerModal from "./components/QRScannerModal";
+import LoadingScreen from "@/components/LoadingScreen";
 
 function EquipmentContent() {
   const router = useRouter();
@@ -856,7 +857,7 @@ function EquipmentContent() {
 
 export default function EquipmentPage() {
   return (
-    <Suspense fallback={<div className="min-h-screen bg-[#F9FAFB] flex justify-center items-center"><Loader2 className="w-8 h-8 animate-spin text-indigo-600" /></div>}>
+    <Suspense fallback={<LoadingScreen />}>
       <EquipmentContent />
     </Suspense>
   );
