@@ -1,12 +1,15 @@
 "use client";
 
 import React, { useState, useEffect, useMemo } from "react";
-import { collection, doc, setDoc, updateDoc, writeBatch, query, where, getDocs } from "firebase/firestore";
+import { collection, doc, setDoc, updateDoc, writeBatch, query, where, getDocs, getDoc } from "firebase/firestore";
 import { getStorage, ref, uploadBytes, getDownloadURL, deleteObject } from "firebase/storage";
-import { db } from "@/lib/firebase";
-import { Send, Loader2, Calendar, Users, Globe, Tag, Search, Pin, AlertTriangle, Save, BellRing, Settings2, CheckSquare, EyeOff, UserCircle, Building2,Edit2, Network, Paperclip, X } from "lucide-react";
+import { auth, db } from "@/lib/firebase";
+import { Send, Loader2, Calendar, Users, Globe, Tag, Search, Pin, AlertTriangle, Save, BellRing, Settings2, CheckSquare, EyeOff, UserCircle, Building2, Edit2, Network, Paperclip, X } from "lucide-react";
 import { GlobalUserData, TenantData } from "../page";
 import { SystemMessage, CATEGORIES, SystemMessageAttachment } from "./MessageDelivery";
+import { sendNotificationToUser } from "@/lib/line";
+import { sendNotificationEmailToUser, sendEmailMessage } from "@/lib/mail";
+import CustomSelect from "@/components/CustomSelect";
 
 type Props = {
   tenants: TenantData[];
@@ -38,6 +41,9 @@ export default function MessageForm({ tenants, users, showAlert, editMessage, on
   const [requireResponse, setRequireResponse] = useState(false);
   const [responseType, setResponseType] = useState<"single" | "all">("single");
 
+  // ★ 通知方法ステート (CustomSelect用)
+  const [notificationMethod, setNotificationMethod] = useState("none");
+
   // 添付ファイル用ステート
   const [existingAttachments, setExistingAttachments] = useState<SystemMessageAttachment[]>([]);
   const [newAttachments, setNewAttachments] = useState<File[]>([]);
@@ -66,12 +72,16 @@ export default function MessageForm({ tenants, users, showAlert, editMessage, on
       setExistingAttachments(editMessage.attachments || []);
       setNewAttachments([]);
       setAttachmentsToDelete([]);
+      
+      // 編集時は誤配信を防ぐため「なし」にリセット
+      setNotificationMethod("none");
     } else {
       setTitle(""); setContent(""); setCategory("info"); setSubBadge("none"); 
       setTargetType("all"); setTargetIds([]); setTargetDepartments([]);
       setStartAt(""); setEndAt(""); setIsImportant(false); setIsDismissible(true); setShowSenderName(false);
       setRequireResponse(false); setResponseType("single");
       setExistingAttachments([]); setNewAttachments([]); setAttachmentsToDelete([]);
+      setNotificationMethod("none");
     }
   }, [isEdit, editMessage]);
 
@@ -157,19 +167,16 @@ export default function MessageForm({ tenants, users, showAlert, editMessage, on
         attachments: finalAttachments,
       };
 
-      // ＝＝＝ インボックスへの通知処理 ＝＝＝
       const batch = writeBatch(db);
       let batchCount = 0;
       const publishDate = startAt ? new Date(startAt) : new Date();
 
-      // 編集時は古い予約通知を削除
       if (isEdit && editMessage) {
         const qNotifs = query(collection(db, "notifications"), where("sourceApp", "==", "system"), where("linkUrl", "==", `/top?msgId=${msgRef.id}`));
         const notifsSnap = await getDocs(qNotifs);
         const now = new Date().getTime();
         notifsSnap.forEach(d => {
           const cTime = d.data().createdAt?.toDate ? d.data().createdAt.toDate().getTime() : new Date(d.data().createdAt).getTime();
-          // まだ配信されていない予約通知を削除
           if (cTime > now && batchCount < 400) {
             batch.delete(d.ref);
             batchCount++;
@@ -177,20 +184,15 @@ export default function MessageForm({ tenants, users, showAlert, editMessage, on
         });
       }
 
-      // ★ 修正：通知ターゲットの取得
-      // targetType が "all" の場合は、システムに登録されている全ユーザーを対象にする
       let targets: GlobalUserData[] = [];
       if (targetType === "all") {
         targets = users;
       } else if (targetType === "tenant") {
-        // 選択されたテナントに所属する全ユーザー
         targets = users.filter(u => targetIds.includes(u.schoolId));
       } else {
-        // "user" や "department" の場合は finalTargetIds にIDが入っている
         targets = users.filter(u => finalTargetIds.includes(u.id));
       }
 
-      // 通知本文とタイトルの生成
       let notifTitle = title;
       if (isEdit) notifTitle = `【更新】${notifTitle}`;
       if (isImportant) notifTitle = `【緊急】${notifTitle}`;
@@ -198,22 +200,51 @@ export default function MessageForm({ tenants, users, showAlert, editMessage, on
       let notifBody = showSenderName ? `システム管理者からメッセージが届きました。` : `新しいシステムメッセージが届きました。`;
       if (requireResponse) notifBody += `\n⚠️対応と報告が要求されています。必ず確認してください。`;
 
+      // 通知オプションの判定
+      const notifyEmail = notificationMethod === "email" || notificationMethod === "both";
+      const notifyLine = notificationMethod === "line" || notificationMethod === "both";
+
+      const emailPromises: Promise<any>[] = [];
+      const linePromises: Promise<any>[] = [];
+      
+      const emailHtmlContent = `
+        <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto;">
+          <p style="color: #555; line-height: 1.6;">${notifBody.replace(/\n/g, "<br/>")}</p>
+          <div style="background-color: #f9fafb; padding: 15px; border-radius: 8px; margin-top: 20px;">
+            <p style="font-size: 12px; color: #666; margin-bottom: 5px; font-weight: bold;">【詳細】</p>
+            <p style="color: #333; line-height: 1.6;">${content.replace(/\n/g, "<br/>")}</p>
+          </div>
+          <div style="margin-top: 20px; text-align: center;">
+            <a href="${process.env.NEXT_PUBLIC_APP_URL || "https://scps.yorikuru.com"}/top?msgId=${msgRef.id}" style="background-color: #2563eb; color: #fff; padding: 10px 20px; text-decoration: none; border-radius: 6px; font-weight: bold; display: inline-block;">ポータルで開く</a>
+          </div>
+        </div>
+      `;
+      
+      const lineTextContent = `${notifTitle}\n\n${notifBody}\n\n【詳細】\n${content}\n\n▼ポータルで開く\n${process.env.NEXT_PUBLIC_APP_URL || "https://scps.yorikuru.com"}/top?msgId=${msgRef.id}`;
+
       targets.forEach(user => {
-        if (batchCount >= 490) return; // Firestore バッチ上限回避
-        
-        const notifRef = doc(collection(db, "notifications"));
-        batch.set(notifRef, {
-          userId: user.id,
-          schoolId: user.schoolId || "SYSTEM", // 対象ユーザーの所属テナントIDを入れる
-          title: notifTitle,
-          body: notifBody,
-          sourceApp: "system",
-          linkUrl: `/top?msgId=${msgRef.id}`, // ダッシュボードのメッセージ詳細を開くパラメータ等を想定
-          isRead: false,
-          isFlagged: isImportant, // 緊急なら最初からフラグON
-          createdAt: publishDate
-        });
-        batchCount++;
+        if (batchCount < 490) {
+          const notifRef = doc(collection(db, "notifications"));
+          batch.set(notifRef, {
+            userId: user.id,
+            schoolId: user.schoolId || "SYSTEM",
+            title: notifTitle,
+            body: notifBody,
+            sourceApp: "system",
+            linkUrl: `/top?msgId=${msgRef.id}`,
+            isRead: false,
+            isFlagged: isImportant,
+            createdAt: publishDate
+          });
+          batchCount++;
+        }
+
+        if (notifyEmail) {
+          emailPromises.push(sendNotificationEmailToUser(user.id, notifTitle, emailHtmlContent, isImportant));
+        }
+        if (notifyLine) {
+          linePromises.push(sendNotificationToUser(user.id, lineTextContent, isImportant));
+        }
       });
 
       if (isEdit && editMessage) {
@@ -229,6 +260,65 @@ export default function MessageForm({ tenants, users, showAlert, editMessage, on
 
       await batch.commit();
 
+      // ★ プッシュ通知の完了待機と配信者へのレポート送信処理
+      let emailSuccess = 0;
+      let lineSuccess = 0;
+
+      if (notifyEmail || notifyLine) {
+        const emailResults = await Promise.allSettled(emailPromises);
+        const lineResults = await Promise.allSettled(linePromises);
+
+        emailSuccess = emailResults.filter(r => r.status === 'fulfilled' && r.value?.success).length;
+        lineSuccess = lineResults.filter(r => r.status === 'fulfilled' && r.value?.success).length;
+
+        // 配信者の情報を取得
+        let senderEmail = auth.currentUser?.email;
+        let senderName = "配信担当者";
+        let isElevated = false;
+
+        if (auth.currentUser?.uid) {
+          const uRef = doc(db, "users", auth.currentUser.uid);
+          const uSnap = await getDoc(uRef);
+          if (uSnap.exists()) {
+            const uData = uSnap.data();
+            senderEmail = uData.email || senderEmail;
+            senderName = uData.name || senderName;
+            isElevated = uData.role === "admin" || uData.role === "system_admin" || uData.isITManager === true;
+          }
+        }
+
+        // 配信者へレポート送信
+        if (senderEmail) {
+          let reportHtml = `<div style="font-family: sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">`;
+          reportHtml += `<h2 style="color: #1e3a8a; border-bottom: 2px solid #2563eb; padding-bottom: 10px;">配信結果レポート</h2>`;
+          reportHtml += `<p style="color: #555; line-height: 1.6; font-weight: bold;">${senderName} 様</p>`;
+          
+          if (isElevated) {
+            reportHtml += `<p style="color: #555; font-size: 12px; margin-top: -10px;">（登録アドレス: ${senderEmail}）</p>`;
+          }
+          
+          reportHtml += `<p style="color: #555; line-height: 1.6; margin-top: 20px;">以下のメッセージのプッシュ配信処理が完了しました。</p>`;
+          reportHtml += `<div style="background-color: #f9fafb; padding: 15px; border-radius: 8px; margin-top: 15px; margin-bottom: 20px;">`;
+          reportHtml += `<p style="margin: 0; font-weight: bold; color: #333;">件名: ${notifTitle}</p>`;
+          reportHtml += `</div>`;
+          
+          reportHtml += `<table style="width: 100%; border-collapse: collapse; margin-bottom: 20px;">`;
+          if (notifyEmail) {
+            reportHtml += `<tr><td style="padding: 10px; border-bottom: 1px solid #eee; color: #555;">メール配信</td><td style="padding: 10px; border-bottom: 1px solid #eee; font-weight: bold; color: #2563eb;">成功: ${emailSuccess}件 / 対象: ${emailPromises.length}件</td></tr>`;
+          }
+          if (notifyLine) {
+            reportHtml += `<tr><td style="padding: 10px; border-bottom: 1px solid #eee; color: #555;">LINE配信</td><td style="padding: 10px; border-bottom: 1px solid #eee; font-weight: bold; color: #06c755;">成功: ${lineSuccess}件 / 対象: ${linePromises.length}件</td></tr>`;
+          }
+          reportHtml += `</table>`;
+          
+          reportHtml += `<p style="font-size: 12px; color: #6b7280;">※対象ユーザーが受信を拒否している場合や未連携の場合は、成功数から除外されます。</p>`;
+          reportHtml += `</div>`;
+          
+          // 送信者に直接送るため、設定に関わらずsendEmailMessageを使用
+          await sendEmailMessage(senderEmail, "【SCPS】メッセージ配信完了レポート", reportHtml).catch(e => console.error("Report Send Error:", e));
+        }
+      }
+
       if (isEdit) {
         showAlert("success", "更新しました。全ユーザーのダッシュボードに再表示されます。");
       } else {
@@ -236,6 +326,7 @@ export default function MessageForm({ tenants, users, showAlert, editMessage, on
       }
       onSuccess();
     } catch (error) {
+      console.error(error);
       showAlert("error", "保存に失敗しました。");
     } finally {
       setIsSubmitting(false);
@@ -292,7 +383,6 @@ export default function MessageForm({ tenants, users, showAlert, editMessage, on
               </div>
             </div>
 
-            {/* ★ 添付ファイル入力エリア */}
             <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-200 space-y-4">
               <div className="border-b border-gray-100 pb-3 flex items-center justify-between">
                 <div className="flex items-center">
@@ -573,6 +663,34 @@ export default function MessageForm({ tenants, users, showAlert, editMessage, on
                   <span className="block text-xs font-bold text-gray-700 flex items-center"><UserCircle className="w-3 h-3 mr-1" /> 自分の名前を配信者として表示</span>
                 </div>
               </label>
+            </div>
+
+            {/* ★ 外部プッシュ通知の設定エリア */}
+            <div className="bg-white p-5 rounded-2xl shadow-sm border border-gray-200 space-y-3">
+              <h4 className="text-sm font-black text-gray-900 flex items-center border-b border-gray-100 pb-2 mb-3">
+                <BellRing className="w-4 h-4 mr-1.5 text-gray-400" /> 外部プッシュ通知の設定
+              </h4>
+              
+              <div>
+                <CustomSelect
+                  value={notificationMethod}
+                  options={[
+                    { value: "none", label: "プッシュ通知なし（アプリ内のみ）" },
+                    { value: "email", label: "メールで通知" },
+                    { value: "line", label: "LINEで通知" },
+                    { value: "both", label: "メールとLINEの両方で通知" }
+                  ]}
+                  onChange={(val: string) => setNotificationMethod(val)}
+                  buttonClassName="w-full flex items-center justify-between bg-white border border-gray-300 rounded-xl px-4 py-3 text-sm font-bold text-gray-700 outline-none focus:ring-2 focus:ring-blue-500 shadow-xs"
+                />
+              </div>
+
+              <div className="p-3 bg-gray-50 rounded-xl border border-gray-100 mt-3">
+                <p className="text-[10px] text-gray-500 font-bold leading-relaxed">
+                  配信を実行した管理者宛に、配信成功状況のレポートがメールで自動送信されます。<br/>
+                  <span className="text-gray-400 mt-1 block">※対象ユーザーが各自の通知設定で受信を拒否している場合や未連携の場合は、配信成功数から除外されます。</span>
+                </p>
+              </div>
             </div>
 
             <button type="submit" disabled={isSubmitting} className="w-full flex items-center justify-center px-6 py-4 rounded-xl shadow-lg text-sm font-black text-white bg-blue-600 hover:bg-blue-700 focus:outline-none transition-all active:scale-95 disabled:opacity-50">

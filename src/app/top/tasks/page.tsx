@@ -12,7 +12,7 @@ import * as LucideIcons from "lucide-react";
 import { 
   Search, Plus, Trash2, CheckCircle2, 
   AlertCircle, Calendar as CalendarIcon, User as UserIcon, 
-  Flag, AlertTriangle, ChevronDown, Users, KanbanSquare, Clock ,Printer
+  Flag, AlertTriangle, ChevronDown, Users, KanbanSquare, Clock, Printer
 } from "lucide-react";
 import LoadingScreen from "@/components/LoadingScreen";
 
@@ -24,7 +24,7 @@ type CompletionReq = "anyone" | "all" | "leader";
 type Task = {
   id: string; title: string; description: string; status: TaskStatus; priority: TaskPriority;
   startDate: string | null; dueDate: string | null; dueTime?: string | null;
-  completedAt?: string | null; // ★ 完了日を追加
+  completedAt?: string | null; 
   assignees: string[]; leaderId: string | null; completionRequirement: CompletionReq;
   completedBy: string[]; createdAt: string;
 };
@@ -61,40 +61,29 @@ const PRIORITY_CONFIG: Record<TaskPriority, { label: string, color: string, icon
   low: { label: "低", color: "text-gray-600 bg-gray-100 border-gray-200", icon: <Flag className="w-2.5 h-2.5 sm:w-3 sm:h-3 text-gray-500" /> },
 };
 
-function CustomSelect({ value, options, onChange, className, ringClass, dropUp = false }: any) {
-  const [isOpen, setIsOpen] = useState(false);
-  const ref = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    const clickOut = (e: any) => { if(ref.current && !ref.current.contains(e.target)) setIsOpen(false); };
-    document.addEventListener("mousedown", clickOut); 
-    return () => document.removeEventListener("mousedown", clickOut);
-  }, []);
-
+// ★ ネイティブ `<select>` をオーバーレイする手法に完全リプレイス
+function CustomSelect({ value, options, onChange, className }: any) {
   const sel = options.find((o:any) => o.value === value);
 
   return (
-    <div className="relative z-20" ref={ref}>
-      <div 
-        onClick={(e) => { e.stopPropagation(); setIsOpen(!isOpen); }} 
-        className={`w-full flex justify-between items-center bg-white border rounded px-1.5 py-1 sm:py-0.5 text-[10px] font-bold cursor-pointer transition-all ${className} ${isOpen ? `ring-1 ${ringClass} border-transparent shadow-sm` : 'border-gray-200 hover:bg-gray-50 text-gray-700'}`}
-      >
-        <span className={sel?.badgeClass || ""}>{sel?.label || ""}</span>
-        <ChevronDown className={`w-3.5 h-3.5 text-gray-400 ml-1 transition-transform ${isOpen ? 'rotate-180' : ''}`} />
+    <div className={`relative ${className} group`}>
+      {/* ユーザーの目に見えるデザイン部分 */}
+      <div className="w-full flex justify-between items-center bg-white border border-gray-200 group-hover:border-indigo-300 rounded px-1.5 py-1 sm:py-0.5 text-[10px] font-bold text-gray-700 transition-colors shadow-2xs">
+        <span className={`truncate ${sel?.badgeClass || ""}`}>{sel?.label || ""}</span>
+        <ChevronDown className="w-3.5 h-3.5 text-gray-400 ml-1 flex-shrink-0 transition-transform group-hover:text-indigo-400" />
       </div>
-      {isOpen && (
-        <div className={`absolute left-0 right-0 ${dropUp ? 'bottom-full mb-1' : 'top-full mt-1'} bg-white border border-gray-200 rounded shadow-xl z-50 overflow-y-auto max-h-40 [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none] p-0.5`}>
-          {options.map((o:any) => (
-            <div 
-              key={o.value} 
-              onClick={(e) => { e.stopPropagation(); onChange(o.value); setIsOpen(false); }} 
-              className={`px-2 py-1.5 sm:py-1 text-[10px] font-bold cursor-pointer rounded transition-colors ${o.value === value ? 'bg-indigo-50 text-indigo-700' : 'text-gray-700 hover:bg-gray-50'}`}
-            >
-              <span className={o.badgeClass || ""}>{o.label}</span>
-            </div>
-          ))}
-        </div>
-      )}
+      
+      {/* 透明な実際の Select 要素 (OS標準のピッカーを呼び出し、Z-index問題を完全に回避する) */}
+      <select 
+        value={value} 
+        onChange={(e) => { e.stopPropagation(); onChange(e.target.value); }}
+        onClick={(e) => e.stopPropagation()}
+        className="absolute inset-0 w-full h-full opacity-0 cursor-pointer appearance-none z-10"
+      >
+        {options.map((o:any) => (
+          <option key={o.value} value={o.value}>{o.label}</option>
+        ))}
+      </select>
     </div>
   );
 }
@@ -208,7 +197,6 @@ export default function TasksPage() {
       }
     }
     
-    // ★ 完了状態から戻す場合は完了日をリセット
     if (task.status === "done" && newStatus !== "done") {
       payload.completedBy = [];
       payload.completedAt = null;
@@ -216,7 +204,6 @@ export default function TasksPage() {
     
     if (finalStatus !== task.status) {
       payload.status = finalStatus;
-      // ★ 新しく完了になった場合に完了日を自動記録
       if (finalStatus === "done") {
         payload.completedAt = new Date().toISOString().split("T")[0];
       }
@@ -299,9 +286,11 @@ export default function TasksPage() {
           </div>
           
           <div className="flex items-center gap-1">
-            <div onClick={e => e.stopPropagation()} className="w-20 flex-shrink-0">
-              <CustomSelect value={t.status} options={statusOptions} onChange={(val: any) => changeTaskStatus(t, val)} className="bg-gray-50 hover:bg-gray-100 py-0.5 text-[9px]" dropUp={true} />
+            {/* ★ ネイティブSelect用のCustomSelectを適用 */}
+            <div onClick={e => e.stopPropagation()} className="w-[85px] flex-shrink-0">
+              <CustomSelect value={t.status} options={statusOptions} onChange={(val: any) => changeTaskStatus(t, val)} className="py-0.5 text-[9px]" />
             </div>
+            
             {t.status !== "done" && (
               <button onClick={(e) => { e.stopPropagation(); changeTaskStatus(t, "done"); }} className="px-1.5 py-0.5 bg-emerald-50 text-emerald-600 hover:bg-emerald-500 hover:text-white border border-emerald-200 hover:border-emerald-500 text-[8px] font-bold rounded shadow-2xs flex items-center transition-colors">
                 <CheckCircle2 className="w-2.5 h-2.5 mr-0.5" />完了
@@ -327,18 +316,19 @@ export default function TasksPage() {
         </div>
         
         <div className="flex items-center gap-1 bg-gray-100 p-1 rounded-lg overflow-x-auto custom-scrollbar whitespace-nowrap">
-        <button className="px-2 sm:px-3 py-1 sm:py-1.5 text-[10px] sm:text-xs font-bold bg-white text-indigo-600 rounded-md sm:rounded-lg shadow-2xs flex items-center gap-1">
-    <KanbanSquare className="w-3 h-3 sm:w-3.5 sm:h-3.5" /> カンバン
-  </button>
-  <button onClick={() => router.push("/top/tasks/personal")} className="px-2 sm:px-3 py-1 sm:py-1.5 text-[10px] sm:text-xs font-bold text-gray-600 hover:text-gray-900 rounded-md sm:rounded-lg transition-colors flex items-center gap-1">
-    <Users className="w-3 h-3 sm:w-3.5 sm:h-3.5" /> パーソナル
-  </button>
-  <button onClick={() => router.push("/top/tasks/timeline")} className="px-2 sm:px-3 py-1 sm:py-1.5 text-[10px] sm:text-xs font-bold text-gray-600 hover:text-gray-900 rounded-md sm:rounded-lg transition-colors flex items-center gap-1">
-    <Clock className="w-3 h-3 sm:w-3.5 sm:h-3.5" /> タイムライン
-  </button>
-  <button onClick={() => router.push("/top/tasks/print")} className="px-2 sm:px-3 py-1 sm:py-1.5 text-[10px] sm:text-xs font-bold text-gray-600 hover:text-gray-900 rounded-md sm:rounded-lg transition-colors flex items-center gap-1">
-    <Printer className="w-3 h-3 sm:w-3.5 sm:h-3.5" /> 出力
-  </button>          </div>
+          <button className="px-2 sm:px-3 py-1 sm:py-1.5 text-[10px] sm:text-xs font-bold bg-white text-indigo-600 rounded-md sm:rounded-lg shadow-2xs flex items-center gap-1">
+            <KanbanSquare className="w-3 h-3 sm:w-3.5 sm:h-3.5" /> カンバン
+          </button>
+          <button onClick={() => router.push("/top/tasks/personal")} className="px-2 sm:px-3 py-1 sm:py-1.5 text-[10px] sm:text-xs font-bold text-gray-600 hover:text-gray-900 rounded-md sm:rounded-lg transition-colors flex items-center gap-1">
+            <Users className="w-3 h-3 sm:w-3.5 sm:h-3.5" /> パーソナル
+          </button>
+          <button onClick={() => router.push("/top/tasks/timeline")} className="px-2 sm:px-3 py-1 sm:py-1.5 text-[10px] sm:text-xs font-bold text-gray-600 hover:text-gray-900 rounded-md sm:rounded-lg transition-colors flex items-center gap-1">
+            <Clock className="w-3 h-3 sm:w-3.5 sm:h-3.5" /> タイムライン
+          </button>
+          <button onClick={() => router.push("/top/tasks/print")} className="px-2 sm:px-3 py-1 sm:py-1.5 text-[10px] sm:text-xs font-bold text-gray-600 hover:text-gray-900 rounded-md sm:rounded-lg transition-colors flex items-center gap-1">
+            <Printer className="w-3 h-3 sm:w-3.5 sm:h-3.5" /> 出力
+          </button>          
+        </div>
       </div>
 
       <main className="flex-1 flex flex-col h-full min-h-0">
@@ -350,7 +340,7 @@ export default function TasksPage() {
               <input type="text" placeholder="タスク検索..." value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} className={`w-full pl-6 pr-2 py-1 bg-gray-50 border border-gray-200 rounded-md text-[16px] sm:text-xs font-bold focus:outline-none focus:ring-1 focus:bg-white transition-all ${c.ring}`} />
             </div>
             <div className="w-24 sm:w-36">
-              <CustomSelect value={filterAssignee} options={assigneeOptions} onChange={(v: any) => setFilterAssignee(v)} ringClass={c.ring} className="py-0.5" />
+              <CustomSelect value={filterAssignee} options={assigneeOptions} onChange={(v: any) => setFilterAssignee(v)} className="py-0.5" />
             </div>
           </div>
           <button onClick={() => router.push("/top/tasks/new")} className={`px-2.5 py-1 sm:px-4 sm:py-1.5 ${c.bg} ${c.hover} text-white text-[10px] sm:text-xs font-bold rounded-md sm:rounded-lg shadow-sm flex items-center justify-center shrink-0`}><Plus className="w-3 h-3 mr-0.5 sm:mr-1" /> 追加</button>
