@@ -2,70 +2,113 @@
 
 /* =====================================================================
  * 【削除禁止】SCPS メール送信カテゴリ定義＆運用メモ
- * =====================================================================
- * （※詳細は src/lib/mail.ts を参照）
- * 1. default (scps_member_support@) : SCPS メンバーサポート
- * 2. auth (scps_auth@) : SCPS アカウント管理
- * 3. notice (scps_notice@) : SCPS お知らせ
- * 4. action (scps_action@) : SCPS リマインダー
- * 5. admin_support (scps_admin_support@) : SCPS 管理者サポート
- * 6. alerts (scps_alerts@) : SCPS システム監視
- * 7. noreply (scps_noreply@) : SCPS 自動送信
- * 8. billing (scps_billing@) : SCPS 請求・契約管理
- * 9. news (scps_news@) : SCPS アップデート
- * 10. export (scps_export@) : SCPS データ出力
+ * （詳細は src/lib/mail.ts を参照）
  * ===================================================================== */
 
-import { doc, collection, writeBatch } from "firebase/firestore";
-import { db } from "@/lib/firebase";
+import { initializeApp, getApps, getApp, cert } from "firebase-admin/app";
+import { getFirestore } from "firebase-admin/firestore";
 import { sendNotificationToUser } from "@/lib/line";
 import { sendNotificationEmailToUser, EmailCategory } from "@/lib/mail";
+import { buildHtmlEmail } from "@/lib/email-template";
 
 export type NotificationType = "none" | "email" | "line" | "both";
 
-export type DispatchParams = {
-  targetUserIds: string[];         // 配信対象のユーザーUID配列
-  title: string;                   // 通知タイトル
-  messageBody: string;             // お知らせの概要/要約本文
-  detailUrl?: string;              // 遷移先URL（例: /top?msgId=xxx）
-  sourceApp?: string;              // 呼び出し元アプリ識別子 (system, task, board, survey等)
-  isImportant?: boolean;          // 緊急フラグ
-  senderName?: string;             // 配信者名（画面表示用）
-  notificationMethod?: NotificationType; // 外部通知方法
-  senderEmailCategory?: EmailCategory; // メール用途カテゴリ
+export type TargetUserInfo = {
+  id: string;
+  name: string;
+  email: string;
 };
 
-/**
- * システム全体で利用する汎用一括通知ヘルパー関数
- */
+export type DeliveryDetail = {
+  id: string;
+  name: string;
+  email: string;
+  emailSuccess: boolean;
+  lineSuccess: boolean;
+  emailError?: string;
+  lineError?: string;
+};
+
+export type DispatchParams = {
+  targetUserIds: string[];         
+  targetUsersInfo?: TargetUserInfo[]; // ★ 追加：詳細レポート用ユーザー情報
+  title: string;                   
+  messageBody: string;             
+  detailUrl?: string;              
+  sourceApp?: string;              
+  appName?: string;    
+  isImportant?: boolean;          
+  senderName?: string;             
+  notificationMethod?: NotificationType; 
+  senderEmailCategory?: EmailCategory; 
+  replaceLinkUrl?: string; 
+};
+
+function getAdminDb() {
+  if (getApps().length === 0) {
+    const base64Key = process.env.GOOGLE_SERVICE_ACCOUNT_KEY;
+    if (!base64Key) throw new Error("環境変数 GOOGLE_SERVICE_ACCOUNT_KEY が設定されていません。");
+    const decodedKey = Buffer.from(base64Key, "base64").toString("utf-8");
+    const credentials = JSON.parse(decodedKey);
+    initializeApp({ credential: cert(credentials) });
+  }
+  const app = getApp();
+  return getFirestore(app);
+}
+
 export async function dispatchNotification({
   targetUserIds,
+  targetUsersInfo,
   title,
   messageBody,
   detailUrl = "/top",
   sourceApp = "system",
+  appName = "システムメッセージ", 
   isImportant = false,
   senderName,
   notificationMethod = "none",
-  senderEmailCategory = "default"
+  senderEmailCategory = "default",
+  replaceLinkUrl
 }: DispatchParams) {
   if (!targetUserIds || targetUserIds.length === 0) {
-    return { success: true, count: 0, emailSuccess: 0, lineSuccess: 0 };
+    return { success: true, count: 0, emailSuccess: 0, lineSuccess: 0, details: [] };
   }
 
+  const adminDb = getAdminDb();
   const publishDate = new Date();
-  const batch = writeBatch(db);
+  const batch = adminDb.batch();
   let batchCount = 0;
 
-  // 1. アプリ内インボックス通知データの作成（Firestore）
+  // 古い通知の削除
+  if (replaceLinkUrl) {
+    try {
+      const q = adminDb.collection("notifications").where("sourceApp", "==", sourceApp).where("linkUrl", "==", replaceLinkUrl);
+      const snap = await q.get();
+      snap.docs.forEach(d => {
+        if (batchCount < 400) { batch.delete(d.ref); batchCount++; }
+      });
+    } catch (e) {
+      console.error("Old notifications delete error:", e);
+    }
+  }
+
+  // ★ レポート用詳細データの器を作成
+  const detailsMap: Record<string, DeliveryDetail> = {};
+  if (targetUsersInfo) {
+    targetUsersInfo.forEach(u => {
+      detailsMap[u.id] = { id: u.id, name: u.name, email: u.email || "未設定", emailSuccess: false, lineSuccess: false };
+    });
+  }
+
+  // アプリ内通知データの作成
   targetUserIds.forEach(uid => {
-    if (batchCount >= 480) return; // Firestoreバッチ制限回避
-    const notifRef = doc(collection(db, "notifications"));
+    if (batchCount >= 480) return; 
+    const notifRef = adminDb.collection("notifications").doc();
     batch.set(notifRef, {
       userId: uid,
       schoolId: "SYSTEM",
       title: isImportant ? `【緊急】${title}` : title,
-      body: messageBody,
+      body: messageBody, 
       sourceApp: sourceApp,
       linkUrl: detailUrl,
       isRead: false,
@@ -75,9 +118,8 @@ export async function dispatchNotification({
     batchCount++;
   });
 
-  await batch.commit();
+  if (batchCount > 0) await batch.commit();
 
-  // 2. 外部プッシュ通知（メール / LINE）の並列処理
   const notifyEmail = notificationMethod === "email" || notificationMethod === "both";
   const notifyLine = notificationMethod === "line" || notificationMethod === "both";
 
@@ -86,37 +128,44 @@ export async function dispatchNotification({
 
   const fullAppUrl = process.env.NEXT_PUBLIC_APP_URL || "https://scps.yorikuru.com";
   const targetLink = `${fullAppUrl}${detailUrl}`;
-  const externalHeader = senderName ? `${senderName} 様より新しいメッセージが届きました。` : `新しいメッセージが届きました。`;
+  const displayTitle = isImportant ? `【緊急】${title}` : title;
+  const externalHeader = senderName ? `${senderName}様より新しい投稿が配信されました。` : `新しい投稿が配信されました。`;
   
-  const emailHtmlContent = `
-    <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #eaeaea; border-radius: 12px;">
-      <h3 style="color: #1e3a8a; border-bottom: 2px solid #2563eb; padding-bottom: 8px;">${isImportant ? "【緊急】" : ""}${title}</h3>
-      <p style="color: #4b5563; font-size: 14px; line-height: 1.6;">${externalHeader}</p>
-      <p style="color: #6b7280; font-size: 13px; line-height: 1.5; background-color: #f9fafb; padding: 12px; border-radius: 8px;">${messageBody}</p>
-      <p style="color: #ef4444; font-size: 12px; font-weight: bold; margin-top: 15px;">※メッセージの本文全文および添付ファイルの確認は、以下のボタンからポータルへアクセスしてください。</p>
-      <div style="margin-top: 24px; text-align: center;">
-        <a href="${targetLink}" style="background-color: #2563eb; color: #ffffff; padding: 12px 24px; text-decoration: none; border-radius: 8px; font-weight: bold; display: inline-block;">メッセージを確認する</a>
-      </div>
-    </div>
-  `;
+  const emailHtmlContent = buildHtmlEmail({
+    title: `「${appName}」`,
+    bodyText: `${externalHeader}\n\n${displayTitle}\n\n内容の詳細はポータルを開いてご確認ください。`,
+    actionButton: { label: "ポータルで確認する", url: targetLink },
+    footerNotes: ["このメールはシステムより自動送信されています。"],
+    theme: isImportant ? "danger" : "primary" 
+  });
 
-  const lineTextContent = `${isImportant ? "【緊急】" : ""}${title}\n\n${externalHeader}\n\n${messageBody}\n\n※内容の確認はポータルを開いてご確認ください。\n\n▼ポータルで確認する\n${targetLink}`;
+  const lineTextContent = `「${appName}」\n${externalHeader}\n\n${displayTitle}\n\n内容の詳細はポータルを開いてご確認ください。\n\n▼ポータルで確認する\n${targetLink}`;
 
   targetUserIds.forEach(uid => {
     if (notifyEmail) {
       emailPromises.push(
-        sendNotificationEmailToUser(
-          uid,
-          isImportant ? `【緊急】${title}` : title,
-          emailHtmlContent,
-          isImportant,
-          senderEmailCategory
-        ).catch(e => console.error("Email send error:", e))
+        sendNotificationEmailToUser(uid, displayTitle, emailHtmlContent, isImportant, senderEmailCategory)
+          .then(res => {
+            if (detailsMap[uid]) { detailsMap[uid].emailSuccess = res.success; if (!res.success) detailsMap[uid].emailError = res.error; }
+            return res;
+          })
+          .catch(e => {
+            if (detailsMap[uid]) detailsMap[uid].emailError = e.message;
+            return { success: false, error: e.message };
+          })
       );
     }
     if (notifyLine) {
       linePromises.push(
-        sendNotificationToUser(uid, lineTextContent, isImportant).catch(e => console.error("Line send error:", e))
+        sendNotificationToUser(uid, lineTextContent, isImportant)
+          .then(res => {
+            if (detailsMap[uid]) { detailsMap[uid].lineSuccess = res.success; if (!res.success) detailsMap[uid].lineError = res.error; }
+            return res;
+          })
+          .catch(e => {
+            if (detailsMap[uid]) detailsMap[uid].lineError = e.message;
+            return { success: false, error: e.message };
+          })
       );
     }
   });
@@ -138,6 +187,7 @@ export async function dispatchNotification({
     emailSuccess,
     lineSuccess,
     notifyEmail,
-    notifyLine
+    notifyLine,
+    details: Object.values(detailsMap) // ★ ユーザー別の詳細結果を返す
   };
 }

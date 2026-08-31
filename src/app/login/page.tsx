@@ -68,7 +68,8 @@ function LoginPageContent() {
     try {
       const array = new Uint32Array(1);
       window.crypto.getRandomValues(array);
-      const code = (array[0] % 90000000 + 10000000).toString();
+      // ★ 8桁から6桁（100000〜999999）に変更
+      const code = (array[0] % 900000 + 100000).toString();
       const expiresAt = new Date(Date.now() + 10 * 60 * 1000);
       
       await updateDoc(doc(db, "users", uid), {
@@ -185,7 +186,6 @@ function LoginPageContent() {
 
     if (!extSnap.empty) {
       const extDoc = extSnap.docs[0];
-      // ★ エラー修正： as any を追加して型の認識エラーを回避
       const extUserData = { id: extDoc.id, ...extDoc.data() } as any;
 
       if (extUserData.status === "suspended") {
@@ -331,7 +331,6 @@ function LoginPageContent() {
       const extSnap = await getDocs(qExt);
 
       if (!extSnap.empty) {
-        // ★ エラー修正： as any を追加
         const extData = extSnap.docs[0].data() as any;
         if (extData.status === "suspended") {
           throw new Error("このアカウントは現在停止されています。");

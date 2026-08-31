@@ -1,15 +1,18 @@
 "use client";
 
 import React, { useState, useEffect, useMemo } from "react";
-import { collection, doc, setDoc, updateDoc, writeBatch, query, where, getDocs } from "firebase/firestore";
+import { collection, doc, writeBatch, query, where, getDocs, getDoc } from "firebase/firestore";
 import { getStorage, ref, uploadBytes, getDownloadURL, deleteObject } from "firebase/storage";
-import { db } from "@/lib/firebase";
-import { Send, Loader2, Calendar, Users, Globe, Tag, Search, Pin, AlertTriangle, Save, BellRing, Settings2, CheckSquare, EyeOff, UserCircle, Network, Edit2, Paperclip, X, Mail, MessageCircle } from "lucide-react";
+import { auth, db } from "@/lib/firebase";
+import { Send, Loader2, Calendar, Users, Globe, Tag, Search, Pin, AlertTriangle, Save, BellRing, Settings2, CheckSquare, EyeOff, UserCircle, Network, Edit2, Paperclip, X, Bell, Mail, MessageCircle, BellOff } from "lucide-react";
 import { UserData, SchoolData } from "../page";
 import { SystemMessage, CATEGORIES, SystemMessageAttachment } from "./MessageDelivery";
-import CustomSelect from "@/components/CustomSelect";
-import { sendNotificationToUser } from "@/lib/line";
-import { sendNotificationEmailToUser, sendEmailMessage } from "@/lib/mail";
+import { dispatchNotification, NotificationType } from "@/lib/notifier";
+import { sendEmailMessage } from "@/lib/mail";
+
+type ExtendedSchoolData = SchoolData & {
+  customAppNames?: Record<string, string>;
+};
 
 type Props = {
   schoolData: SchoolData | null;
@@ -24,6 +27,7 @@ type Props = {
 export default function MessageForm({ schoolData, users, currentUser, showAlert, editMessage, onSuccess, onCancel }: Props) {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [confirmResetDialog, setConfirmResetDialog] = useState(false); 
+  const [showUpdateNotifyDialog, setShowUpdateNotifyDialog] = useState(false);
 
   const [title, setTitle] = useState("");
   const [content, setContent] = useState("");
@@ -42,10 +46,9 @@ export default function MessageForm({ schoolData, users, currentUser, showAlert,
   const [requireResponse, setRequireResponse] = useState(false);
   const [responseType, setResponseType] = useState<"single" | "all">("single");
 
-  // 通知方法ステート
-  const [notificationMethod, setNotificationMethod] = useState("none");
+  const [notificationMethod, setNotificationMethod] = useState<NotificationType>("none");
+  const [updateNotifyMethod, setUpdateNotifyMethod] = useState<NotificationType>("none");
 
-  // 添付ファイル用ステート
   const [existingAttachments, setExistingAttachments] = useState<SystemMessageAttachment[]>([]);
   const [newAttachments, setNewAttachments] = useState<File[]>([]);
   const [attachmentsToDelete, setAttachmentsToDelete] = useState<SystemMessageAttachment[]>([]);
@@ -74,6 +77,7 @@ export default function MessageForm({ schoolData, users, currentUser, showAlert,
       setAttachmentsToDelete([]);
       
       setNotificationMethod("none");
+      setUpdateNotifyMethod("none");
     } else {
       setTitle(""); setContent(""); setCategory("info"); setSubBadge("none"); 
       setTargetType("tenant"); setTargetIds([]); setTargetDepartments([]);
@@ -82,6 +86,7 @@ export default function MessageForm({ schoolData, users, currentUser, showAlert,
       setExistingAttachments([]); setNewAttachments([]); setAttachmentsToDelete([]);
       
       setNotificationMethod("none");
+      setUpdateNotifyMethod("none");
     }
   }, [isEdit, editMessage]);
 
@@ -106,7 +111,6 @@ export default function MessageForm({ schoolData, users, currentUser, showAlert,
       if (targetDepartments.includes("role_teacher") && u.role === "teacher") matched = true;
       if (targetDepartments.includes("role_student") && u.role === "student") matched = true;
       if (u.positionName && targetDepartments.includes(`pos_${u.positionName}`)) matched = true;
-
       if (matched) ids.add(u.id);
     });
     return Array.from(ids);
@@ -116,14 +120,12 @@ export default function MessageForm({ schoolData, users, currentUser, showAlert,
     setTargetDepartments(prev => prev.includes(key) ? prev.filter(k => k !== key) : [...prev, key]);
   };
 
-  const executeSave = async () => {
+  const executeSave = async (methodToUse: NotificationType) => {
     if (!schoolData || !currentUser) return;
-    if (isEdit && editMessage && (editMessage.senderRole === "system_admin" || editMessage.schoolId === "SYSTEM")) {
-      showAlert("error", "権限エラー: システム管理者が発行したお知らせは編集・保存できません。");
-      return;
-    }
-
     setIsSubmitting(true);
+    setShowUpdateNotifyDialog(false);
+    setConfirmResetDialog(false);
+
     try {
       const storage = getStorage();
 
@@ -164,77 +166,6 @@ export default function MessageForm({ schoolData, users, currentUser, showAlert,
       };
 
       const batch = writeBatch(db);
-      let batchCount = 0;
-      const publishDate = startAt ? new Date(startAt) : new Date();
-
-      if (isEdit && editMessage) {
-        const qNotifs = query(collection(db, "notifications"), where("sourceApp", "==", "system"), where("linkUrl", "==", `/top?msgId=${msgRef.id}`));
-        const notifsSnap = await getDocs(qNotifs);
-        const now = new Date().getTime();
-        notifsSnap.forEach(d => {
-          const cTime = d.data().createdAt?.toDate ? d.data().createdAt.toDate().getTime() : new Date(d.data().createdAt).getTime();
-          if (cTime > now && batchCount < 400) {
-            batch.delete(d.ref);
-            batchCount++;
-          }
-        });
-      }
-
-      let targets: UserData[] = [];
-      if (targetType === "tenant") targets = users;
-      else targets = users.filter(u => finalTargetIds.includes(u.id));
-
-      let notifTitle = title;
-      if (isEdit) notifTitle = `【更新】${notifTitle}`;
-      if (isImportant) notifTitle = `【緊急】${notifTitle}`;
-
-      let notifBody = showSenderName ? `${currentUser.name}から管理者メッセージが届きました。` : `新しい管理者メッセージが届きました。`;
-      if (requireResponse) notifBody += `\n⚠️対応と報告が要求されています。必ず確認してください。`;
-
-      const notifyEmail = notificationMethod === "email" || notificationMethod === "both";
-      const notifyLine = notificationMethod === "line" || notificationMethod === "both";
-
-      const emailPromises: Promise<any>[] = [];
-      const linePromises: Promise<any>[] = [];
-      
-      const emailHtmlContent = `
-        <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto;">
-          <p style="color: #555; line-height: 1.6;">${notifBody.replace(/\n/g, "<br/>")}</p>
-          <div style="background-color: #f9fafb; padding: 15px; border-radius: 8px; margin-top: 20px;">
-            <p style="font-size: 12px; color: #666; margin-bottom: 5px; font-weight: bold;">【詳細】</p>
-            <p style="color: #333; line-height: 1.6;">${content.replace(/\n/g, "<br/>")}</p>
-          </div>
-          <div style="margin-top: 20px; text-align: center;">
-            <a href="${process.env.NEXT_PUBLIC_APP_URL || "https://scps.yorikuru.com"}/top?msgId=${msgRef.id}" style="background-color: #2563eb; color: #fff; padding: 10px 20px; text-decoration: none; border-radius: 6px; font-weight: bold; display: inline-block;">ポータルで開く</a>
-          </div>
-        </div>
-      `;
-      
-      const lineTextContent = `${notifTitle}\n\n${notifBody}\n\n【詳細】\n${content}\n\n▼ポータルで開く\n${process.env.NEXT_PUBLIC_APP_URL || "https://scps.yorikuru.com"}/top?msgId=${msgRef.id}`;
-
-      targets.forEach(u => {
-        if (batchCount >= 490) return; 
-        const notifRef = doc(collection(db, "notifications"));
-        batch.set(notifRef, {
-          userId: u.id,
-          schoolId: schoolData.id,
-          title: notifTitle,
-          body: notifBody,
-          sourceApp: "system",
-          linkUrl: `/top?msgId=${msgRef.id}`, 
-          isRead: false,
-          isFlagged: isImportant, 
-          createdAt: publishDate
-        });
-        batchCount++;
-
-        if (notifyEmail) {
-          emailPromises.push(sendNotificationEmailToUser(u.id, notifTitle, emailHtmlContent, isImportant).catch(e => console.error(e)));
-        }
-        if (notifyLine) {
-          linePromises.push(sendNotificationToUser(u.id, lineTextContent, isImportant).catch(e => console.error(e)));
-        }
-      });
 
       if (isEdit && editMessage) {
         const newRevision = (editMessage.revision || 1) + 1;
@@ -249,56 +180,109 @@ export default function MessageForm({ schoolData, users, currentUser, showAlert,
 
       await batch.commit();
 
-      if (notifyEmail || notifyLine) {
-        const emailResults = await Promise.allSettled(emailPromises);
-        const lineResults = await Promise.allSettled(linePromises);
+      let targets: UserData[] = [];
+      if (targetType === "tenant") targets = users;
+      else targets = users.filter(u => finalTargetIds.includes(u.id));
 
-        const emailSuccess = emailResults.filter(r => r.status === 'fulfilled' && r.value?.success).length;
-        const lineSuccess = lineResults.filter(r => r.status === 'fulfilled' && r.value?.success).length;
+      let notifTitle = isEdit ? `【更新】${title}` : title;
+      let targetUserIds = targets.map(u => u.id);
+      
+      // ★ 詳細レポート作成のために名前とメアドのリストを作成
+      let targetUsersInfo = targets.map(u => ({ id: u.id, name: u.name, email: u.email || "" }));
 
-        const senderEmail = currentUser.email;
-        const senderName = currentUser.name || "配信担当者";
-        const isElevated = currentUser.role === "admin" || currentUser.role === "system_admin" || (currentUser as any).isITManager === true;
+      let senderEmail = auth.currentUser?.email;
+      let senderName = currentUser.name || "配信担当者";
+      let isElevated = currentUser.role === "admin" || currentUser.role === "system_admin" || (currentUser as any).isITManager === true;
 
-        if (senderEmail) {
-          let reportHtml = `<div style="font-family: sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">`;
-          reportHtml += `<h2 style="color: #1e3a8a; border-bottom: 2px solid #2563eb; padding-bottom: 10px;">配信結果レポート</h2>`;
-          reportHtml += `<p style="color: #555; line-height: 1.6; font-weight: bold;">${senderName} 様</p>`;
-          
-          if (isElevated) {
-            reportHtml += `<p style="color: #555; font-size: 12px; margin-top: -10px;">（登録アドレス: ${senderEmail}）</p>`;
-          }
-          
-          reportHtml += `<p style="color: #555; line-height: 1.6; margin-top: 20px;">以下のメッセージのプッシュ配信処理が完了しました。</p>`;
-          reportHtml += `<div style="background-color: #f9fafb; padding: 15px; border-radius: 8px; margin-top: 15px; margin-bottom: 20px;">`;
-          reportHtml += `<p style="margin: 0; font-weight: bold; color: #333;">件名: ${notifTitle}</p>`;
-          reportHtml += `</div>`;
-          
-          reportHtml += `<table style="width: 100%; border-collapse: collapse; margin-bottom: 20px;">`;
-          if (notifyEmail) {
-            reportHtml += `<tr><td style="padding: 10px; border-bottom: 1px solid #eee; color: #555;">メール配信</td><td style="padding: 10px; border-bottom: 1px solid #eee; font-weight: bold; color: #2563eb;">成功: ${emailSuccess}件 / 対象: ${emailPromises.length}件</td></tr>`;
-          }
-          if (notifyLine) {
-            reportHtml += `<tr><td style="padding: 10px; border-bottom: 1px solid #eee; color: #555;">LINE配信</td><td style="padding: 10px; border-bottom: 1px solid #eee; font-weight: bold; color: #06c755;">成功: ${lineSuccess}件 / 対象: ${linePromises.length}件</td></tr>`;
-          }
-          reportHtml += `</table>`;
-          
-          reportHtml += `<p style="font-size: 12px; color: #6b7280;">※対象ユーザーが受信を拒否している場合や未連携の場合は、成功数から除外されます。</p>`;
-          reportHtml += `</div>`;
-          
-          await sendEmailMessage(senderEmail, "【SCPS】メッセージ配信完了レポート", reportHtml).catch(e => console.error("Report Send Error:", e));
+      const exSchoolData = schoolData as ExtendedSchoolData;
+      const customAppName = exSchoolData?.customAppNames?.["system"] || "組織内メッセージ";
+
+      const executeTime = new Date().toLocaleString('ja-JP', { timeZone: 'Asia/Tokyo' });
+
+      // 一括通知実行（詳細結果を返してもらう）
+      const dispatchResult = await dispatchNotification({
+        targetUserIds,
+        targetUsersInfo,
+        title: notifTitle,
+        messageBody: content.length > 60 ? `${content.substring(0, 60)}...` : content,
+        detailUrl: `/top?msgId=${msgRef.id}`,
+        sourceApp: "system",
+        appName: customAppName,
+        isImportant,
+        senderName: showSenderName ? senderName : undefined,
+        notificationMethod: methodToUse,
+        senderEmailCategory: "notice",
+        replaceLinkUrl: isEdit ? `/top?msgId=${msgRef.id}` : undefined
+      });
+
+      if ((methodToUse !== "none") && senderEmail) {
+        // ★ 配信者宛てのメールが「同時送信によるスパム判定」を受けるのを防ぐため3秒待機
+        await new Promise(resolve => setTimeout(resolve, 3000));
+
+        // CSVデータの作成（BOM付きUTF-8）
+        let csvContent = "\uFEFF";
+        csvContent += "ユーザー名,メールアドレス,メール通知結果,LINE通知結果,エラー詳細\n";
+        dispatchResult.details?.forEach(row => {
+          csvContent += `"${row.name}","${row.email}",${row.emailSuccess ? '成功' : 'スキップ/失敗'},${row.lineSuccess ? '成功' : 'スキップ/失敗'},"${row.emailError || ''} ${row.lineError || ''}"\n`;
+        });
+        const base64Csv = Buffer.from(csvContent, "utf-8").toString("base64");
+
+        // HTMLレポートの作成
+        let reportHtml = `<div style="font-family: sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">`;
+        reportHtml += `<h2 style="color: #1e3a8a; border-bottom: 2px solid #2563eb; padding-bottom: 10px;">配信結果レポート</h2>`;
+        reportHtml += `<p style="color: #555; line-height: 1.6; font-weight: bold;">${senderName} 様</p>`;
+        if (isElevated) reportHtml += `<p style="color: #555; font-size: 12px; margin-top: -10px;">（登録アドレス: ${senderEmail}）</p>`;
+        
+        reportHtml += `<p style="color: #555; line-height: 1.6; margin-top: 20px;">プッシュ配信処理が完了しました。</p>`;
+        reportHtml += `<div style="background-color: #f9fafb; padding: 15px; border-radius: 8px; margin-bottom: 20px;">`;
+        reportHtml += `<p style="margin: 0; font-weight: bold; color: #333;">実行日時: <span style="font-weight:normal;">${executeTime}</span></p>`;
+        reportHtml += `<p style="margin: 8px 0 0 0; font-weight: bold; color: #333;">件名: <span style="font-weight:normal;">${notifTitle}</span></p>`;
+        reportHtml += `</div>`;
+        
+        reportHtml += `<table style="width: 100%; border-collapse: collapse; margin-bottom: 10px; font-size: 14px;">`;
+        if (dispatchResult.notifyEmail) {
+          reportHtml += `<tr><td style="padding: 10px; border-bottom: 1px solid #eee; color: #555;">メール配信</td><td style="padding: 10px; border-bottom: 1px solid #eee; font-weight: bold; color: #2563eb;">成功: ${dispatchResult.emailSuccess}件 / 対象: ${targetUserIds.length}件</td></tr>`;
         }
+        if (dispatchResult.notifyLine) {
+          reportHtml += `<tr><td style="padding: 10px; border-bottom: 1px solid #eee; color: #555;">LINE配信</td><td style="padding: 10px; border-bottom: 1px solid #eee; font-weight: bold; color: #06c755;">成功: ${dispatchResult.lineSuccess}件 / 対象: ${targetUserIds.length}件</td></tr>`;
+        }
+        reportHtml += `</table>`;
+        reportHtml += `<p style="font-size: 12px; color: #6b7280; margin-bottom: 30px;">※対象ユーザーが受信を拒否している場合や未連携の場合は成功数から除外されます。</p>`;
+
+        // ★ 詳細なデータ表（HTMLテーブル）
+        reportHtml += `<h3 style="color: #333; font-size: 15px; border-bottom: 1px solid #eee; padding-bottom: 5px;">詳細ログ（上位100件まで）</h3>`;
+        reportHtml += `<table style="width: 100%; border-collapse: collapse; font-size: 12px; text-align: left; margin-bottom: 20px;">`;
+        reportHtml += `<thead><tr><th style="border-bottom: 2px solid #ccc; padding: 6px;">名前</th><th style="border-bottom: 2px solid #ccc; padding: 6px;">メール</th><th style="border-bottom: 2px solid #ccc; padding: 6px;">LINE</th></tr></thead><tbody>`;
+        
+        dispatchResult.details?.slice(0, 100).forEach(row => {
+          reportHtml += `<tr>
+            <td style="border-bottom: 1px solid #eee; padding: 6px;">${row.name}</td>
+            <td style="border-bottom: 1px solid #eee; padding: 6px; color: ${row.emailSuccess ? '#059669' : '#dc2626'};">${row.emailSuccess ? '成功' : 'スキップ'}</td>
+            <td style="border-bottom: 1px solid #eee; padding: 6px; color: ${row.lineSuccess ? '#059669' : '#dc2626'};">${row.lineSuccess ? '成功' : 'スキップ'}</td>
+          </tr>`;
+        });
+        reportHtml += `</tbody></table>`;
+        reportHtml += `<p style="font-size: 12px; color: #ef4444; font-weight: bold;">※ すべての完全なデータは、本メールに添付されているCSVファイル（Excel形式）でご確認・保存いただけます。</p>`;
+        reportHtml += `</div>`;
+        
+        // ★ CSVファイルを添付して送信
+        await sendEmailMessage(
+          senderEmail, 
+          "【SCPS】メッセージ配信完了レポート", 
+          reportHtml, 
+          "notice",
+          [{ name: `delivery_report_${Date.now()}.csv`, contentType: "text/csv", base64Content: base64Csv }]
+        ).catch(e => console.error("Report Send Error:", e));
       }
 
-      if (isEdit) showAlert("success", "更新しました。全対象ユーザーのダッシュボードに再表示されます。");
+      if (isEdit) showAlert("success", "更新しました。対象ユーザーのダッシュボードに再表示されます。");
       else showAlert("success", "メッセージを配信しました。");
       
       onSuccess();
     } catch (error) {
+      console.error(error);
       showAlert("error", "保存に失敗しました。");
-    } finally {
       setIsSubmitting(false);
-      setConfirmResetDialog(false);
     }
   };
 
@@ -325,10 +309,14 @@ export default function MessageForm({ schoolData, users, currentUser, showAlert,
       return;
     }
 
-    if (isEdit && editMessage?.requireResponse && editMessage?.responses && editMessage.responses.length > 0) {
-      setConfirmResetDialog(true);
+    if (isEdit) {
+      if (editMessage?.requireResponse && editMessage?.responses && editMessage.responses.length > 0) {
+        setConfirmResetDialog(true);
+      } else {
+        setShowUpdateNotifyDialog(true);
+      }
     } else {
-      executeSave();
+      executeSave(notificationMethod);
     }
   };
 
@@ -531,6 +519,42 @@ export default function MessageForm({ schoolData, users, currentUser, showAlert,
 
             {/* 右側の表示設定 */}
             <div className="lg:col-span-4 space-y-4 sm:space-y-6">
+
+              {/* ★ 新規作成時のみ表示される、最上部の外部プッシュ通知設定 */}
+              {!isEdit && (
+                <div className="bg-gradient-to-br from-blue-50 to-white p-4 sm:p-5 rounded-2xl shadow-sm border border-blue-200 space-y-4">
+                  <div className="flex items-center justify-between border-b border-blue-100 pb-2">
+                    <h4 className="text-sm font-black text-blue-900 flex items-center">
+                      <Bell className="w-4 h-4 mr-1.5 text-blue-600" /> プッシュ通知の設定
+                    </h4>
+                  </div>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                    {[
+                      { value: "none", label: "通知なし", icon: BellOff, color: "text-gray-500", bg: "bg-gray-100" },
+                      { value: "email", label: "メールで通知", icon: Mail, color: "text-blue-600", bg: "bg-blue-100" },
+                      { value: "line", label: "LINEで通知", icon: MessageCircle, color: "text-[#06C755]", bg: "bg-[#b3efca]" },
+                      { value: "both", label: "メール & LINE", icon: BellRing, color: "text-indigo-600", bg: "bg-indigo-100" }
+                    ].map(opt => (
+                      <label key={opt.value} className={`flex items-center p-2.5 rounded-xl border-2 cursor-pointer transition-all ${notificationMethod === opt.value ? 'border-blue-500 bg-white shadow-sm' : 'border-transparent bg-gray-50/50 hover:bg-gray-50'}`}>
+                        <input type="radio" className="hidden" checked={notificationMethod === opt.value} onChange={() => setNotificationMethod(opt.value as NotificationType)} />
+                        <div className={`p-1.5 rounded-lg ${opt.bg} mr-2.5`}>
+                          <opt.icon className={`w-3.5 h-3.5 ${opt.color}`} />
+                        </div>
+                        <span className={`text-[11px] sm:text-xs font-bold flex-1 ${notificationMethod === opt.value ? 'text-blue-900' : 'text-gray-700'}`}>{opt.label}</span>
+                        <div className={`w-3.5 h-3.5 rounded-full border-2 flex items-center justify-center transition-colors ${notificationMethod === opt.value ? 'border-blue-600' : 'border-gray-300'}`}>
+                          {notificationMethod === opt.value && <div className="w-1.5 h-1.5 rounded-full bg-blue-600" />}
+                        </div>
+                      </label>
+                    ))}
+                  </div>
+                  <div className="pt-1">
+                    <p className="text-[10px] text-blue-600/80 font-bold leading-relaxed">
+                      ※ 配信後、成功状況のレポートが登録アドレス宛に自動送信されます。<br/>対象者が受信拒否設定中の場合は配信されません。
+                    </p>
+                  </div>
+                </div>
+              )}
+
               <div className="bg-white p-4 sm:p-5 rounded-2xl shadow-sm border border-gray-200 space-y-4 sm:space-y-5">
                 <h4 className="text-sm font-black text-gray-900 flex items-center border-b border-gray-100 pb-2">
                   <Tag className="w-4 h-4 mr-1.5 text-gray-400" /> 表示設定
@@ -622,34 +646,6 @@ export default function MessageForm({ schoolData, users, currentUser, showAlert,
                 </label>
               </div>
 
-              {/* ★ 外部プッシュ通知の設定エリア */}
-              <div className="bg-white p-4 sm:p-5 rounded-2xl shadow-sm border border-gray-200 space-y-3">
-                <h4 className="text-sm font-black text-gray-900 flex items-center border-b border-gray-100 pb-2 mb-3">
-                  <BellRing className="w-4 h-4 mr-1.5 text-gray-400" /> 外部プッシュ通知の設定
-                </h4>
-                
-                <div>
-                  <CustomSelect
-                    value={notificationMethod}
-                    options={[
-                      { value: "none", label: "プッシュ通知なし（アプリ内のみ）" },
-                      { value: "email", label: "メールで通知" },
-                      { value: "line", label: "LINEで通知" },
-                      { value: "both", label: "メールとLINEの両方で通知" }
-                    ]}
-                    onChange={(val: string) => setNotificationMethod(val)}
-                    buttonClassName="w-full flex items-center justify-between bg-white border border-gray-300 rounded-xl px-4 py-3 text-[13px] sm:text-sm font-bold text-gray-700 outline-none focus:ring-2 focus:ring-blue-500 shadow-xs"
-                  />
-                </div>
-
-                <div className="p-3 bg-gray-50 rounded-xl border border-gray-100 mt-3">
-                  <p className="text-[10px] text-gray-500 font-bold leading-relaxed">
-                    配信を実行したユーザー宛に、配信成功状況のレポートがメールで自動送信されます。<br/>
-                    <span className="text-gray-400 mt-1 block">※対象ユーザーが各自の通知設定で受信を拒否している場合や未連携の場合は、配信成功数から除外されます。</span>
-                  </p>
-                </div>
-              </div>
-
               <button type="submit" disabled={isSubmitting} className="w-full flex items-center justify-center px-4 sm:px-6 py-3 sm:py-4 rounded-xl shadow-lg text-[13px] sm:text-sm font-black text-white bg-blue-600 hover:bg-blue-700 focus:outline-none transition-all active:scale-95 disabled:opacity-50">
                 {isSubmitting ? <Loader2 className="animate-spin h-4 w-4 sm:h-5 sm:w-5 mr-2" /> : (isEdit ? <Save className="h-4 w-4 sm:h-5 sm:w-5 mr-2" /> : <Send className="h-4 w-4 sm:h-5 sm:w-5 mr-2" />)} 
                 {isEdit ? "保存して全ユーザーに再通知" : "メッセージを配信する"}
@@ -659,6 +655,54 @@ export default function MessageForm({ schoolData, users, currentUser, showAlert,
         </form>
       </div>
 
+      {/* 編集時の更新確認ダイアログ（カード型UIに変更） */}
+      {showUpdateNotifyDialog && (
+        <div className="fixed inset-0 z-[120] flex items-center justify-center bg-black/50 backdrop-blur-sm px-4 py-6 animate-fade-in">
+          <div className="bg-white rounded-2xl shadow-xl w-full max-w-sm p-5 sm:p-6 border border-gray-100 relative overflow-visible flex flex-col max-h-[90vh]">
+            <div className="flex flex-col items-center text-center mb-5 shrink-0">
+              <div className="w-12 h-12 bg-blue-50 rounded-full flex items-center justify-center mb-3">
+                <BellRing className="w-6 h-6 text-blue-600" />
+              </div>
+              <h3 className="text-[15px] sm:text-base font-black text-gray-900 mb-1.5">お知らせの更新を通知しますか？</h3>
+              <p className="text-[11px] sm:text-xs font-bold text-gray-500 leading-relaxed">
+                内容が「更新」されたことを対象ユーザーにプッシュ通知できます。サイレント更新も可能です。
+              </p>
+            </div>
+            
+            <div className="space-y-2 mb-6 overflow-y-auto custom-scrollbar p-1">
+              {[
+                { value: "none", label: "サイレント更新 (通知なし)", desc: "ポータル上のみ更新", icon: BellOff, color: "text-gray-500", bg: "bg-gray-100" },
+                { value: "email", label: "メールで通知", desc: "登録アドレスへ送信", icon: Mail, color: "text-blue-600", bg: "bg-blue-100" },
+                { value: "line", label: "LINEで通知", desc: "連携済みLINEへ送信", icon: MessageCircle, color: "text-[#06C755]", bg: "bg-[#b3efca]" },
+                { value: "both", label: "メール & LINE", desc: "両方で確実に通知", icon: BellRing, color: "text-indigo-600", bg: "bg-indigo-100" }
+              ].map(opt => (
+                <label key={opt.value} className={`flex items-center p-3 rounded-xl border-2 cursor-pointer transition-all ${updateNotifyMethod === opt.value ? `border-blue-500 bg-blue-50/50 shadow-sm` : `border-transparent bg-gray-50 hover:bg-gray-100`}`}>
+                  <input type="radio" className="hidden" checked={updateNotifyMethod === opt.value} onChange={() => setUpdateNotifyMethod(opt.value as NotificationType)} />
+                  <div className={`p-2 rounded-lg ${opt.bg} mr-3`}>
+                    <opt.icon className={`w-4 h-4 sm:w-5 sm:h-5 ${opt.color}`} />
+                  </div>
+                  <div className="flex-1">
+                    <div className={`text-xs sm:text-sm font-bold ${updateNotifyMethod === opt.value ? 'text-blue-900' : 'text-gray-800'}`}>{opt.label}</div>
+                    <div className="text-[10px] text-gray-500 mt-0.5">{opt.desc}</div>
+                  </div>
+                  <div className={`w-4 h-4 sm:w-5 sm:h-5 rounded-full border-2 flex items-center justify-center transition-colors ${updateNotifyMethod === opt.value ? 'border-blue-600' : 'border-gray-300'}`}>
+                    {updateNotifyMethod === opt.value && <div className="w-2 h-2 sm:w-2.5 sm:h-2.5 rounded-full bg-blue-600" />}
+                  </div>
+                </label>
+              ))}
+            </div>
+
+            <div className="flex gap-2 shrink-0">
+              <button type="button" onClick={() => setShowUpdateNotifyDialog(false)} disabled={isSubmitting} className="flex-1 py-2.5 sm:py-3 bg-white border border-gray-300 text-gray-700 text-[11px] sm:text-xs font-bold rounded-xl hover:bg-gray-50 transition-colors disabled:opacity-50">キャンセル</button>
+              <button type="button" onClick={() => executeSave(updateNotifyMethod)} disabled={isSubmitting} className="flex-1 py-2.5 sm:py-3 bg-blue-600 text-white text-[11px] sm:text-xs font-bold rounded-xl hover:bg-blue-700 shadow-sm transition-colors flex justify-center items-center disabled:opacity-50">
+                {isSubmitting ? <Loader2 className="w-4 h-4 animate-spin" /> : "保存して更新"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 応答リセット確認ダイアログ */}
       {confirmResetDialog && (
         <div className="fixed inset-0 z-[110] flex items-center justify-center bg-black/50 backdrop-blur-sm px-4 py-6 animate-fade-in">
           <div className="bg-white rounded-2xl shadow-xl w-full max-w-sm overflow-hidden p-5 sm:p-6 text-center border border-gray-100">
@@ -669,7 +713,7 @@ export default function MessageForm({ schoolData, users, currentUser, showAlert,
             </p>
             <div className="flex gap-2">
               <button type="button" onClick={() => setConfirmResetDialog(false)} className="flex-1 py-2 sm:py-2.5 bg-white border border-gray-300 text-gray-700 text-[11px] sm:text-xs font-bold rounded-xl hover:bg-gray-50 transition-colors">キャンセル</button>
-              <button type="button" onClick={executeSave} className="flex-1 py-2 sm:py-2.5 bg-blue-600 text-white text-[11px] sm:text-xs font-bold rounded-xl hover:bg-blue-700 shadow-sm transition-colors">リセットして更新</button>
+              <button type="button" onClick={() => { setConfirmResetDialog(false); setShowUpdateNotifyDialog(true); }} className="flex-1 py-2 sm:py-2.5 bg-blue-600 text-white text-[11px] sm:text-xs font-bold rounded-xl hover:bg-blue-700 shadow-sm transition-colors">リセットして次へ</button>
             </div>
           </div>
         </div>
